@@ -14,7 +14,9 @@ import {
   DollarSign,
   Truck,
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  Check,
+  Store
 } from "lucide-react";
 import { fetchApi, Product } from "@/lib/api";
 
@@ -27,6 +29,27 @@ export default function CatalogPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
+  const [publishingId, setPublishingId] = useState<number | null>(null);
+  const [publishSuccess, setPublishSuccess] = useState<string | null>(null);
+
+  const handlePublishToEbay = async (product: Product) => {
+    setPublishingId(product.id);
+    setPublishSuccess(null);
+    try {
+      const res = await fetchApi<any>("/listings/publish", {
+        method: "POST",
+        body: JSON.stringify({
+          product_id: product.id,
+          marketplace_id: 1, // eBay
+        }),
+      });
+      setPublishSuccess(`Published to eBay! ID: ${res.external_listing_id}`);
+    } catch (err: any) {
+      alert("Publish failed: " + err.message);
+    } finally {
+      setPublishingId(null);
+    }
+  };
 
   const loadProducts = async () => {
     setLoading(true);
@@ -291,6 +314,24 @@ export default function CatalogPage() {
                     </tbody>
                   </table>
                 </div>
+              {/* Publish to Marketplace Action */}
+              <div className="pt-4 border-t border-gray-800 flex items-center justify-between">
+                <div>
+                  {publishSuccess && (
+                    <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
+                      <Check className="h-4 w-4 text-emerald-400" />
+                      {publishSuccess}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => handlePublishToEbay(selectedProduct)}
+                  disabled={publishingId === selectedProduct.id}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
+                >
+                  <Store className="h-3.5 w-3.5" />
+                  <span>{publishingId === selectedProduct.id ? "Publishing to eBay..." : "Publish Offer to eBay"}</span>
+                </button>
               </div>
             </div>
           </div>

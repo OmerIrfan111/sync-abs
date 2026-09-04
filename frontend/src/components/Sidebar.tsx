@@ -17,8 +17,9 @@ import {
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Central Catalog", href: "/catalog", icon: Layers },
+  { name: "Marketplace Listings", href: "/listings", icon: Store },
   { name: "Suppliers", href: "/suppliers", icon: Truck },
-  { name: "Marketplaces", href: "/marketplaces", icon: Store },
+  { name: "Channels Setup", href: "/marketplaces", icon: Settings },
   { name: "Sync & Error Logs", href: "/logs", icon: History },
 ];
 

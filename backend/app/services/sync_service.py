@@ -50,11 +50,27 @@ class SyncService:
             adapter.test_connection()
             items = adapter.fetch_catalog()
 
+            changed_product_ids = set()
             for item in items:
-                _, _, logs = self.catalog_service.upsert_supplier_product(supplier, item)
+                prod, _, logs = self.catalog_service.upsert_supplier_product(supplier, item)
                 imported_count += 1
                 if logs:
                     changed_count += len(logs)
+                    changed_product_ids.add(prod.id)
+
+            # Automatically propagate stock & price changes to connected marketplaces (Spec Section 18 & 31)
+            from app.services.listing_service import ListingService
+            listing_service = ListingService(self.db)
+            for pid in changed_product_ids:
+                try:
+                    listing_service.sync_all_listings_for_product(pid)
+                except Exception as sync_err:
+                    self.db.add(ErrorLog(
+                        error_type="MARKETPLACE_CONNECTION_ERROR",
+                        product_id=pid,
+                        message=f"Automatic propagation failed: {str(sync_err)}",
+                        status="PENDING"
+                    ))
 
             supplier.last_synced_at = datetime.now(timezone.utc)
             self.db.commit()
