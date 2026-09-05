@@ -10,7 +10,7 @@ export default function Navbar() {
         <div className="flex items-center gap-2 py-1 px-3 bg-white rounded-full border border-black/[0.06] shadow-wandor-sm">
           <img
             src="/logo.png"
-            alt="OAKAO"
+            alt="سync"
             className="h-4 w-auto object-contain mix-blend-multiply"
           />
           <span className="text-[10px] font-bold text-[#767676] tracking-wider uppercase">Enterprise</span>

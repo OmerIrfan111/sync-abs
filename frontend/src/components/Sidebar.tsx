@@ -35,8 +35,8 @@ export default function Sidebar() {
           <Link href="/" className="flex items-center">
             <img
               src="/logo.png"
-              alt="OAKAO"
-              className="h-10 w-auto object-contain mix-blend-multiply"
+              alt="سync"
+              className="h-11 w-auto object-contain mix-blend-multiply"
             />
           </Link>
         </div>
