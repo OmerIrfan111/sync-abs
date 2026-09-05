@@ -190,38 +190,40 @@ export default function RulesPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto pb-12">
-      {/* Header */}
-      <div className="glass-card p-8 rounded-[2rem] shadow-wandor-sm">
-        <div className="flex items-center gap-2.5">
-          <h1 className="text-3xl font-black text-[#0a0a0a] tracking-tight">Pricing & Stock Rules</h1>
-          <span className="text-xs font-semibold px-3 py-0.5 rounded-full bg-[#905831]/10 text-[#905831] border border-[#905831]/20">
-            Automated Calculations
-          </span>
+    <div className="space-y-6 max-w-5xl mx-auto pb-12">
+      {/* Header - Unboxed on canvas */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-200">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold text-[#0a0a0a] tracking-tight">Pricing & Stock Rules</h1>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#905831]/10 text-[#905831] border border-[#905831]/20">
+              Automated Calculations
+            </span>
+          </div>
+          <p className="text-sm text-[#767676] mt-1 max-w-2xl leading-relaxed">
+            Set how much profit you want to make on each product. The system will automatically calculate the selling price and update your stores.
+          </p>
         </div>
-        <p className="text-sm text-[#767676] mt-1.5 max-w-2xl leading-relaxed">
-          Set how much profit you want to make on each product. The system will automatically calculate the selling price and update your stores.
-        </p>
       </div>
 
       {/* Feedback Banner */}
       {feedback && (
-        <div className={`p-4 rounded-2xl text-xs font-semibold flex items-center gap-2.5 shadow-wandor-sm ${
+        <div className={`p-3.5 rounded-lg text-xs font-semibold flex items-center gap-2.5 ${
           feedback.type === "success" 
             ? "bg-emerald-50 border border-emerald-300 text-emerald-900"
             : "bg-rose-50 border border-rose-300 text-rose-900"
         }`}>
-          {feedback.type === "success" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertCircle className="h-4 w-4 text-rose-600" />}
+          {feedback.type === "success" ? <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" /> : <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />}
           <span>{feedback.message}</span>
         </div>
       )}
 
       {/* Main Profit Form */}
       <form onSubmit={handleSaveGlobalRules} className="space-y-6">
-        <div className="glass-card p-8 rounded-[2rem] shadow-wandor-sm space-y-6">
-          <div className="border-b border-black/[0.05] pb-4">
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-5">
+          <div className="border-b border-gray-100 pb-3">
             <h2 className="text-base font-bold text-[#0a0a0a] flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-[#905831]" />
+              <DollarSign className="h-4 w-4 text-[#905831]" />
               <span>How much profit do you want to make?</span>
             </h2>
             <p className="text-xs text-[#767676] mt-0.5">
@@ -229,19 +231,19 @@ export default function RulesPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {/* Option A: Percentage Markup */}
             <div 
               onClick={() => setPricingMode("PERCENTAGE_MARKUP")}
-              className={`p-6 rounded-3xl border cursor-pointer transition-all flex flex-col justify-between ${
+              className={`p-5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
                 pricingMode === "PERCENTAGE_MARKUP"
-                  ? "bg-white border-[#0a0a0a] shadow-wandor-md"
-                  : "bg-white/60 border-black/[0.06] hover:border-black/[0.15]"
+                  ? "bg-white border-[#0a0a0a] ring-1 ring-[#0a0a0a] shadow-sm"
+                  : "bg-gray-50/50 border-gray-200 hover:border-gray-300"
               }`}
             >
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-[#767676] uppercase tracking-wider">Option A (Recommended)</span>
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-[11px] font-bold text-[#767676] uppercase tracking-wider">Option A (Recommended)</span>
                   <input 
                     type="radio" 
                     name="pricingMode" 
@@ -250,7 +252,7 @@ export default function RulesPage() {
                     className="accent-[#0a0a0a] cursor-pointer h-4 w-4"
                   />
                 </div>
-                <div className="text-sm font-bold text-[#0a0a0a] mb-2">
+                <div className="text-sm font-semibold text-[#0a0a0a] mb-2">
                   Make a percentage profit on every product
                 </div>
                 <div className="flex items-center gap-2 mt-2">
@@ -261,12 +263,12 @@ export default function RulesPage() {
                     max="500"
                     value={markupPercent}
                     onChange={(e) => setMarkupPercent(e.target.value)}
-                    className="w-24 px-3 py-2 bg-white border border-black/[0.08] rounded-full text-sm font-black text-[#0a0a0a] text-center focus:outline-none focus:border-[#0a0a0a] shadow-wandor-sm"
+                    className="w-20 px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-[#0a0a0a] text-center focus:outline-none focus:border-[#0a0a0a]"
                   />
-                  <span className="text-sm font-bold text-[#905831]">% profit</span>
+                  <span className="text-sm font-semibold text-[#905831]">% profit</span>
                 </div>
               </div>
-              <p className="text-[11px] text-[#767676] mt-4">
+              <p className="text-[11px] text-[#767676] mt-3">
                 Example: On a $50 product, a 20% markup sells for $60.
               </p>
             </div>
@@ -274,15 +276,15 @@ export default function RulesPage() {
             {/* Option B: Fixed Dollar Amount */}
             <div 
               onClick={() => setPricingMode("FIXED_PROFIT")}
-              className={`p-6 rounded-3xl border cursor-pointer transition-all flex flex-col justify-between ${
+              className={`p-5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
                 pricingMode === "FIXED_PROFIT"
-                  ? "bg-white border-[#0a0a0a] shadow-wandor-md"
-                  : "bg-white/60 border-black/[0.06] hover:border-black/[0.15]"
+                  ? "bg-white border-[#0a0a0a] ring-1 ring-[#0a0a0a] shadow-sm"
+                  : "bg-gray-50/50 border-gray-200 hover:border-gray-300"
               }`}
             >
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-[#767676] uppercase tracking-wider">Option B</span>
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-[11px] font-bold text-[#767676] uppercase tracking-wider">Option B</span>
                   <input 
                     type="radio" 
                     name="pricingMode" 
@@ -291,64 +293,64 @@ export default function RulesPage() {
                     className="accent-[#0a0a0a] cursor-pointer h-4 w-4"
                   />
                 </div>
-                <div className="text-sm font-bold text-[#0a0a0a] mb-2">
+                <div className="text-sm font-semibold text-[#0a0a0a] mb-2">
                   Make a flat dollar profit on every product
                 </div>
                 <div className="flex items-center gap-2 mt-2">
                   <span className="text-xs text-[#767676] font-medium">Add</span>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#767676] font-bold">$</span>
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#767676] font-bold text-xs">$</span>
                     <input
                       type="number"
                       step="0.50"
                       min="0"
                       value={fixedDollar}
                       onChange={(e) => setFixedDollar(e.target.value)}
-                      className="w-28 pl-7 pr-3 py-2 bg-white border border-black/[0.08] rounded-full text-sm font-black text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] shadow-wandor-sm"
+                      className="w-24 pl-6 pr-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
                     />
                   </div>
-                  <span className="text-sm font-bold text-emerald-700">flat profit</span>
+                  <span className="text-sm font-semibold text-emerald-700">flat profit</span>
                 </div>
               </div>
-              <p className="text-[11px] text-[#767676] mt-4">
+              <p className="text-[11px] text-[#767676] mt-3">
                 Example: On a $50 product, adding $10 sells for $60.
               </p>
             </div>
           </div>
 
           {/* Live Preview Box */}
-          <div className="p-6 rounded-3xl bg-[#fbfbfa] border border-black/[0.06] shadow-wandor-sm">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-bold text-[#905831] uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="h-4 w-4" />
+          <div className="p-4 rounded-xl bg-gray-50 border border-gray-200">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-[#905831] uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5" />
                 <span>Live Calculation Preview</span>
               </span>
               <div className="flex items-center gap-2 text-xs text-[#767676]">
                 <span>Test with Supplier Cost:</span>
                 <div className="relative">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#767676]">$</span>
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#767676] text-xs">$</span>
                   <input
                     type="number"
                     value={sampleCost}
                     onChange={(e) => setSampleCost(e.target.value)}
-                    className="w-24 pl-6 pr-3 py-1 bg-white border border-black/[0.08] rounded-full text-xs font-bold text-[#0a0a0a] text-right shadow-wandor-sm"
+                    className="w-20 pl-5 pr-2 py-1 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-[#0a0a0a] text-right"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="p-4 bg-white rounded-2xl border border-black/[0.05] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm shadow-wandor-sm">
+            <div className="p-3.5 bg-white rounded-lg border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
               <div className="text-[#1a1a1a]">
-                If the wholesale supplier charges you <span className="font-bold text-[#0a0a0a]">${costNum.toFixed(2)}</span>:
+                If the wholesale supplier charges you <span className="font-semibold text-[#0a0a0a]">${costNum.toFixed(2)}</span>:
               </div>
               <div className="flex items-center gap-5">
                 <div className="text-right">
                   <span className="text-xs text-[#767676] block">Customer Pays</span>
-                  <span className="text-2xl font-black text-[#905831]">${sellingPricePreview.toFixed(2)}</span>
+                  <span className="text-xl font-bold text-[#905831]">${sellingPricePreview.toFixed(2)}</span>
                 </div>
-                <div className="text-right pl-5 border-l border-black/[0.06]">
+                <div className="text-right pl-5 border-l border-gray-200">
                   <span className="text-xs text-[#767676] block">Your Profit</span>
-                  <span className="text-lg font-bold text-emerald-700">+${profitAmountPreview.toFixed(2)}</span>
+                  <span className="text-base font-semibold text-emerald-700">+${profitAmountPreview.toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -356,10 +358,10 @@ export default function RulesPage() {
         </div>
 
         {/* Stock Safety Buffer Section */}
-        <div className="glass-card p-8 rounded-[2rem] shadow-wandor-sm space-y-5">
-          <div className="border-b border-black/[0.05] pb-4">
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
+          <div className="border-b border-gray-100 pb-3">
             <h2 className="text-base font-bold text-[#0a0a0a] flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-[#905831]" />
+              <ShieldCheck className="h-4 w-4 text-[#905831]" />
               <span>Stock Protection & Safety Buffer</span>
             </h2>
             <p className="text-xs text-[#767676] mt-0.5">
@@ -367,11 +369,11 @@ export default function RulesPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Safety Buffer Units */}
-            <div className="p-5 bg-white/70 rounded-3xl border border-black/[0.06] space-y-2.5">
+            <div className="p-4 bg-gray-50/70 rounded-xl border border-gray-200 space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-[#0a0a0a]">
+                <label className="text-xs font-semibold text-[#0a0a0a]">
                   Keep this many units as backup
                 </label>
                 <div className="flex items-center gap-1.5 text-xs">
@@ -381,7 +383,7 @@ export default function RulesPage() {
                     max="20"
                     value={safetyBuffer}
                     onChange={(e) => setSafetyBuffer(e.target.value)}
-                    className="w-16 px-2 py-1.5 bg-white border border-black/[0.08] rounded-full text-xs font-black text-[#0a0a0a] text-center focus:outline-none focus:border-[#0a0a0a] shadow-wandor-sm"
+                    className="w-14 px-2 py-1 bg-white border border-gray-300 rounded-lg text-xs font-bold text-[#0a0a0a] text-center focus:outline-none focus:border-[#0a0a0a]"
                   />
                   <span className="text-[#767676] font-medium">units</span>
                 </div>
@@ -392,8 +394,8 @@ export default function RulesPage() {
             </div>
 
             {/* What to do when out of stock */}
-            <div className="p-5 bg-white/70 rounded-3xl border border-black/[0.06] space-y-2.5">
-              <label className="text-xs font-bold text-[#0a0a0a] block">
+            <div className="p-4 bg-gray-50/70 rounded-xl border border-gray-200 space-y-2">
+              <label className="text-xs font-semibold text-[#0a0a0a] block">
                 What to do when a product runs out
               </label>
               <div className="space-y-2 text-xs text-[#1a1a1a]">
@@ -427,7 +429,7 @@ export default function RulesPage() {
             <button
               type="submit"
               disabled={savingGlobal}
-              className="px-7 py-3.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-full text-sm font-semibold transition-all shadow-wandor-md hover:shadow-wandor-lg disabled:opacity-50"
+              className="px-5 py-2.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50"
             >
               {savingGlobal ? "Saving Settings..." : "Save Profit & Stock Rules"}
             </button>
@@ -436,7 +438,7 @@ export default function RulesPage() {
       </form>
 
       {/* Advanced Collapsible Section */}
-      <div className="glass-card p-7 rounded-[2rem] shadow-wandor-sm space-y-4">
+      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
@@ -451,20 +453,20 @@ export default function RulesPage() {
               Override your main profit rule for individual items, or test scenario calculations with the live simulator.
             </p>
           </div>
-          <div className="p-2 rounded-full bg-black/[0.04] text-[#767676] hover:text-[#0a0a0a]">
+          <div className="p-1.5 rounded-lg bg-gray-100 text-[#767676] hover:text-[#0a0a0a]">
             {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </div>
         </button>
 
         {showAdvanced && (
-          <div className="pt-4 border-t border-black/[0.05] space-y-6">
+          <div className="pt-3.5 border-t border-gray-100 space-y-5">
             {/* Custom Overrides Table */}
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-xs font-bold text-[#767676] uppercase tracking-wider">Active Custom Overrides</h4>
+              <div className="flex items-center justify-between mb-2.5">
+                <h4 className="text-xs font-semibold text-[#767676] uppercase tracking-wider">Active Custom Overrides</h4>
                 <button
                   onClick={() => setShowOverrideModal(true)}
-                  className="px-4 py-2 bg-white hover:bg-black/[0.02] text-[#0a0a0a] rounded-full text-xs font-bold flex items-center gap-1.5 border border-black/[0.08] shadow-wandor-sm"
+                  className="px-3 py-1.5 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium flex items-center gap-1.5 border border-gray-300 shadow-sm"
                 >
                   <Plus className="h-3 w-3" />
                   <span>Add Product Override</span>
@@ -472,28 +474,28 @@ export default function RulesPage() {
               </div>
 
               {pricingRules.filter(r => r.product_id).length === 0 ? (
-                <div className="text-center py-8 text-xs text-[#767676] bg-black/[0.02] rounded-2xl border border-black/[0.05]">
+                <div className="text-center py-6 text-xs text-[#767676] bg-gray-50 rounded-lg border border-gray-200">
                   No individual product overrides configured. All products are currently using your main {pricingMode === "PERCENTAGE_MARKUP" ? `${markupPercent}% markup` : `$${fixedDollar} profit`} rule.
                 </div>
               ) : (
-                <div className="border border-black/[0.06] rounded-2xl overflow-hidden bg-white">
+                <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
                   <table className="w-full text-left text-xs text-[#1a1a1a]">
-                    <thead className="bg-black/[0.02] text-[#767676] uppercase text-[10px]">
+                    <thead className="bg-gray-50 text-[#767676] uppercase text-[10px] border-b border-gray-200">
                       <tr>
-                        <th className="px-4 py-3">Product</th>
-                        <th className="px-4 py-3">Custom Markup</th>
-                        <th className="px-4 py-3 text-right">Action</th>
+                        <th className="px-3.5 py-2.5">Product</th>
+                        <th className="px-3.5 py-2.5">Custom Markup</th>
+                        <th className="px-3.5 py-2.5 text-right">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-black/[0.05]">
+                    <tbody className="divide-y divide-gray-100">
                       {pricingRules.filter(r => r.product_id).map((r) => (
                         <tr key={r.id}>
-                          <td className="px-4 py-3 font-bold text-[#0a0a0a]">{r.product_title || `Product #${r.product_id}`}</td>
-                          <td className="px-4 py-3 text-[#905831] font-black">{r.percentage}% markup</td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-3.5 py-2.5 font-medium text-[#0a0a0a]">{r.product_title || `Product #${r.product_id}`}</td>
+                          <td className="px-3.5 py-2.5 text-[#905831] font-semibold">{r.percentage}% markup</td>
+                          <td className="px-3.5 py-2.5 text-right">
                             <button
                               onClick={() => handleDeleteRule("pricing", r.id)}
-                              className="text-rose-700 hover:text-rose-900 font-bold"
+                              className="text-rose-700 hover:text-rose-900 font-medium"
                             >
                               Remove
                             </button>
@@ -507,8 +509,8 @@ export default function RulesPage() {
             </div>
 
             {/* Live Scenario Simulator */}
-            <div className="p-5 bg-white/70 rounded-3xl border border-black/[0.06] space-y-3">
-              <h4 className="text-xs font-bold text-[#0a0a0a] flex items-center gap-1.5">
+            <div className="p-4 bg-gray-50/70 rounded-xl border border-gray-200 space-y-2.5">
+              <h4 className="text-xs font-semibold text-[#0a0a0a] flex items-center gap-1.5">
                 <Play className="h-3.5 w-3.5 text-[#905831]" />
                 <span>Live Calculator Simulator</span>
               </h4>
@@ -516,11 +518,11 @@ export default function RulesPage() {
                 Select any product to see exactly how its supplier cost, safety buffer, and profit rule will calculate in real-time.
               </p>
 
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <select
                   value={simProductId}
                   onChange={(e) => setSimProductId(Number(e.target.value))}
-                  className="flex-1 px-4 py-2.5 bg-white border border-black/[0.08] rounded-full text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a] shadow-wandor-sm"
+                  className="flex-1 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a]"
                 >
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -532,29 +534,29 @@ export default function RulesPage() {
                 <button
                   onClick={handleRunSimulator}
                   disabled={simulating || !simProductId}
-                  className="px-6 py-2.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-full text-xs font-bold transition-colors disabled:opacity-50 shadow-wandor-sm"
+                  className="px-4 py-1.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50 shadow-sm"
                 >
                   {simulating ? "Calculating..." : "Test Calculation"}
                 </button>
               </div>
 
               {simPreview && (
-                <div className="mt-3.5 p-4 bg-white rounded-2xl border border-black/[0.06] shadow-wandor-sm grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="mt-2.5 p-3 bg-white rounded-lg border border-gray-200 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   <div>
                     <span className="text-[#767676] block text-[10px]">Supplier Cost</span>
-                    <span className="font-bold text-[#0a0a0a]">${Number(simPreview.pricing?.supplier_cost ?? 0).toFixed(2)}</span>
+                    <span className="font-semibold text-[#0a0a0a]">${Number(simPreview.pricing?.supplier_cost ?? 0).toFixed(2)}</span>
                   </div>
                   <div>
                     <span className="text-[#767676] block text-[10px]">Calculated Selling Price</span>
-                    <span className="font-black text-[#905831]">${Number(simPreview.pricing?.calculated_price ?? 0).toFixed(2)}</span>
+                    <span className="font-bold text-[#905831]">${Number(simPreview.pricing?.calculated_price ?? 0).toFixed(2)}</span>
                   </div>
                   <div>
                     <span className="text-[#767676] block text-[10px]">Stock Shown in Store</span>
-                    <span className="font-bold text-emerald-700">{simPreview.inventory?.calculated_marketplace_qty ?? 0} units</span>
+                    <span className="font-semibold text-emerald-700">{simPreview.inventory?.calculated_marketplace_qty ?? 0} units</span>
                   </div>
                   <div>
                     <span className="text-[#767676] block text-[10px]">Store Status</span>
-                    <span className="font-bold text-[#0a0a0a]">{simPreview.inventory?.target_listing_status ?? "ACTIVE"}</span>
+                    <span className="font-semibold text-[#0a0a0a]">{simPreview.inventory?.target_listing_status ?? "ACTIVE"}</span>
                   </div>
                 </div>
               )}
@@ -565,28 +567,28 @@ export default function RulesPage() {
 
       {/* Add Product Override Modal */}
       {showOverrideModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white/95 backdrop-blur-2xl border border-black/[0.08] rounded-[2.5rem] max-w-md w-full p-7 shadow-wandor-float space-y-5">
-            <div className="flex items-start justify-between pb-3 border-b border-black/[0.05]">
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-start justify-between pb-3 border-b border-gray-200">
               <div>
-                <h3 className="text-xl font-black text-[#0a0a0a]">Add Custom Product Rule</h3>
+                <h3 className="text-lg font-bold text-[#0a0a0a]">Add Custom Product Rule</h3>
                 <p className="text-xs text-[#767676] mt-0.5">Set a specific markup for one product.</p>
               </div>
               <button
                 onClick={() => setShowOverrideModal(false)}
-                className="p-2 rounded-full text-[#767676] hover:text-[#0a0a0a] hover:bg-black/[0.04]"
+                className="p-1.5 rounded-lg text-[#767676] hover:text-[#0a0a0a] hover:bg-gray-100"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3.5">
               <div>
-                <label className="block text-xs font-bold text-[#1a1a1a] mb-1.5">Choose Product</label>
+                <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">Choose Product</label>
                 <select
                   value={overrideProductId}
                   onChange={(e) => setOverrideProductId(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-black/[0.08] rounded-2xl text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a] shadow-wandor-sm"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a]"
                 >
                   <option value="">Select a product...</option>
                   {products.map((p) => (
@@ -596,23 +598,23 @@ export default function RulesPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#1a1a1a] mb-1.5">Custom Profit Markup (%)</label>
+                <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">Custom Profit Markup (%)</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
                     value={overridePercent}
                     onChange={(e) => setOverridePercent(e.target.value)}
-                    className="w-28 px-4 py-2 bg-white border border-black/[0.08] rounded-full text-sm font-bold text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] shadow-wandor-sm"
+                    className="w-24 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-semibold text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
                   />
-                  <span className="text-xs text-[#905831] font-bold">% profit</span>
+                  <span className="text-xs text-[#905831] font-semibold">% profit</span>
                 </div>
               </div>
             </div>
 
-            <div className="pt-3 border-t border-black/[0.05] flex justify-end gap-2.5">
+            <div className="pt-3 border-t border-gray-200 flex justify-end gap-2.5">
               <button
                 onClick={() => setShowOverrideModal(false)}
-                className="px-5 py-2.5 text-xs font-semibold text-[#767676] hover:text-[#0a0a0a]"
+                className="px-4 py-2 text-xs font-medium text-[#767676] hover:text-[#0a0a0a]"
               >
                 Cancel
               </button>
@@ -635,7 +637,7 @@ export default function RulesPage() {
                     alert("Error: " + err.message);
                   }
                 }}
-                className="px-6 py-2.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-full text-xs font-bold shadow-wandor-md"
+                className="px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium shadow-sm"
               >
                 Save Override
               </button>

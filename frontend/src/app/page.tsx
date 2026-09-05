@@ -148,7 +148,7 @@ export default function DashboardPage() {
       title: "Live in Your Stores",
       value: stats?.active_listings ?? 0,
       icon: Layers,
-      iconColor: "text-emerald-600",
+      iconColor: "text-emerald-700",
       description: "Online products buyers can buy now",
       tooltip: "Products currently visible and ready for customers to purchase on your marketplaces.",
       href: "/listings"
@@ -157,7 +157,7 @@ export default function DashboardPage() {
       title: "In Stock",
       value: stats?.in_stock_products ?? 0,
       icon: CheckCircle2,
-      iconColor: "text-teal-600",
+      iconColor: "text-teal-700",
       description: "Ready to ship immediately",
       tooltip: "Products your suppliers currently have in their warehouses.",
       href: "/catalog?in_stock=true"
@@ -166,7 +166,7 @@ export default function DashboardPage() {
       title: "Out of Stock",
       value: stats?.out_of_stock_products ?? 0,
       icon: AlertTriangle,
-      iconColor: "text-amber-600",
+      iconColor: "text-amber-700",
       description: "Suppliers temporarily ran out",
       tooltip: "Products that have 0 inventory at suppliers. We protect you by hiding or setting them to 0 on your stores.",
       href: "/catalog"
@@ -175,7 +175,7 @@ export default function DashboardPage() {
       title: "Issues to Check",
       value: stats?.needs_attention ?? 0,
       icon: AlertCircle,
-      iconColor: "text-rose-600",
+      iconColor: "text-rose-700",
       description: stats?.needs_attention ? "Items need quick review" : "Everything running smoothly",
       tooltip: "Sync warnings or connection interruptions that need a quick look.",
       href: "/logs"
@@ -183,48 +183,43 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-12">
-      {/* Top Header Surface */}
-      <div className="glass-card p-8 rounded-[2rem] shadow-wandor-sm flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
-        <div className="space-y-2">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* Clean Unboxed Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-200">
+        <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-3xl font-black text-[#0a0a0a] tracking-tight">Store Overview</h1>
-            <span className="text-xs font-semibold px-3 py-0.5 rounded-full bg-[#905831]/10 text-[#905831] border border-[#905831]/20">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Store Overview</h1>
+            <span className="text-xs font-medium px-2 py-0.5 rounded bg-amber-50 text-[#905831] border border-amber-200">
               Live Automation
             </span>
           </div>
-          <p className="text-sm text-[#767676] max-w-xl leading-relaxed">
+          <p className="text-sm text-gray-500 mt-1">
             Real-time control center for your connected distributors, profit calculations, and active marketplace offers.
           </p>
-          <div className="flex items-center gap-2 text-xs text-[#767676] pt-1">
-            <Clock className="h-3.5 w-3.5 text-[#905831]" />
+          <div className="flex items-center gap-2 text-xs text-gray-400 pt-1">
+            <Clock className="h-3.5 w-3.5 text-gray-400" />
             <span suppressHydrationWarning>
               Last checked: {mounted ? lastUpdatedTime.toLocaleTimeString() : "--:--"} (Continuous background sync every 10s)
             </span>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="flex flex-col">
-            <button
-              onClick={handleReconcileAll}
-              disabled={reconciling}
-              className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-full text-sm font-semibold transition-all shadow-wandor-md hover:shadow-wandor-lg disabled:opacity-50"
-            >
-              <Zap className={`h-4 w-4 ${reconciling ? "animate-pulse text-[#905831]" : "text-[#905831]"}`} />
-              <span>{reconciling ? "Checking Suppliers..." : "Update Everything Now"}</span>
-            </button>
-            <span className="text-[11px] text-[#767676] mt-1.5 text-center">
-              Forces an immediate check across all suppliers & stores
-            </span>
-          </div>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={handleReconcileAll}
+            disabled={reconciling}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+          >
+            <Zap className={`h-3.5 w-3.5 ${reconciling ? "animate-pulse text-[#905831]" : "text-[#905831]"}`} />
+            <span>{reconciling ? "Checking..." : "Update Everything Now"}</span>
+          </button>
 
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-white hover:bg-black/[0.02] text-[#1a1a1a] rounded-full text-sm font-semibold transition-all border border-black/[0.08] shadow-wandor-sm disabled:opacity-50 self-start sm:self-auto"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium transition-colors border border-gray-300 disabled:opacity-50"
           >
-            <RefreshCw className={`h-4 w-4 text-[#767676] ${refreshing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-3.5 w-3.5 text-gray-500 ${refreshing ? "animate-spin" : ""}`} />
             <span>Refresh</span>
           </button>
         </div>
@@ -232,60 +227,58 @@ export default function DashboardPage() {
 
       {/* Getting Started Guide */}
       {showGettingStarted && (
-        <div className="glass-card p-7 rounded-[2rem] shadow-wandor-sm border border-black/[0.06] relative overflow-hidden bg-gradient-to-br from-white/90 via-white/80 to-[#fdfbf9]">
-          <div className="flex items-center justify-between pb-4 border-b border-black/[0.05] mb-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-2xl bg-[#905831]/10 text-[#905831]">
-                <Sparkles className="h-5 w-5" />
-              </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="h-5 w-5 text-[#905831]" />
               <div>
-                <h2 className="text-base font-bold text-[#0a0a0a]">Getting Started Guide</h2>
-                <p className="text-xs text-[#767676]">Follow these 5 simple steps to have your business running on autopilot.</p>
+                <h2 className="text-sm font-bold text-gray-900">Getting Started Guide</h2>
+                <p className="text-xs text-gray-500">5 steps to automate your wholesale inventory and sales.</p>
               </div>
             </div>
             <button 
               onClick={() => setShowGettingStarted(false)}
-              className="text-xs text-[#767676] hover:text-[#0a0a0a] px-3 py-1.5 rounded-full border border-black/[0.06] hover:bg-black/[0.03] flex items-center gap-1.5 transition-colors"
+              className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded hover:bg-gray-100 flex items-center gap-1 transition-colors"
             >
-              <X className="h-3 w-3" />
-              <span>Hide Guide</span>
+              <X className="h-3.5 w-3.5" />
+              <span>Dismiss</span>
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3.5">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             {gettingStartedSteps.map((step) => (
               <div 
                 key={step.num}
-                className={`p-4 rounded-2xl border flex flex-col justify-between transition-all duration-200 ${
+                className={`p-3.5 rounded-lg border flex flex-col justify-between transition-colors ${
                   step.done 
-                    ? "bg-emerald-500/[0.04] border-emerald-500/20" 
-                    : "bg-white/80 border-black/[0.06]"
+                    ? "bg-emerald-50/40 border-emerald-200/80" 
+                    : "bg-gray-50/60 border-gray-200"
                 }`}
               >
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                       step.done 
-                        ? "bg-emerald-100/80 text-emerald-800" 
-                        : "bg-[#905831]/10 text-[#905831]"
+                        ? "bg-emerald-100 text-emerald-800" 
+                        : "bg-gray-200 text-gray-700"
                     }`}>
                       Step {step.num}
                     </span>
                     {step.done ? (
-                      <Check className="h-4 w-4 text-emerald-600" />
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
                     ) : (
-                      <span className="text-[10px] text-[#767676] font-medium">Ready</span>
+                      <span className="text-[10px] text-gray-400 font-medium">Pending</span>
                     )}
                   </div>
-                  <h3 className="text-xs font-bold text-[#0a0a0a] leading-tight">{step.title}</h3>
-                  <p className="text-[11px] text-[#767676] mt-1.5 leading-snug">{step.description}</p>
+                  <h3 className="text-xs font-semibold text-gray-900 leading-snug">{step.title}</h3>
+                  <p className="text-[11px] text-gray-500 mt-1 leading-snug">{step.description}</p>
                 </div>
                 <Link
                   href={step.href}
-                  className="mt-4 inline-flex items-center gap-1 text-[11px] font-bold text-[#905831] hover:text-[#7b4724] group"
+                  className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-[#905831] hover:text-[#7b4724]"
                 >
                   <span>{step.actionText}</span>
-                  <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+                  <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
             ))}
@@ -295,25 +288,25 @@ export default function DashboardPage() {
 
       {/* Immediate Reconcile Result Box */}
       {reconcileResult && (
-        <div className="p-5 rounded-2xl bg-emerald-50/80 border border-emerald-500/30 text-emerald-900 shadow-wandor-sm">
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2 font-bold text-sm text-emerald-900">
-              <CheckCircle className="h-5 w-5 text-emerald-600" />
+            <div className="flex items-center gap-2 font-semibold text-xs text-emerald-900">
+              <CheckCircle className="h-4 w-4 text-emerald-600" />
               <span>All 5 wholesale suppliers checked and updated!</span>
             </div>
             <button
               onClick={() => setReconcileResult(null)}
-              className="text-xs text-emerald-800 hover:text-emerald-950 px-2.5 py-1 bg-white/80 rounded-full border border-emerald-200"
+              className="text-xs text-emerald-700 hover:text-emerald-900 px-2 py-0.5 bg-white rounded border border-emerald-200"
             >
               Dismiss
             </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 mt-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mt-2">
             {reconcileResult.details.map((d, i) => (
-              <div key={i} className="text-xs p-3 rounded-xl bg-white/90 border border-emerald-100 shadow-wandor-sm">
-                <span className="font-bold text-[#0a0a0a] block">{d.supplier_name}</span>
+              <div key={i} className="text-xs p-2.5 rounded-lg bg-white border border-emerald-100">
+                <span className="font-semibold text-gray-900 block">{d.supplier_name}</span>
                 {d.status === "SUCCESS" ? (
-                  <span className="text-[#767676] text-[11px]">
+                  <span className="text-gray-500 text-[11px]">
                     Imported: <span className="text-emerald-700 font-bold">{d.imported}</span> | Changes: <span className="text-[#905831] font-bold">{d.changed}</span>
                   </span>
                 ) : (
@@ -325,30 +318,30 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* 5 KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* 5 Grounded KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {kpis.map((kpi, index) => {
           const Icon = kpi.icon;
           return (
             <Link
               key={index}
               href={kpi.href}
-              className="glass-card glass-card-hover p-6 rounded-3xl shadow-wandor-sm relative overflow-hidden flex flex-col justify-between group"
+              className="bg-white border border-gray-200 hover:border-gray-300 rounded-xl p-4 flex flex-col justify-between transition-colors"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[#767676] tracking-wide">{kpi.title}</span>
-                <div className={`p-2 rounded-2xl bg-black/[0.03] ${kpi.iconColor}`}>
+                <span className="text-xs font-semibold text-gray-500">{kpi.title}</span>
+                <div className={`p-1.5 rounded-md bg-gray-50 ${kpi.iconColor}`}>
                   <Icon className="h-4 w-4" />
                 </div>
               </div>
-              <div className="mt-5">
-                <div className="text-3xl font-black text-[#0a0a0a] tracking-tight">
+              <div className="mt-3">
+                <div className="text-2xl font-bold text-gray-900 tracking-tight">
                   {loading ? "..." : kpi.value.toLocaleString()}
                 </div>
-                <div className="text-[11px] text-[#767676] mt-1 font-medium">{kpi.description}</div>
+                <div className="text-[11px] text-gray-500 mt-0.5">{kpi.description}</div>
               </div>
-              <div className="mt-4 pt-3 border-t border-black/[0.05] text-[10px] text-[#767676] flex items-center gap-1 group-hover:text-[#0a0a0a] transition-colors">
-                <HelpCircle className="h-3 w-3 text-[#905831]" />
+              <div className="mt-3 pt-2 border-t border-gray-100 text-[10px] text-gray-400 flex items-center gap-1">
+                <HelpCircle className="h-3 w-3 text-gray-400 shrink-0" />
                 <span className="truncate">{kpi.tooltip}</span>
               </div>
             </Link>
@@ -357,51 +350,46 @@ export default function DashboardPage() {
       </div>
 
       {/* Wholesale Suppliers & Online Stores Side-by-Side Status */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Wholesale Suppliers */}
-        <div className="glass-card p-7 rounded-[2rem] shadow-wandor-sm">
-          <div className="flex items-center justify-between pb-4 border-b border-black/[0.05] mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-2xl bg-[#905831]/10 text-[#905831]">
-                <Truck className="h-5 w-5" />
-              </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-3">
+            <div className="flex items-center gap-2">
+              <Truck className="h-4 w-4 text-[#905831]" />
               <div>
-                <h2 className="text-base font-bold text-[#0a0a0a]">Your Wholesale Suppliers</h2>
-                <p className="text-xs text-[#767676]">Where products come from. We check stock and prices continuously.</p>
+                <h2 className="text-sm font-bold text-gray-900">Your Wholesale Suppliers</h2>
+                <p className="text-xs text-gray-500">Live feeds from connected distributor warehouses.</p>
               </div>
             </div>
             <Link 
               href="/suppliers" 
-              className="text-xs font-bold text-[#905831] hover:text-[#7b4724] flex items-center gap-1"
+              className="text-xs font-semibold text-[#905831] hover:text-[#7b4724] flex items-center gap-1"
             >
               <span>Manage</span>
               <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
 
-          <div className="space-y-2.5">
+          <div className="divide-y divide-gray-100">
             {stats?.suppliers_health.map((sup) => (
               <div
                 key={sup.id}
-                className="flex items-center justify-between p-4 rounded-2xl bg-white/70 border border-black/[0.05] hover:border-black/[0.1] transition-all"
+                className="flex items-center justify-between py-2.5"
               >
-                <div className="flex items-center gap-3">
-                  <div className={`h-2.5 w-2.5 rounded-full ${
-                    sup.status === "HEALTHY" ? "bg-emerald-500 shadow-sm shadow-emerald-500/50" : "bg-rose-500"
+                <div className="flex items-center gap-2.5">
+                  <div className={`h-2 w-2 rounded-full ${
+                    sup.status === "HEALTHY" ? "bg-emerald-500" : "bg-rose-500"
                   }`} />
                   <div>
-                    <div className="text-sm font-bold text-[#1a1a1a]">{sup.name}</div>
-                    <div className="text-xs text-[#767676] flex items-center gap-1.5">
-                      <span>Status: </span>
-                      <span className={sup.status === "HEALTHY" ? "text-emerald-700 font-semibold" : "text-rose-600 font-semibold"}>
-                        {sup.status === "HEALTHY" ? "Connected & Up to date" : "Needs Attention"}
-                      </span>
+                    <div className="text-xs font-semibold text-gray-900">{sup.name}</div>
+                    <div className="text-[11px] text-gray-500">
+                      {sup.status === "HEALTHY" ? "Connected & Up to date" : "Needs Attention"}
                     </div>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-black text-[#0a0a0a]">{sup.product_count} products</div>
-                  <span className="text-[10px] text-[#767676]">Available to sell</span>
+                  <div className="text-xs font-bold text-gray-900">{sup.product_count} items</div>
+                  <span className="text-[10px] text-gray-400">Available</span>
                 </div>
               </div>
             ))}
@@ -409,42 +397,40 @@ export default function DashboardPage() {
         </div>
 
         {/* Online Stores */}
-        <div className="glass-card p-7 rounded-[2rem] shadow-wandor-sm">
-          <div className="flex items-center justify-between pb-4 border-b border-black/[0.05] mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-2xl bg-black/[0.05] text-[#0a0a0a]">
-                <Store className="h-5 w-5" />
-              </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-3">
+            <div className="flex items-center gap-2">
+              <Store className="h-4 w-4 text-gray-700" />
               <div>
-                <h2 className="text-base font-bold text-[#0a0a0a]">Your Online Stores</h2>
-                <p className="text-xs text-[#767676]">Where buyers purchase. We update store stock automatically.</p>
+                <h2 className="text-sm font-bold text-gray-900">Your Online Stores</h2>
+                <p className="text-xs text-gray-500">Active listings on customer-facing marketplaces.</p>
               </div>
             </div>
             <Link 
               href="/marketplaces" 
-              className="text-xs font-bold text-[#0a0a0a] hover:text-[#767676] flex items-center gap-1"
+              className="text-xs font-semibold text-gray-700 hover:text-gray-900 flex items-center gap-1"
             >
               <span>Connect More</span>
               <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
 
-          <div className="space-y-2.5">
+          <div className="divide-y divide-gray-100">
             {stats?.marketplaces_health.map((mkt) => (
               <div
                 key={mkt.id}
-                className="flex items-center justify-between p-4 rounded-2xl bg-white/70 border border-black/[0.05] hover:border-black/[0.1] transition-all"
+                className="flex items-center justify-between py-2.5"
               >
-                <div className="flex items-center gap-3">
-                  <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50" />
+                <div className="flex items-center gap-2.5">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500" />
                   <div>
-                    <div className="text-sm font-bold text-[#1a1a1a]">{mkt.name}</div>
-                    <div className="text-xs text-emerald-700 font-semibold">Store Connected & Selling</div>
+                    <div className="text-xs font-semibold text-gray-900">{mkt.name}</div>
+                    <div className="text-[11px] text-emerald-700 font-medium">Active & Selling</div>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-black text-[#0a0a0a]">{mkt.listing_count} products live</div>
-                  <span className="text-[10px] text-[#767676]">Active offers</span>
+                  <div className="text-xs font-bold text-gray-900">{mkt.listing_count} offers</div>
+                  <span className="text-[10px] text-gray-400">Live in store</span>
                 </div>
               </div>
             ))}
@@ -453,76 +439,72 @@ export default function DashboardPage() {
       </div>
 
       {/* Notifications & Plain English Alerts */}
-      <div className="glass-card p-7 rounded-[2rem] shadow-wandor-sm">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-black/[0.04] text-[#0a0a0a]">
-              <AlertCircle className="h-5 w-5" />
-            </div>
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-gray-700" />
             <div>
-              <h2 className="text-base font-bold text-[#0a0a0a]">Alerts & Notifications</h2>
-              <p className="text-xs text-[#767676]">Any events or connection issues requiring your attention.</p>
+              <h2 className="text-sm font-bold text-gray-900">Alerts & Notifications</h2>
+              <p className="text-xs text-gray-500">Operational events requiring your attention.</p>
             </div>
           </div>
-          <Link href="/logs" className="text-xs font-bold text-[#905831] hover:text-[#7b4724] flex items-center gap-1">
-            <span>View Full History</span>
+          <Link href="/logs" className="text-xs font-semibold text-[#905831] hover:text-[#7b4724] flex items-center gap-1">
+            <span>View History</span>
             <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
 
         {stats?.recent_errors && stats.recent_errors.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {stats.recent_errors.map((err) => (
-              <div key={err.id} className="p-4 bg-rose-50/80 border border-rose-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
+              <div key={err.id} className="p-3 bg-rose-50/70 border border-rose-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800">
-                      Needs Attention
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">
+                      Attention
                     </span>
-                    <span className="text-xs text-[#767676]" suppressHydrationWarning>
-                      {new Date(err.created_at).toLocaleTimeString()}
-                    </span>
+                    <span className="text-[11px] text-gray-500" suppressHydrationWarning>{new Date(err.created_at).toLocaleTimeString()}</span>
                   </div>
-                  <p className="text-[#0a0a0a] font-bold mt-1">
+                  <p className="text-gray-900 font-semibold mt-1">
                     {err.marketplace_name 
-                      ? `We ran into a temporary issue with your ${err.marketplace_name} store.` 
+                      ? `Temporary connection notice for ${err.marketplace_name}.` 
                       : err.supplier_name 
-                        ? `Could not reach ${err.supplier_name} during update check.` 
+                        ? `Could not reach ${err.supplier_name} during check.` 
                         : "A temporary update was delayed."}
                   </p>
-                  <p className="text-xs text-rose-800/80 mt-0.5">
-                    Why it matters: Stock or price updates for affected products may be delayed until re-checked.
+                  <p className="text-[11px] text-gray-600 mt-0.5">
+                    Why it matters: Stock or price updates for affected items may be delayed until re-checked.
                   </p>
                 </div>
                 <Link
                   href="/logs"
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-full text-xs font-bold self-start sm:self-center shrink-0 transition-colors shadow-sm"
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-xs font-semibold self-start sm:self-center shrink-0 transition-colors"
                 >
-                  Review & Fix
+                  Review
                 </Link>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-10 text-[#767676] text-sm bg-white/60 rounded-2xl border border-black/[0.04]">
-            <CheckCircle2 className="h-10 w-10 text-emerald-600 mx-auto mb-2" />
-            <div className="font-bold text-[#0a0a0a]">All systems are running smoothly!</div>
-            <p className="text-xs text-[#767676] mt-1">All suppliers are connected, and all store listings are in sync.</p>
+          <div className="text-center py-6 text-gray-500 text-xs bg-gray-50 rounded-lg border border-gray-100">
+            <CheckCircle2 className="h-7 w-7 text-emerald-600 mx-auto mb-1.5" />
+            <div className="font-semibold text-gray-900">All systems are running smoothly</div>
+            <p className="text-[11px] text-gray-500 mt-0.5">All wholesale suppliers are connected, and all store listings are in sync.</p>
           </div>
         )}
 
         {/* Collapsible Technical Diagnostics */}
-        <div className="mt-5 pt-4 border-t border-black/[0.05]">
+        <div className="mt-4 pt-3 border-t border-gray-100">
           <button
             onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-            className="text-xs text-[#767676] hover:text-[#0a0a0a] flex items-center gap-1.5 transition-colors font-medium"
+            className="text-[11px] text-gray-500 hover:text-gray-800 flex items-center gap-1 transition-colors font-medium"
           >
-            {showTechnicalDetails ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            {showTechnicalDetails ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             <span>{showTechnicalDetails ? "Hide technical diagnostic details" : "Show technical diagnostic details"}</span>
           </button>
 
           {showTechnicalDetails && (
-            <div className="mt-3 p-4 bg-white/90 rounded-2xl border border-black/[0.06] text-xs font-mono text-[#767676] space-y-1.5 shadow-wandor-sm">
+            <div className="mt-2.5 p-3 bg-gray-50 rounded-lg border border-gray-200 text-[11px] font-mono text-gray-600 space-y-1">
               <div>Backend Status: Connected (http://localhost:8000/api/v1)</div>
               <div>Database: PostgreSQL 16 (Relational Catalog & Rules Storage)</div>
               <div>Worker Task Queue: Celery + RabbitMQ (Asynchronous distributor sync)</div>
