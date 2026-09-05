@@ -31,19 +31,23 @@ export default function CatalogPage() {
   const [loading, setLoading] = useState(true);
   const [publishingId, setPublishingId] = useState<number | null>(null);
   const [publishSuccess, setPublishSuccess] = useState<string | null>(null);
+  const [marketplaces, setMarketplaces] = useState<any[]>([]);
+  const [selectedChannelId, setSelectedChannelId] = useState<number>(1);
 
-  const handlePublishToEbay = async (product: Product) => {
+  const handlePublishToChannel = async (product: Product) => {
     setPublishingId(product.id);
     setPublishSuccess(null);
     try {
+      const channel = marketplaces.find(m => m.id === selectedChannelId);
+      const channelName = channel ? channel.name : "Channel";
       const res = await fetchApi<any>("/listings/publish", {
         method: "POST",
         body: JSON.stringify({
           product_id: product.id,
-          marketplace_id: 1, // eBay
+          marketplace_id: selectedChannelId,
         }),
       });
-      setPublishSuccess(`Published to eBay! ID: ${res.external_listing_id}`);
+      setPublishSuccess(`Published to ${channelName}! ID: ${res.external_listing_id}`);
     } catch (err: any) {
       alert("Publish failed: " + err.message);
     } finally {
@@ -75,6 +79,12 @@ export default function CatalogPage() {
 
   useEffect(() => {
     loadProducts();
+    fetchApi<any[]>("/marketplaces")
+      .then((res) => {
+        setMarketplaces(res);
+        if (res.length > 0) setSelectedChannelId(res[0].id);
+      })
+      .catch((err) => console.error("Could not fetch marketplaces:", err));
   }, [page]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -314,24 +324,39 @@ export default function CatalogPage() {
                     </tbody>
                   </table>
                 </div>
-              {/* Publish to Marketplace Action */}
-              <div className="pt-4 border-t border-gray-800 flex items-center justify-between">
-                <div>
+              {/* Multi-Channel Publish Action */}
+              <div className="pt-4 border-t border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 font-medium">Channel:</span>
+                  <select
+                    value={selectedChannelId}
+                    onChange={(e) => setSelectedChannelId(Number(e.target.value))}
+                    className="bg-gray-900 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    {marketplaces.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.adapter_class})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-3">
                   {publishSuccess && (
-                    <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
+                    <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
                       <Check className="h-4 w-4 text-emerald-400" />
                       {publishSuccess}
                     </span>
                   )}
+                  <button
+                    onClick={() => handlePublishToChannel(selectedProduct)}
+                    disabled={publishingId === selectedProduct.id}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
+                  >
+                    <Store className="h-3.5 w-3.5" />
+                    <span>{publishingId === selectedProduct.id ? "Publishing..." : "Publish Offer to Channel"}</span>
+                  </button>
                 </div>
-                <button
-                  onClick={() => handlePublishToEbay(selectedProduct)}
-                  disabled={publishingId === selectedProduct.id}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
-                >
-                  <Store className="h-3.5 w-3.5" />
-                  <span>{publishingId === selectedProduct.id ? "Publishing to eBay..." : "Publish Offer to eBay"}</span>
-                </button>
               </div>
             </div>
           </div>

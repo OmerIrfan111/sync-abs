@@ -30,11 +30,11 @@ def seed_database():
 
         # 2. Seed 5 Suppliers (Spec Section 3)
         suppliers_data = [
-            {"name": "Ingram Micro", "adapter_class": "MockSupplierAdapter"},
-            {"name": "D&H", "adapter_class": "MockSupplierAdapter"},
-            {"name": "TD SYNNEX", "adapter_class": "MockSupplierAdapter"},
-            {"name": "Ma Labs", "adapter_class": "MockSupplierAdapter"},
-            {"name": "VoiceComm", "adapter_class": "MockSupplierAdapter"},
+            {"name": "Ingram Micro", "adapter_class": "IngramMicroAdapter"},
+            {"name": "D&H", "adapter_class": "DAndHAdapter"},
+            {"name": "TD SYNNEX", "adapter_class": "TDSynnexAdapter"},
+            {"name": "Ma Labs", "adapter_class": "MaLabsAdapter"},
+            {"name": "VoiceComm", "adapter_class": "VoiceCommAdapter"},
         ]
 
         created_suppliers = []
@@ -50,15 +50,18 @@ def seed_database():
                 db.commit()
                 db.refresh(s)
                 logger.info(f"Supplier registered: {s.name}")
+            else:
+                s.adapter_class = s_data["adapter_class"]
+                db.commit()
             created_suppliers.append(s)
 
         # 3. Seed 5 Marketplaces (Spec Section 3)
         marketplaces_data = [
-            {"name": "eBay", "adapter_class": "MockMarketplaceAdapter"},
-            {"name": "Amazon", "adapter_class": "MockMarketplaceAdapter"},
-            {"name": "Walmart", "adapter_class": "MockMarketplaceAdapter"},
-            {"name": "Shopify", "adapter_class": "MockMarketplaceAdapter"},
-            {"name": "Newegg", "adapter_class": "MockMarketplaceAdapter"},
+            {"name": "eBay", "adapter_class": "MockEBayAdapter"},
+            {"name": "Amazon", "adapter_class": "MockAmazonAdapter"},
+            {"name": "Walmart", "adapter_class": "MockWalmartAdapter"},
+            {"name": "Shopify", "adapter_class": "MockShopifyAdapter"},
+            {"name": "Newegg", "adapter_class": "MockNeweggAdapter"},
         ]
 
         for m_data in marketplaces_data:
@@ -72,6 +75,9 @@ def seed_database():
                 db.add(m)
                 db.commit()
                 logger.info(f"Marketplace registered: {m.name}")
+            else:
+                m.adapter_class = m_data["adapter_class"]
+                db.commit()
 
         # 4. Perform initial supplier sync to populate central catalog
         logger.info("Performing initial catalog sync from mock suppliers...")

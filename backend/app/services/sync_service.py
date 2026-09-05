@@ -23,11 +23,12 @@ class SyncService:
             except Exception:
                 pass
 
-        if supplier.adapter_class == "MockSupplierAdapter":
-            return MockSupplierAdapter(supplier_name=supplier.name, credentials=credentials)
-        
-        # Default to mock adapter with supplier's name
-        return MockSupplierAdapter(supplier_name=supplier.name, credentials=credentials)
+        from app.adapters.registry import get_supplier_adapter
+        return get_supplier_adapter(
+            adapter_class=supplier.adapter_class,
+            supplier_name=supplier.name,
+            credentials=credentials
+        )
 
     def sync_supplier(self, supplier_id: int) -> Dict[str, Any]:
         """

@@ -77,8 +77,8 @@ class ListingService:
             except Exception:
                 pass
 
-        # In Phase 2, we support MockEBayAdapter
-        return MockEBayAdapter(credentials=credentials)
+        from app.adapters.registry import get_marketplace_adapter
+        return get_marketplace_adapter(marketplace.adapter_class, credentials=credentials)
 
     def publish_product_to_marketplace(
         self,
