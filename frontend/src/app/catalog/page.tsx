@@ -324,6 +324,8 @@ export default function CatalogPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+
               {/* Multi-Channel Publish Action */}
               <div className="pt-4 border-t border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
