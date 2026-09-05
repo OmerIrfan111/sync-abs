@@ -16,13 +16,13 @@ import {
 } from "lucide-react";
 
 const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Central Catalog", href: "/catalog", icon: Layers },
-  { name: "Marketplace Listings", href: "/listings", icon: Store },
-  { name: "Rules & Automation", href: "/rules", icon: SlidersHorizontal },
-  { name: "Suppliers", href: "/suppliers", icon: Truck },
-  { name: "Channels Setup", href: "/marketplaces", icon: Settings },
-  { name: "Sync & Error Logs", href: "/logs", icon: History },
+  { name: "Store Overview", href: "/", icon: LayoutDashboard, hint: "Key numbers & store health" },
+  { name: "Products to Sell", href: "/catalog", icon: Layers, hint: "Browse & select items" },
+  { name: "Your Online Stores", href: "/listings", icon: Store, hint: "Live items & selling prices" },
+  { name: "Pricing & Stock Rules", href: "/rules", icon: SlidersHorizontal, hint: "Set your profit margins" },
+  { name: "Wholesale Suppliers", href: "/suppliers", icon: Truck, hint: "Distributors & stock feeds" },
+  { name: "Connect Stores", href: "/marketplaces", icon: Settings, hint: "Amazon, eBay, Shopify..." },
+  { name: "Activity & Alerts", href: "/logs", icon: History, hint: "Recent updates & notifications" },
 ];
 
 export default function Sidebar() {
@@ -40,10 +40,10 @@ export default function Sidebar() {
             <div className="font-bold text-lg text-white tracking-tight flex items-center gap-1.5">
               <span>سync</span>
               <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                V1 Core
+                Business
               </span>
             </div>
-            <div className="text-[11px] text-gray-400 font-medium">Dropshipping Engine</div>
+            <div className="text-[11px] text-gray-400 font-medium">Store Automation Manager</div>
           </div>
         </div>
 
@@ -56,14 +56,17 @@ export default function Sidebar() {
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
                   isActive
                     ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
                     : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/50"
                 }`}
               >
                 <Icon className={`h-4 w-4 ${isActive ? "text-white" : "text-gray-400"}`} />
-                <span>{item.name}</span>
+                <div>
+                  <div>{item.name}</div>
+                  <div className={`text-[10px] ${isActive ? "text-indigo-200" : "text-gray-500"}`}>{item.hint}</div>
+                </div>
               </Link>
             );
           })}
@@ -74,13 +77,13 @@ export default function Sidebar() {
       <div className="p-4 border-t border-gray-800/80">
         <div className="p-3 bg-gray-900/60 rounded-xl border border-gray-800">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-semibold text-gray-300">Sync Engine</span>
+            <span className="text-xs font-semibold text-gray-300">Automatic Updates</span>
             <span className="flex h-2 w-2 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
           </div>
-          <p className="text-[11px] text-gray-400">PostgreSQL + Celery + Redis</p>
+          <p className="text-[11px] text-gray-400">Checking prices & stock continuously</p>
         </div>
       </div>
     </aside>

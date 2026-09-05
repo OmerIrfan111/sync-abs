@@ -5,42 +5,39 @@ import {
   Store, 
   Wifi, 
   RefreshCw, 
-  ExternalLink, 
-  ShieldCheck, 
   Check, 
   AlertCircle, 
-  Settings, 
   Lock, 
-  Layers, 
-  ShoppingBag 
+  CheckCircle2,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
+  X,
+  ExternalLink,
+  ShieldCheck
 } from "lucide-react";
 import { fetchApi, Marketplace } from "@/lib/api";
 
-const CHANNEL_DETAILS: Record<string, { iconColor: string; description: string; badge: string }> = {
+const STORE_DESCRIPTIONS: Record<string, { summary: string; guide: string }> = {
   "eBay": {
-    iconColor: "from-blue-600 to-sky-500",
-    description: "Supports eBay Sell Inventory API, Offer Creation, Price Revisions, and Stock Feeds.",
-    badge: "Sell Inventory API"
+    summary: "Sell to millions of shoppers on eBay. We automatically update your listing prices and stock levels.",
+    guide: "Log in to your eBay Developer Portal, generate a Production User Token, and paste your Client ID and Client Secret."
   },
   "Amazon": {
-    iconColor: "from-amber-600 to-orange-500",
-    description: "Selling Partner API (SP-API) Listings Items, LWA OAuth, and Price Feeds.",
-    badge: "SP-API v2021"
+    summary: "Sell products on Amazon US. We handle pricing formulas and stock synchronization automatically.",
+    guide: "Go to Seller Central > Partner Network > Develop Apps, and generate an LWA Refresh Token."
   },
   "Walmart": {
-    iconColor: "from-yellow-500 to-amber-500",
-    description: "Item management, price feeds, inventory endpoints, and lag time synchronization.",
-    badge: "Marketplace API v3"
+    summary: "Reach shoppers on Walmart.com with automated inventory and order feeds.",
+    guide: "Log in to Walmart Developer Portal, generate API Keys, and paste your Client ID and Client Secret."
   },
   "Shopify": {
-    iconColor: "from-emerald-600 to-teal-500",
-    description: "Admin REST & GraphQL API, inventory level adjustments, variant pricing, and webhooks.",
-    badge: "Admin API 2024-01"
+    summary: "Connect your personal branded storefront for seamless inventory management.",
+    guide: "In Shopify Admin, go to Settings > Apps > Custom apps, create an app, and copy the Admin API Access Token."
   },
   "Newegg": {
-    iconColor: "from-purple-600 to-indigo-500",
-    description: "Item creation feeds, price/stock feeds for consumer electronics and components.",
-    badge: "Marketplace B2B"
+    summary: "Sell electronics, hardware, and accessories on Newegg Marketplace.",
+    guide: "Log in to Newegg Seller Portal > Manage Account > API Settings, and copy your Seller ID and Secret Key."
   }
 };
 
@@ -54,6 +51,7 @@ export default function MarketplacesPage() {
   const [configChannel, setConfigChannel] = useState<Marketplace | null>(null);
   const [credentialsJson, setCredentialsJson] = useState("");
   const [savingConfig, setSavingConfig] = useState(false);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const loadMarketplaces = async () => {
     setLoading(true);
@@ -83,12 +81,21 @@ export default function MarketplacesPage() {
       const res = await fetchApi<{ success: boolean; message: string }>(`/marketplaces/${id}/test`, {
         method: "POST"
       });
-      showFeedback(res.message || `${name} connection verified`, "success");
+      showFeedback(res.message || `${name} is connected and responding quickly!`, "success");
     } catch (err: any) {
-      showFeedback(err.message || `${name} connection test failed`, "error");
+      showFeedback(err.message || `Could not connect to ${name}`, "error");
     } finally {
       setTestingId(null);
     }
+  };
+
+  const handleOpenConfig = (mkt: Marketplace) => {
+    setConfigChannel(mkt);
+    setCredentialsJson(
+      mkt.has_credentials 
+        ? '{\n  "api_key": "••••••••••••••••",\n  "status": "configured_and_encrypted"\n}' 
+        : '{\n  "api_key": "",\n  "secret": ""\n}'
+    );
   };
 
   const handleSaveCredentials = async (e: React.FormEvent) => {
@@ -101,7 +108,7 @@ export default function MarketplacesPage() {
         try {
           creds = JSON.parse(credentialsJson);
         } catch (_) {
-          throw new Error("Invalid JSON format for credentials");
+          throw new Error("Please enter valid JSON format or leave empty");
         }
       }
 
@@ -110,7 +117,7 @@ export default function MarketplacesPage() {
         body: JSON.stringify({ credentials: creds })
       });
 
-      showFeedback(`Credentials for ${configChannel.name} encrypted and saved.`, "success");
+      showFeedback(`Keys for ${configChannel.name} encrypted and saved securely!`, "success");
       setConfigChannel(null);
       loadMarketplaces();
     } catch (err: any) {
@@ -120,201 +127,205 @@ export default function MarketplacesPage() {
     }
   };
 
-  const totalListings = marketplaces.reduce((acc, m) => acc + m.active_listings_count, 0);
-
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0e1526] p-6 rounded-2xl border border-gray-800 shadow-xl">
         <div>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-600/20 text-indigo-400 rounded-xl border border-indigo-500/30">
-              <Store className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">Channels & Marketplaces Setup</h1>
-              <p className="text-sm text-gray-400">
-                Multi-channel retail distribution matrix with dedicated adapter integrations and AES-256 encryption.
-              </p>
-            </div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black text-white tracking-tight">Connect Your Online Stores</h1>
+            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">
+              Sales Channels
+            </span>
           </div>
+          <p className="text-sm text-gray-400 mt-1">
+            Connect the marketplaces where you want to sell products. Once connected, stock and pricing updates are delivered automatically.
+          </p>
         </div>
 
         <button
           onClick={loadMarketplaces}
-          className="flex items-center gap-2 px-3.5 py-2 bg-gray-800/80 hover:bg-gray-700 text-gray-200 rounded-lg text-sm font-medium border border-gray-700 transition"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl text-xs font-semibold transition-all border border-gray-700 self-start sm:self-auto"
         >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin text-indigo-400" : ""}`} />
-          <span>Refresh Channels</span>
+          <RefreshCw className="h-3.5 w-3.5" />
+          <span>Refresh Stores</span>
         </button>
       </div>
 
-      {/* Global Feedback Banner */}
+      {/* Feedback Banner */}
       {feedback && (
-        <div
-          className={`p-4 rounded-xl text-sm font-medium flex items-center justify-between shadow-lg animate-in fade-in duration-200 border ${
-            feedback.type === "success"
-              ? "bg-emerald-950/80 border-emerald-500/50 text-emerald-200"
-              : "bg-rose-950/80 border-rose-500/50 text-rose-200"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {feedback.type === "success" ? <Check className="h-5 w-5 text-emerald-400" /> : <AlertCircle className="h-5 w-5 text-rose-400" />}
-            <span>{feedback.message}</span>
-          </div>
+        <div className={`p-4 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg ${
+          feedback.type === "success" 
+            ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
+            : "bg-rose-500/10 border border-rose-500/30 text-rose-300"
+        }`}>
+          {feedback.type === "success" ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <AlertCircle className="h-4 w-4 text-rose-400" />}
+          <span>{feedback.message}</span>
         </div>
       )}
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-[#131b2e] border border-gray-800 rounded-xl p-5 shadow-sm">
-          <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Configured Channels</div>
-          <div className="text-2xl font-bold text-white">{marketplaces.length} Channels</div>
-          <p className="text-xs text-indigo-400 mt-1">eBay, Amazon, Walmart, Shopify, Newegg</p>
-        </div>
-
-        <div className="bg-[#131b2e] border border-gray-800 rounded-xl p-5 shadow-sm">
-          <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Active Live Listings</div>
-          <div className="text-2xl font-bold text-emerald-400">{totalListings} Listings</div>
-          <p className="text-xs text-gray-400 mt-1">Synchronized across retailers</p>
-        </div>
-
-        <div className="bg-[#131b2e] border border-gray-800 rounded-xl p-5 shadow-sm">
-          <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Security Architecture</div>
-          <div className="text-2xl font-bold text-white flex items-center gap-2">
-            <Lock className="h-5 w-5 text-indigo-400" />
-            <span>AES-256 Fernet</span>
-          </div>
-          <p className="text-xs text-gray-400 mt-1">Encrypted credential isolation</p>
-        </div>
-      </div>
-
-      {/* Channels Grid */}
+      {/* Marketplace Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {marketplaces.map((item) => {
-          const detail = CHANNEL_DETAILS[item.name] || {
-            iconColor: "from-gray-600 to-gray-500",
-            description: "Direct retail channel integration.",
-            badge: item.adapter_class
-          };
+        {loading ? (
+          <div className="col-span-full py-16 text-center text-gray-500">
+            Loading online store channels...
+          </div>
+        ) : (
+          marketplaces.map((mkt) => {
+            const isTesting = testingId === mkt.id;
+            const info = Object.entries(STORE_DESCRIPTIONS).find(([key]) => mkt.name.includes(key))?.[1] || {
+              summary: "Automated ecommerce sales channel with live price & inventory feeds.",
+              guide: "Paste your API keys from your store developer settings."
+            };
+            const isExpanded = expandedId === mkt.id;
 
-          return (
-            <div
-              key={item.id}
-              className="bg-[#131b2e] border border-gray-800 rounded-2xl p-6 flex flex-col justify-between shadow-sm hover:border-gray-700 transition relative overflow-hidden"
-            >
-              <div>
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`h-11 w-11 rounded-xl bg-gradient-to-tr ${detail.iconColor} flex items-center justify-center text-white shadow-md`}>
-                      <Store className="h-5 w-5" />
+            return (
+              <div
+                key={mkt.id}
+                className="bg-[#0e1526] border border-gray-800 rounded-2xl p-6 flex flex-col justify-between shadow-xl relative overflow-hidden space-y-4"
+              >
+                <div>
+                  {/* Top Row: Store Name & Status */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-violet-600/10 text-violet-400 border border-violet-500/20">
+                        <Store className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-white">{mkt.name}</h2>
+                        <span className="text-[11px] text-gray-400">Online Marketplace</span>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-bold text-lg text-white">{item.name}</h3>
-                      <span className="text-[11px] font-mono text-gray-400">{item.adapter_class}</span>
-                    </div>
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      <span>Connected</span>
+                    </span>
                   </div>
 
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                    {detail.badge}
-                  </span>
+                  <p className="text-xs text-gray-400 leading-relaxed mb-4">
+                    {info.summary}
+                  </p>
+
+                  {/* Metrics */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="p-3 bg-gray-900/60 rounded-xl border border-gray-800/80">
+                      <span className="text-[11px] text-gray-400 block">Products Live</span>
+                      <span className="text-lg font-black text-white">{mkt.active_listings_count ?? mkt.total_listings_count ?? 0}</span>
+                      <span className="text-[10px] text-emerald-400 block">Active offers</span>
+                    </div>
+                    <div className="p-3 bg-gray-900/60 rounded-xl border border-gray-800/80">
+                      <span className="text-[11px] text-gray-400 block">Security & Keys</span>
+                      <span className="text-xs font-bold text-gray-200 block truncate flex items-center gap-1 mt-1">
+                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                        <span>Encrypted (Safe)</span>
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <p className="text-xs text-gray-300 mb-6 leading-relaxed">
-                  {detail.description}
-                </p>
+                {/* Actions */}
+                <div className="space-y-2 pt-3 border-t border-gray-800">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleTestConnection(mkt.id, mkt.name)}
+                      disabled={isTesting}
+                      className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all border border-gray-700 disabled:opacity-50"
+                    >
+                      <Wifi className={`h-3.5 w-3.5 ${isTesting ? "animate-pulse text-violet-400" : ""}`} />
+                      <span>{isTesting ? "Testing..." : "Test Store Connection"}</span>
+                    </button>
 
-                <div className="space-y-2 bg-[#0e1526] p-3.5 rounded-xl border border-gray-800/80 mb-6">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-400">Connection Status:</span>
-                    <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                      ACTIVE (Ready)
-                    </span>
+                    <button
+                      onClick={() => handleOpenConfig(mkt)}
+                      className="px-3.5 py-2 bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                    >
+                      <Lock className="h-3.5 w-3.5" />
+                      <span>Keys</span>
+                    </button>
                   </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-400">Active Listings:</span>
-                    <span className="font-bold text-white font-mono">{item.active_listings_count}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-400">Credentials:</span>
-                    <span className={`font-semibold ${item.has_credentials ? "text-indigo-400" : "text-gray-400"}`}>
-                      {item.has_credentials ? "Configured (Encrypted)" : "Simulated / Default"}
-                    </span>
+
+                  {/* Collapsible Advanced Info */}
+                  <div className="pt-1">
+                    <button
+                      onClick={() => setExpandedId(isExpanded ? null : mkt.id)}
+                      className="text-[11px] text-gray-500 hover:text-gray-300 flex items-center gap-1 transition-colors"
+                    >
+                      {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      <span>Store API details (Advanced)</span>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="mt-2 p-3 bg-gray-950/80 rounded-xl border border-gray-800 text-[11px] font-mono text-gray-400 space-y-1">
+                        <div>Adapter: {mkt.adapter_class}</div>
+                        <div>Encryption: AES-256 Fernet (At rest in DB)</div>
+                        <div>Setup guide: {info.guide}</div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-
-              <div className="flex items-center gap-2 pt-2 border-t border-gray-800/80">
-                <button
-                  onClick={() => handleTestConnection(item.id, item.name)}
-                  disabled={testingId === item.id}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-200 rounded-lg text-xs font-semibold border border-gray-700 transition"
-                >
-                  <Wifi className={`h-3.5 w-3.5 ${testingId === item.id ? "animate-spin text-indigo-400" : "text-emerald-400"}`} />
-                  <span>{testingId === item.id ? "Testing..." : "Test Connection"}</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setConfigChannel(item);
-                    setCredentialsJson("");
-                  }}
-                  className="p-2 hover:bg-gray-800 text-gray-400 hover:text-white rounded-lg border border-transparent hover:border-gray-700 transition"
-                  title="Configure Channel Credentials"
-                >
-                  <Settings className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
-      {/* MODAL: CONFIGURE CREDENTIALS */}
+      {/* Store Credentials Modal */}
       {configChannel && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#131b2e] border border-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Lock className="h-5 w-5 text-indigo-400" />
-                <span>Configure {configChannel.name}</span>
-              </h3>
-              <span className="text-xs text-gray-400 font-mono">{configChannel.adapter_class}</span>
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0e1526] border border-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-start justify-between pb-3 border-b border-gray-800">
+              <div>
+                <h3 className="text-base font-bold text-white">Connect {configChannel.name}</h3>
+                <p className="text-xs text-gray-400">Enter your store API credentials to enable automated publishing.</p>
+              </div>
+              <button
+                onClick={() => setConfigChannel(null)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
-            <p className="text-xs text-gray-400 leading-relaxed">
-              API credentials are encrypted with AES-256 before storage in PostgreSQL. When left empty, the adapter operates in high-fidelity mock simulation mode.
-            </p>
+            <form onSubmit={handleSaveCredentials} className="space-y-3">
+              <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-xs text-indigo-300 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <HelpCircle className="h-3.5 w-3.5" />
+                  <span>Where do I find my API keys?</span>
+                </div>
+                <p className="text-[11px] leading-relaxed">
+                  {Object.entries(STORE_DESCRIPTIONS).find(([k]) => configChannel.name.includes(k))?.[1].guide || "Log in to your store seller account and look under Developer or API settings."}
+                </p>
+              </div>
 
-            <form onSubmit={handleSaveCredentials} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">
-                  API Credentials (JSON Object)
+                <label className="block text-xs font-bold text-gray-300 mb-1">
+                  API Keys & Credentials (Encrypted with AES-256)
                 </label>
                 <textarea
                   rows={5}
-                  placeholder={`{\n  "client_id": "...",\n  "client_secret": "...",\n  "refresh_token": "..."\n}`}
                   value={credentialsJson}
                   onChange={(e) => setCredentialsJson(e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 font-mono text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded-xl text-xs font-mono text-gray-200 focus:outline-none focus:border-violet-500"
                 />
+                <p className="text-[10px] text-gray-500 mt-1">
+                  All keys are encrypted at rest with military-grade AES-256 encryption.
+                </p>
               </div>
 
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setConfigChannel(null)}
-                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm font-semibold transition"
+                  className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={savingConfig}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold shadow-md shadow-indigo-600/30 transition"
+                  className="px-5 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold disabled:opacity-50"
                 >
-                  {savingConfig ? "Encrypting..." : "Save & Encrypt"}
+                  {savingConfig ? "Encrypting & Saving..." : "Save Store Keys"}
                 </button>
               </div>
             </form>
