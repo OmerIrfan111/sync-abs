@@ -104,18 +104,39 @@ class ListingService:
             Listing.marketplace_id == marketplace_id
         ).first()
 
-        # Calculate initial listed quantity (sum across supplier products if not provided)
+        from app.services.pricing_service import PricingService
+        from app.services.inventory_service import InventoryService
+        from app.services.supplier_selection_service import SupplierSelectionService
+
+        pricing_service = PricingService(self.db)
+        inventory_service = InventoryService(self.db)
+        selection_service = SupplierSelectionService(self.db)
+
+        best_sp = selection_service.select_best_supplier(product)
+        supplier_cost = best_sp.cost if best_sp else Decimal("0.00")
+        supplier_stock = best_sp.qty_available if best_sp else sum(sp.qty_available for sp in product.supplier_products)
+
+        # Calculate initial listed quantity applying safety buffer & zero floor (Spec Section 14)
         if custom_qty is not None:
             quantity = max(0, custom_qty)
+            oos_action = "SET_QUANTITY_ZERO"
         else:
-            quantity = sum(sp.qty_available for sp in product.supplier_products)
+            quantity, oos_action = inventory_service.calculate_marketplace_quantity(
+                supplier_quantity=supplier_stock,
+                product_id=product.id
+            )
 
-        # Calculate price (use lowest cost + 15% default markup if not provided)
+        # Calculate price using PricingEngine (Spec Section 16)
         if custom_price is not None:
             price = custom_price
         else:
-            lowest_cost = min((sp.cost for sp in product.supplier_products), default=Decimal("100.00"))
-            price = (lowest_cost * Decimal("1.15")).quantize(Decimal("0.01"))
+            price = pricing_service.calculate_price(
+                cost=supplier_cost,
+                product_id=product.id,
+                marketplace_id=marketplace.id
+            )
+
+        target_status = inventory_service.determine_listing_status(quantity, oos_action)
 
         adapter = self.get_adapter_for_marketplace(marketplace)
 
@@ -180,7 +201,8 @@ class ListingService:
         self,
         listing_id: int,
         new_price: Optional[Decimal] = None,
-        new_qty: Optional[int] = None
+        new_qty: Optional[int] = None,
+        new_status: Optional[str] = None
     ) -> Listing:
         """
         Updates an existing listing with Redis concurrency protection (Spec Section 21).
@@ -219,6 +241,21 @@ class ListingService:
                         new_value=str(new_price)
                     ))
                     listing.selling_price = new_price
+
+                if new_status is not None and new_status != listing.status:
+                    if new_status in ["PAUSED", "WITHDRAWN"] and listing.status == "ACTIVE":
+                        if listing.external_listing_id:
+                            try:
+                                adapter.withdraw_listing(listing.external_listing_id)
+                            except Exception:
+                                pass
+                    self.db.add(SyncLog(
+                        product_id=listing.product_id,
+                        field_changed=f"{marketplace.name}_status_update",
+                        old_value=listing.status,
+                        new_value=new_status
+                    ))
+                    listing.status = new_status
 
                 listing.last_updated_at = now
                 self.db.commit()
@@ -266,32 +303,64 @@ class ListingService:
 
     def sync_all_listings_for_product(self, product_id: int) -> List[Listing]:
         """
-        Propagates supplier stock changes to all active listings for a product.
-        (Spec Section 18 & Section 31 QA criteria:
-        'Supplier stock changes propagate through Celery to marketplace quantity')
+        Propagates supplier stock changes to all listings for a product,
+        applying multi-supplier selection, pricing formulas, and safety buffers.
+        (Spec Section 13, 14, 15, 16, 18, 29 & Section 31 QA criteria)
         """
         product = self.db.query(Product).filter(Product.id == product_id).first()
         if not product:
             return []
 
-        active_listings = self.db.query(Listing).filter(
+        listings = self.db.query(Listing).filter(
             Listing.product_id == product_id,
-            Listing.status == "ACTIVE"
+            Listing.status.in_(["ACTIVE", "PAUSED", "UNAVAILABLE", "OUT_OF_STOCK"])
         ).all()
 
-        if not active_listings:
+        if not listings:
             return []
 
-        # Aggregate total available stock across active suppliers
-        total_qty = sum(sp.qty_available for sp in product.supplier_products if sp.availability_status == "ACTIVE")
+        from app.services.pricing_service import PricingService
+        from app.services.inventory_service import InventoryService
+        from app.services.supplier_selection_service import SupplierSelectionService
 
-        # Recalculate price based on lowest cost
-        costs = [sp.cost for sp in product.supplier_products if sp.qty_available > 0]
-        lowest_cost = min(costs) if costs else (min((sp.cost for sp in product.supplier_products), default=Decimal("0.00")))
-        new_price = (lowest_cost * Decimal("1.15")).quantize(Decimal("0.01")) if lowest_cost > 0 else Decimal("0.00")
+        pricing_service = PricingService(self.db)
+        inventory_service = InventoryService(self.db)
+        selection_service = SupplierSelectionService(self.db)
+
+        # Multi-supplier selection
+        best_sp = selection_service.select_best_supplier(product)
+        if best_sp:
+            supplier_cost = best_sp.cost
+            supplier_stock = best_sp.qty_available
+        else:
+            active_sps = [sp for sp in product.supplier_products if sp.availability_status == "ACTIVE"]
+            supplier_cost = min((sp.cost for sp in active_sps), default=Decimal("0.00")) if active_sps else Decimal("0.00")
+            supplier_stock = 0
+
+        # Safety buffer and marketplace quantity
+        target_qty, oos_action = inventory_service.calculate_marketplace_quantity(
+            supplier_quantity=supplier_stock,
+            product_id=product.id
+        )
 
         updated = []
-        for l in active_listings:
-            up = self.update_listing_on_marketplace(l.id, new_price=new_price, new_qty=total_qty)
+        for l in listings:
+            target_price = pricing_service.calculate_price(
+                cost=supplier_cost,
+                product_id=product.id,
+                marketplace_id=l.marketplace_id
+            )
+            target_status = inventory_service.determine_listing_status(
+                marketplace_qty=target_qty,
+                oos_action=oos_action,
+                current_status=l.status
+            )
+
+            up = self.update_listing_on_marketplace(
+                l.id,
+                new_price=target_price,
+                new_qty=target_qty,
+                new_status=target_status
+            )
             updated.append(up)
         return updated

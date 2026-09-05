@@ -11,13 +11,15 @@ import {
   History, 
   AlertCircle,
   Settings,
-  RefreshCw
+  RefreshCw,
+  SlidersHorizontal
 } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Central Catalog", href: "/catalog", icon: Layers },
   { name: "Marketplace Listings", href: "/listings", icon: Store },
+  { name: "Rules & Automation", href: "/rules", icon: SlidersHorizontal },
   { name: "Suppliers", href: "/suppliers", icon: Truck },
   { name: "Channels Setup", href: "/marketplaces", icon: Settings },
   { name: "Sync & Error Logs", href: "/logs", icon: History },
