@@ -116,6 +116,61 @@ def publish_listing(payload: ListingPublishRequest, db: Session = Depends(get_db
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+@router.put("/{listing_id}", response_model=ListingResponse)
+def update_listing(listing_id: int, payload: ListingUpdate, db: Session = Depends(get_db)):
+    service = ListingService(db)
+    listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    try:
+        updated = service.update_listing_on_marketplace(
+            listing_id=listing_id,
+            new_price=payload.selling_price,
+            new_qty=payload.listed_qty,
+            new_status=payload.status
+        )
+        return ListingResponse(
+            id=updated.id,
+            product_id=updated.product_id,
+            product_sku=updated.product.sku if updated.product else None,
+            product_title=updated.product.title if updated.product else None,
+            marketplace_id=updated.marketplace_id,
+            marketplace_name=updated.marketplace.name if updated.marketplace else None,
+            external_listing_id=updated.external_listing_id,
+            status=updated.status,
+            selling_price=updated.selling_price,
+            listed_qty=updated.listed_qty,
+            last_updated_at=updated.last_updated_at,
+            created_at=updated.created_at,
+            updated_at=updated.updated_at
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@router.post("/{listing_id}/reactivate", response_model=ListingResponse)
+def reactivate_listing(listing_id: int, db: Session = Depends(get_db)):
+    service = ListingService(db)
+    try:
+        reactivated = service.reactivate_listing_on_marketplace(listing_id)
+        return ListingResponse(
+            id=reactivated.id,
+            product_id=reactivated.product_id,
+            product_sku=reactivated.product.sku if reactivated.product else None,
+            product_title=reactivated.product.title if reactivated.product else None,
+            marketplace_id=reactivated.marketplace_id,
+            marketplace_name=reactivated.marketplace.name if reactivated.marketplace else None,
+            external_listing_id=reactivated.external_listing_id,
+            status=reactivated.status,
+            selling_price=reactivated.selling_price,
+            listed_qty=reactivated.listed_qty,
+            last_updated_at=reactivated.last_updated_at,
+            created_at=reactivated.created_at,
+            updated_at=reactivated.updated_at
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
 @router.post("/{listing_id}/sync", response_model=ListingResponse)
 def sync_listing(listing_id: int, db: Session = Depends(get_db)):
     service = ListingService(db)
@@ -124,11 +179,14 @@ def sync_listing(listing_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Listing not found")
 
     try:
-        updated = service.update_listing_on_marketplace(
-            listing_id=listing.id,
-            new_price=listing.selling_price,
-            new_qty=listing.listed_qty
-        )
+        if listing.status in ["WITHDRAWN", "PAUSED"]:
+            updated = service.reactivate_listing_on_marketplace(listing.id)
+        else:
+            updated = service.update_listing_on_marketplace(
+                listing_id=listing.id,
+                new_price=listing.selling_price,
+                new_qty=listing.listed_qty
+            )
         return ListingResponse(
             id=updated.id,
             product_id=updated.product_id,

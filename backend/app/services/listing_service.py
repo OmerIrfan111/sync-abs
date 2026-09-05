@@ -301,6 +301,64 @@ class ListingService:
             self.db.refresh(listing)
             return listing
 
+    def reactivate_listing_on_marketplace(self, listing_id: int) -> Listing:
+        """Reactivates / unhides a withdrawn or paused marketplace listing."""
+        lock_key = f"sync:lock:listing:{listing_id}"
+        with distributed_lock(lock_key) as acquired:
+            listing = self.db.query(Listing).filter(Listing.id == listing_id).first()
+            if not listing:
+                raise ValueError(f"Listing {listing_id} not found")
+
+            product = listing.product
+            from app.services.inventory_service import InventoryService
+            from app.services.pricing_service import PricingService
+            from app.services.supplier_selection_service import SupplierSelectionService
+
+            selection_service = SupplierSelectionService(self.db)
+            inventory_service = InventoryService(self.db)
+            pricing_service = PricingService(self.db)
+
+            best_sp = selection_service.select_best_supplier(product)
+            supplier_stock = best_sp.qty_available if best_sp else sum(sp.qty_available for sp in product.supplier_products)
+            supplier_cost = best_sp.cost if best_sp else Decimal("0.00")
+
+            calculated_qty, _ = inventory_service.calculate_marketplace_quantity(
+                supplier_quantity=supplier_stock,
+                product_id=product.id
+            )
+            # If calculated_qty is 0 but product has stock, default to at least 1 or stock
+            active_qty = calculated_qty if calculated_qty > 0 else (supplier_stock if supplier_stock > 0 else 1)
+
+            price = listing.selling_price if listing.selling_price > 0 else pricing_service.calculate_price(
+                cost=supplier_cost,
+                product_id=product.id,
+                marketplace_id=listing.marketplace_id
+            )
+
+            adapter = self.get_adapter_for_marketplace(listing.marketplace)
+            if listing.external_listing_id:
+                try:
+                    adapter.update_inventory(listing.external_listing_id, product.sku, active_qty)
+                    adapter.update_price(listing.external_listing_id, product.sku, price)
+                except Exception:
+                    pass
+
+            old_status = listing.status
+            listing.status = "ACTIVE"
+            listing.listed_qty = active_qty
+            listing.selling_price = price
+            listing.last_updated_at = datetime.now(timezone.utc)
+
+            self.db.add(SyncLog(
+                product_id=listing.product_id,
+                field_changed=f"{listing.marketplace.name}_reactivated",
+                old_value=old_status,
+                new_value="ACTIVE"
+            ))
+            self.db.commit()
+            self.db.refresh(listing)
+            return listing
+
     def sync_all_listings_for_product(self, product_id: int) -> List[Listing]:
         """
         Propagates supplier stock changes to all listings for a product,

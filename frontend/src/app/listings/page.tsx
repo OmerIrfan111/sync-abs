@@ -106,7 +106,7 @@ export default function ListingsPage() {
 
   const handleToggleHide = async (listing: Listing) => {
     const shouldHide = listing.status === "ACTIVE";
-    const actionEndpoint = shouldHide ? `/listings/${listing.id}/withdraw` : `/listings/${listing.id}/sync`;
+    const actionEndpoint = shouldHide ? `/listings/${listing.id}/withdraw` : `/listings/${listing.id}/reactivate`;
     try {
       await fetchApi(actionEndpoint, { method: "POST" });
       setFeedback(shouldHide ? "Product is now hidden from buyers." : "Product is now live on your store!");
@@ -310,15 +310,30 @@ export default function ListingsPage() {
                         )}
                       </td>
 
-                      {/* Single Edit Button */}
+                      {/* Action Buttons: Hide/Unhide & Edit */}
                       <td className="px-6 py-3.5 text-right">
-                        <button
-                          onClick={() => openEditModal(listing)}
-                          className="px-3 py-1.5 rounded-lg bg-white hover:bg-gray-50 text-[#0a0a0a] font-medium text-xs transition-colors inline-flex items-center gap-1.5 border border-gray-300 shadow-sm"
-                        >
-                          <Edit3 className="h-3.5 w-3.5 text-[#767676]" />
-                          <span>Edit</span>
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleToggleHide(listing)}
+                            className={`px-2.5 py-1.5 rounded-lg border text-xs transition-colors shadow-sm font-medium inline-flex items-center gap-1 ${
+                              isLive 
+                                ? "bg-white border-gray-300 text-gray-600 hover:text-rose-600 hover:border-rose-300" 
+                                : "bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+                            }`}
+                            title={isLive ? "Hide this product from buyers" : "Make this product live again"}
+                          >
+                            {isLive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                            <span>{isLive ? "Hide" : "Unhide"}</span>
+                          </button>
+
+                          <button
+                            onClick={() => openEditModal(listing)}
+                            className="px-3 py-1.5 rounded-lg bg-white hover:bg-gray-50 text-[#0a0a0a] font-medium text-xs transition-colors inline-flex items-center gap-1.5 border border-gray-300 shadow-sm"
+                          >
+                            <Edit3 className="h-3.5 w-3.5 text-[#767676]" />
+                            <span>Edit</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

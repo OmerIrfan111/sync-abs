@@ -21,7 +21,7 @@ import {
   AlertCircle,
   Sparkles
 } from "lucide-react";
-import { fetchApi, Product } from "@/lib/api";
+import { fetchApi, Product, Listing } from "@/lib/api";
 
 export default function CatalogPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -45,22 +45,49 @@ export default function CatalogPage() {
   const [selectedChannelId, setSelectedChannelId] = useState<number>(1);
   const [disabledProducts, setDisabledProducts] = useState<Record<number, boolean>>({});
 
-  const handlePublishToChannel = async (product: Product, targetMarketplaceId?: number) => {
-    const channelId = targetMarketplaceId || selectedChannelId;
+  // Store selection modal state for row listing
+  const [listingModalProduct, setListingModalProduct] = useState<Product | null>(null);
+  const [selectedModalChannelId, setSelectedModalChannelId] = useState<number>(1);
+  const [existingListingsMap, setExistingListingsMap] = useState<Record<number, { id: number; marketplace_id: number; marketplace_name: string; status: string }[]>>({});
+
+  const loadListingsMap = async () => {
+    try {
+      const res = await fetchApi<{ items: Listing[] }>("/listings?page=1&page_size=100");
+      const map: Record<number, { id: number; marketplace_id: number; marketplace_name: string; status: string }[]> = {};
+      res.items.forEach((l) => {
+        if (!map[l.product_id]) {
+          map[l.product_id] = [];
+        }
+        map[l.product_id].push({
+          id: l.id,
+          marketplace_id: l.marketplace_id,
+          marketplace_name: l.marketplace_name || "Store",
+          status: l.status,
+        });
+      });
+      setExistingListingsMap(map);
+    } catch (err) {
+      console.error("Could not load listings map:", err);
+    }
+  };
+
+  const handlePublishToChannel = async (product: Product, targetMarketplaceId: number) => {
     setPublishingId(product.id);
     setPublishSuccess(null);
     try {
-      const channel = marketplaces.find(m => m.id === channelId);
+      const channel = marketplaces.find(m => m.id === targetMarketplaceId);
       const channelName = channel ? channel.name : "Your Store";
       await fetchApi<any>("/listings/publish", {
         method: "POST",
         body: JSON.stringify({
           product_id: product.id,
-          marketplace_id: channelId,
+          marketplace_id: targetMarketplaceId,
         }),
       });
-      setPublishSuccess(`Successfully listed on ${channelName}!`);
-      setTimeout(() => setPublishSuccess(null), 4000);
+      setPublishSuccess(`Successfully listed "${product.title}" on ${channelName}!`);
+      setTimeout(() => setPublishSuccess(null), 5000);
+      setListingModalProduct(null);
+      await loadListingsMap();
     } catch (err: any) {
       alert("Could not start selling: " + err.message);
     } finally {
@@ -112,9 +139,14 @@ export default function CatalogPage() {
     fetchApi<any[]>("/marketplaces")
       .then((res) => {
         setMarketplaces(res);
-        if (res.length > 0) setSelectedChannelId(res[0].id);
+        if (res.length > 0) {
+          setSelectedChannelId(res[0].id);
+          setSelectedModalChannelId(res[0].id);
+        }
       })
       .catch((err) => console.error("Could not fetch marketplaces:", err));
+
+    loadListingsMap();
   }, []);
 
   useEffect(() => {
@@ -351,23 +383,48 @@ export default function CatalogPage() {
 
                       {/* 5. Live In Stores */}
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 border border-gray-200">
-                            Ready to List
-                          </span>
-                        </div>
+                        {(() => {
+                          const currentListings = existingListingsMap[product.id] || [];
+                          if (currentListings.length === 0) {
+                            return (
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-gray-100 text-gray-500 border border-gray-200">
+                                Not listed yet
+                              </span>
+                            );
+                          }
+                          return (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {currentListings.map((l) => (
+                                <span
+                                  key={l.id}
+                                  className={`text-[11px] font-medium px-2 py-0.5 rounded-md border ${
+                                    l.status === "ACTIVE"
+                                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                      : "bg-gray-100 text-gray-600 border-gray-200"
+                                  }`}
+                                  title={l.status === "ACTIVE" ? `Live on ${l.marketplace_name}` : `Hidden on ${l.marketplace_name}`}
+                                >
+                                  {l.marketplace_name}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* 6. Action Buttons */}
                       <td className="px-6 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => handlePublishToChannel(product)}
+                            onClick={() => {
+                              setListingModalProduct(product);
+                              setSelectedModalChannelId(marketplaces.length > 0 ? marketplaces[0].id : 1);
+                            }}
                             disabled={publishingId === product.id || isExcluded}
                             className="px-3 py-1.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5 shrink-0"
                           >
                             <Store className="h-3.5 w-3.5" />
-                            <span>{publishingId === product.id ? "Listing..." : "Start Selling This"}</span>
+                            <span>Start Selling This</span>
                           </button>
 
                           <button
@@ -516,7 +573,30 @@ export default function CatalogPage() {
               </div>
             </div>
 
-            {/* One-click list action in drawer */}
+            {/* Live in stores info in drawer */}
+            {(() => {
+              const live = existingListingsMap[selectedProduct.id] || [];
+              if (live.length > 0) {
+                return (
+                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <span className="text-xs font-semibold text-[#1a1a1a] block mb-1.5">Already Listed On:</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {live.map((l) => (
+                        <span
+                          key={l.id}
+                          className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200"
+                        >
+                          ✓ {l.marketplace_name} ({l.status === "ACTIVE" ? "Live" : "Hidden"})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
+            {/* Choose store & list action in drawer */}
             <div className="pt-3.5 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-[#1a1a1a] font-semibold">Choose Store to List on:</span>
@@ -525,21 +605,149 @@ export default function CatalogPage() {
                   onChange={(e) => setSelectedChannelId(Number(e.target.value))}
                   className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-xs text-[#0a0a0a] font-medium focus:outline-none"
                 >
-                  {marketplaces.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
+                  {marketplaces.map((m) => {
+                    const alreadyIn = (existingListingsMap[selectedProduct.id] || []).some(
+                      (l) => l.marketplace_id === m.id
+                    );
+                    return (
+                      <option key={m.id} value={m.id}>
+                        {m.name} {alreadyIn ? "(Already Listed — will update)" : ""}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
               <button
-                onClick={() => handlePublishToChannel(selectedProduct)}
+                onClick={() => handlePublishToChannel(selectedProduct, selectedChannelId)}
                 disabled={publishingId === selectedProduct.id}
                 className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
               >
                 <Store className="h-4 w-4" />
                 <span>{publishingId === selectedProduct.id ? "Listing..." : "Start Selling on Store"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Start Selling / List on Store Modal */}
+      {listingModalProduct && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-start justify-between pb-3 border-b border-gray-200">
+              <div>
+                <h3 className="text-lg font-bold text-[#0a0a0a]">Select Store to Sell On</h3>
+                <p className="text-xs text-[#767676] mt-0.5">Choose which marketplace to publish this product to.</p>
+              </div>
+              <button
+                onClick={() => setListingModalProduct(null)}
+                className="p-1.5 rounded-lg text-[#767676] hover:text-[#0a0a0a] hover:bg-gray-100 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Product Summary */}
+            <div className="p-3.5 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+              <div className="font-semibold text-sm text-[#0a0a0a] line-clamp-1">
+                {listingModalProduct.title}
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div>
+                  <span className="text-[10px] text-[#767676] block">Wholesale Cost</span>
+                  <span className="font-semibold text-[#0a0a0a]">
+                    ${Number(listingModalProduct.lowest_cost || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[#767676] block">Selling Price</span>
+                  <span className="font-bold text-[#905831]">
+                    ${(Number(listingModalProduct.lowest_cost || 0) * 1.15).toFixed(2)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[#767676] block">Stock Available</span>
+                  <span className="font-semibold text-emerald-700">
+                    {listingModalProduct.total_stock} units
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Already Live Stores Status */}
+            {(() => {
+              const liveOn = existingListingsMap[listingModalProduct.id] || [];
+              if (liveOn.length > 0) {
+                return (
+                  <div className="text-xs">
+                    <span className="text-[#767676] block mb-1 font-medium">Currently listed on:</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {liveOn.map((l) => (
+                        <span
+                          key={l.id}
+                          className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200"
+                        >
+                          ✓ {l.marketplace_name} ({l.status === "ACTIVE" ? "Live" : "Hidden"})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
+            {/* Store Selection */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-[#1a1a1a]">
+                Choose Target Marketplace:
+              </label>
+              <select
+                value={selectedModalChannelId}
+                onChange={(e) => setSelectedModalChannelId(Number(e.target.value))}
+                className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+              >
+                {marketplaces.map((m) => {
+                  const alreadyIn = (existingListingsMap[listingModalProduct.id] || []).some(
+                    (l) => l.marketplace_id === m.id
+                  );
+                  return (
+                    <option key={m.id} value={m.id}>
+                      {m.name} {alreadyIn ? "(Already Listed — will update)" : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            <div className="p-3 bg-[#905831]/[0.06] rounded-lg border border-[#905831]/20 text-xs text-[#905831] space-y-0.5">
+              <div className="font-semibold flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Automated Sync:</span>
+              </div>
+              <p className="text-[11px] text-[#767676]">
+                Once published, the system will keep stock and price synchronized in the background.
+              </p>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="pt-3 border-t border-gray-200 flex items-center justify-end gap-2.5">
+              <button
+                onClick={() => setListingModalProduct(null)}
+                className="px-4 py-2 text-xs font-medium text-[#767676] hover:text-[#0a0a0a] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handlePublishToChannel(listingModalProduct, selectedModalChannelId)}
+                disabled={publishingId === listingModalProduct.id}
+                className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <Store className="h-3.5 w-3.5" />
+                <span>
+                  {publishingId === listingModalProduct.id ? "Listing..." : "Confirm & Start Selling"}
+                </span>
               </button>
             </div>
           </div>
