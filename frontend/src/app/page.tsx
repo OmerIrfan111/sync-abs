@@ -31,6 +31,7 @@ export default function DashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [reconciling, setReconciling] = useState(false);
   const [lastUpdatedTime, setLastUpdatedTime] = useState<Date>(new Date());
+  const [mounted, setMounted] = useState(false);
   const [showGettingStarted, setShowGettingStarted] = useState(true);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [reconcileResult, setReconcileResult] = useState<{
@@ -58,6 +59,7 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    setMounted(true);
     loadStats();
     const interval = setInterval(loadStats, 10000); // 10s auto-refresh
     return () => clearInterval(interval);
@@ -196,7 +198,9 @@ export default function DashboardPage() {
           </p>
           <div className="flex items-center gap-2 text-xs text-[#767676] pt-1">
             <Clock className="h-3.5 w-3.5 text-[#905831]" />
-            <span>Last checked: {lastUpdatedTime.toLocaleTimeString()} (Continuous background sync every 10s)</span>
+            <span suppressHydrationWarning>
+              Last checked: {mounted ? lastUpdatedTime.toLocaleTimeString() : "--:--"} (Continuous background sync every 10s)
+            </span>
           </div>
         </div>
 
@@ -475,7 +479,9 @@ export default function DashboardPage() {
                     <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800">
                       Needs Attention
                     </span>
-                    <span className="text-xs text-[#767676]">{new Date(err.created_at).toLocaleTimeString()}</span>
+                    <span className="text-xs text-[#767676]" suppressHydrationWarning>
+                      {new Date(err.created_at).toLocaleTimeString()}
+                    </span>
                   </div>
                   <p className="text-[#0a0a0a] font-bold mt-1">
                     {err.marketplace_name 

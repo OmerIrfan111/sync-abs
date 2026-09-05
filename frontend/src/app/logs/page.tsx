@@ -235,7 +235,7 @@ export default function LogsPage() {
                   ) : (
                     syncLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-black/[0.02] transition-colors">
-                        <td className="px-6 py-4 text-[#767676] whitespace-nowrap">
+                        <td className="px-6 py-4 text-[#767676] whitespace-nowrap" suppressHydrationWarning>
                           {new Date(log.synced_at).toLocaleString(undefined, {
                             month: "short",
                             day: "numeric",
@@ -324,7 +324,7 @@ export default function LogsPage() {
                           >
                             {isResolved ? "Resolved" : "Needs Attention"}
                           </span>
-                          <span className="text-xs text-[#767676]">
+                          <span className="text-xs text-[#767676]" suppressHydrationWarning>
                             Reported {new Date(err.created_at).toLocaleString()}
                           </span>
                           {(err.marketplace_name || err.supplier_name) && (

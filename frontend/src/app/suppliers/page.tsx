@@ -149,7 +149,7 @@ export default function SuppliersPage() {
                     </div>
                     <div className="p-3.5 bg-black/[0.02] rounded-2xl border border-black/[0.05]">
                       <span className="text-[11px] text-[#767676] block">Last Update Check</span>
-                      <span className="text-xs font-bold text-[#0a0a0a] block truncate mt-1">
+                      <span className="text-xs font-bold text-[#0a0a0a] block truncate mt-1" suppressHydrationWarning>
                         {sup.last_synced_at ? new Date(sup.last_synced_at).toLocaleTimeString() : "Pending check"}
                       </span>
                       <span className="text-[10px] text-emerald-700 font-bold block mt-0.5">Auto-sync active</span>
