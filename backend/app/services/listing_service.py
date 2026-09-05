@@ -156,7 +156,7 @@ class ListingService:
                     product_id=product.id,
                     marketplace_id=marketplace.id,
                     external_listing_id=adapter_result["external_listing_id"],
-                    status="ACTIVE",
+                    status=target_status,
                     selling_price=price,
                     listed_qty=quantity,
                     last_updated_at=now
@@ -164,7 +164,7 @@ class ListingService:
                 self.db.add(listing)
             else:
                 listing.external_listing_id = adapter_result["external_listing_id"]
-                listing.status = "ACTIVE"
+                listing.status = target_status
                 listing.selling_price = price
                 listing.listed_qty = quantity
                 listing.last_updated_at = now

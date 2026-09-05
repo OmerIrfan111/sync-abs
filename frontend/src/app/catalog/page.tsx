@@ -27,6 +27,13 @@ export default function CatalogPage() {
   const [pageSize] = useState(15);
   const [totalPages, setTotalPages] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedBrand, setSelectedBrand] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [filterOptions, setFilterOptions] = useState<{ brands: string[]; categories: string[] }>({
+    brands: [],
+    categories: [],
+  });
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [publishingId, setPublishingId] = useState<number | null>(null);
@@ -58,14 +65,21 @@ export default function CatalogPage() {
   const loadProducts = async () => {
     setLoading(true);
     try {
-      const qParam = searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : "";
+      const params = new URLSearchParams();
+      params.append("page", page.toString());
+      params.append("page_size", pageSize.toString());
+      if (searchQuery.trim()) params.append("q", searchQuery.trim());
+      if (selectedBrand) params.append("brand", selectedBrand);
+      if (selectedCategory) params.append("category", selectedCategory);
+      if (inStockOnly) params.append("in_stock", "true");
+
       const res = await fetchApi<{
         items: Product[];
         total: number;
         page: number;
         page_size: number;
         total_pages: number;
-      }>(`/products?page=${page}&page_size=${pageSize}${qParam}`);
+      }>(`/products?${params.toString()}`);
 
       setProducts(res.items);
       setTotal(res.total);
@@ -78,20 +92,37 @@ export default function CatalogPage() {
   };
 
   useEffect(() => {
-    loadProducts();
+    fetchApi<{ brands: string[]; categories: string[] }>("/products/filters/options")
+      .then((data) => setFilterOptions(data))
+      .catch((err) => console.error("Could not fetch filter options:", err));
+
     fetchApi<any[]>("/marketplaces")
       .then((res) => {
         setMarketplaces(res);
         if (res.length > 0) setSelectedChannelId(res[0].id);
       })
       .catch((err) => console.error("Could not fetch marketplaces:", err));
-  }, [page]);
+  }, []);
+
+  useEffect(() => {
+    loadProducts();
+  }, [page, selectedBrand, selectedCategory, inStockOnly]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
     loadProducts();
   };
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setSelectedBrand("");
+    setSelectedCategory("");
+    setInStockOnly(false);
+    setPage(1);
+  };
+
+  const hasActiveFilters = Boolean(searchQuery || selectedBrand || selectedCategory || inStockOnly);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -108,24 +139,80 @@ export default function CatalogPage() {
         </div>
       </div>
 
-      {/* Search & Filter Toolbar */}
-      <div className="p-4 bg-[#0e1526] border border-gray-800 rounded-2xl flex flex-col md:flex-row gap-3">
-        <form onSubmit={handleSearchSubmit} className="flex-1 relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search by SKU, UPC, EAN, MPN, Brand, or Title..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-gray-900/80 border border-gray-700/60 rounded-xl text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition-colors"
-          />
-        </form>
-        <button
-          onClick={() => { setPage(1); loadProducts(); }}
-          className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-indigo-600/20"
-        >
-          Search
-        </button>
+      {/* Search & Multi-Filter Toolbar */}
+      <div className="p-4 bg-[#0e1526] border border-gray-800 rounded-2xl space-y-3 shadow-lg">
+        <div className="flex flex-col md:flex-row gap-3">
+          <form onSubmit={handleSearchSubmit} className="flex-1 relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by SKU, UPC, EAN, MPN, Brand, or Title..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-gray-900/80 border border-gray-700/60 rounded-xl text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </form>
+          <button
+            onClick={() => { setPage(1); loadProducts(); }}
+            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-indigo-600/20"
+          >
+            Search
+          </button>
+        </div>
+
+        {/* Filters Row */}
+        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-800/80 text-xs text-gray-400">
+          <div className="flex items-center gap-1.5 font-semibold text-gray-300">
+            <Filter className="h-3.5 w-3.5 text-indigo-400" />
+            <span>Filters:</span>
+          </div>
+
+          {/* Brand Filter */}
+          <select
+            value={selectedBrand}
+            onChange={(e) => { setSelectedBrand(e.target.value); setPage(1); }}
+            className="px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-indigo-500"
+          >
+            <option value="">All Brands</option>
+            {filterOptions.brands.map((b) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+
+          {/* Category Filter */}
+          <select
+            value={selectedCategory}
+            onChange={(e) => { setSelectedCategory(e.target.value); setPage(1); }}
+            className="px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-indigo-500"
+          >
+            <option value="">All Categories</option>
+            {filterOptions.categories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+
+          {/* In-Stock Toggle */}
+          <label className="flex items-center gap-2 cursor-pointer select-none bg-gray-900 border border-gray-700 px-3 py-1.5 rounded-lg hover:border-gray-600">
+            <input
+              type="checkbox"
+              checked={inStockOnly}
+              onChange={(e) => { setInStockOnly(e.target.checked); setPage(1); }}
+              className="rounded border-gray-700 bg-gray-800 text-indigo-600 focus:ring-0 h-3.5 w-3.5 cursor-pointer"
+            />
+            <span className="text-xs text-gray-300">In Stock Only</span>
+          </label>
+
+          {/* Clear Filters Button */}
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="inline-flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 px-2 py-1 bg-rose-500/10 rounded-lg border border-rose-500/20 transition-colors"
+            >
+              <X className="h-3 w-3" />
+              <span>Clear Filters</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Products Table */}

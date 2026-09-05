@@ -31,9 +31,9 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     in_stock_products = db.query(Product).filter(Product.id.in_(in_stock_stmt)).count()
     out_of_stock_products = max(0, total_products - in_stock_products)
 
-    # 4. Needs attention: pending errors or inactive products
-    pending_errors = db.query(ErrorLog).filter(ErrorLog.status == "PENDING").count()
-    needs_attention = pending_errors
+    # 4. Needs attention: pending/failed errors
+    unresolved_errors = db.query(ErrorLog).filter(ErrorLog.status.in_(["PENDING", "FAILED"])).count()
+    needs_attention = unresolved_errors
 
     # 5. Suppliers health
     suppliers = db.query(Supplier).all()
@@ -42,7 +42,7 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         p_count = db.query(SupplierProduct).filter(SupplierProduct.supplier_id == s.id).count()
         recent_err = db.query(ErrorLog).filter(
             ErrorLog.supplier_id == s.id,
-            ErrorLog.status == "PENDING"
+            ErrorLog.status.in_(["PENDING", "FAILED"])
         ).first()
         status_str = "ERROR" if recent_err else ("HEALTHY" if s.is_active else "IDLE")
         suppliers_health.append(SupplierHealthStatus(
@@ -61,7 +61,7 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         l_count = db.query(Listing).filter(Listing.marketplace_id == m.id).count()
         recent_err = db.query(ErrorLog).filter(
             ErrorLog.marketplace_id == m.id,
-            ErrorLog.status == "PENDING"
+            ErrorLog.status.in_(["PENDING", "FAILED"])
         ).first()
         status_str = "ERROR" if recent_err else ("HEALTHY" if m.is_active else "IDLE")
         marketplaces_health.append(MarketplaceHealthStatus(
@@ -105,3 +105,38 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         marketplaces_health=marketplaces_health,
         recent_errors=recent_errors
     )
+
+@router.post("/reconcile-all")
+def reconcile_all_suppliers(db: Session = Depends(get_db)):
+    """
+    Trigger system-wide catalog reconciliation across all active suppliers.
+    (Spec Section 20 & 24)
+    """
+    from app.services.sync_service import SyncService
+    sync_service = SyncService(db)
+    suppliers = db.query(Supplier).filter(Supplier.is_active == True).all()
+    results = []
+    for s in suppliers:
+        try:
+            res = sync_service.sync_supplier(s.id)
+            results.append({
+                "supplier_id": s.id,
+                "supplier_name": s.name,
+                "status": "SUCCESS",
+                "imported": res.get("products_imported", 0),
+                "changed": res.get("changes_detected", 0)
+            })
+        except Exception as exc:
+            results.append({
+                "supplier_id": s.id,
+                "supplier_name": s.name,
+                "status": "ERROR",
+                "error": str(exc)
+            })
+
+    return {
+        "reconciled_suppliers": len(suppliers),
+        "details": results,
+        "message": "System-wide reconciliation completed successfully."
+    }
+

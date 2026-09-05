@@ -171,6 +171,13 @@ class CatalogService:
         if supplier_id:
             query = query.join(SupplierProduct).filter(SupplierProduct.supplier_id == supplier_id)
 
+        if in_stock is True:
+            in_stock_subquery = self.db.query(SupplierProduct.product_id).filter(SupplierProduct.qty_available > 0).distinct().subquery()
+            query = query.filter(Product.id.in_(in_stock_subquery))
+        elif in_stock is False:
+            in_stock_subquery = self.db.query(SupplierProduct.product_id).filter(SupplierProduct.qty_available > 0).distinct().subquery()
+            query = query.filter(~Product.id.in_(in_stock_subquery))
+
         total = query.count()
         products = query.order_by(desc(Product.updated_at)).offset(skip).limit(limit).all()
 
@@ -194,12 +201,6 @@ class CatalogService:
                 ))
                 total_stock += sp.qty_available
                 costs.append(sp.cost)
-
-            if in_stock is not None:
-                if in_stock and total_stock <= 0:
-                    continue
-                if not in_stock and total_stock > 0:
-                    continue
 
             results.append(ProductResponse(
                 id=p.id,

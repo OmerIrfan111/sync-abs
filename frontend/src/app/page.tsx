@@ -11,7 +11,10 @@ import {
   RefreshCw,
   Clock,
   Truck,
-  Store
+  Store,
+  Zap,
+  CheckCircle,
+  AlertCircle
 } from "lucide-react";
 import { fetchApi, DashboardStats } from "@/lib/api";
 
@@ -19,6 +22,17 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileResult, setReconcileResult] = useState<{
+    message: string;
+    details: Array<{
+      supplier_name: string;
+      status: string;
+      imported?: number;
+      changed?: number;
+      error?: string;
+    }>;
+  } | null>(null);
 
   const loadStats = async () => {
     try {
@@ -41,6 +55,22 @@ export default function DashboardPage() {
   const handleRefresh = () => {
     setRefreshing(true);
     loadStats();
+  };
+
+  const handleReconcileAll = async () => {
+    setReconciling(true);
+    setReconcileResult(null);
+    try {
+      const result = await fetchApi<any>("/dashboard/reconcile-all", {
+        method: "POST",
+      });
+      setReconcileResult(result);
+      await loadStats();
+    } catch (err: any) {
+      alert("System reconcile failed: " + err.message);
+    } finally {
+      setReconciling(false);
+    }
   };
 
   const kpis = [
@@ -96,15 +126,57 @@ export default function DashboardPage() {
             Real-time synchronization metrics across wholesale suppliers and ecommerce marketplaces.
           </p>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-semibold transition-all shadow-md shadow-indigo-600/20 self-start sm:self-auto"
-        >
-          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-          <span>Refresh Metrics</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleReconcileAll}
+            disabled={reconciling}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-amber-600/20 disabled:opacity-50"
+          >
+            <Zap className={`h-4 w-4 ${reconciling ? "animate-pulse" : "fill-current"}`} />
+            <span>{reconciling ? "Reconciling All..." : "Run System Reconcile"}</span>
+          </button>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            <span>Refresh Metrics</span>
+          </button>
+        </div>
       </div>
+
+      {/* Reconciliation Result Banner */}
+      {reconcileResult && (
+        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 font-semibold">
+              <CheckCircle className="h-5 w-5 text-emerald-400" />
+              <span>{reconcileResult.message}</span>
+            </div>
+            <button
+              onClick={() => setReconcileResult(null)}
+              className="text-xs text-gray-400 hover:text-white px-2 py-1 bg-gray-800/60 rounded"
+            >
+              Dismiss
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mt-2">
+            {reconcileResult.details.map((d, i) => (
+              <div key={i} className="text-xs p-2.5 rounded-lg bg-gray-950/60 border border-emerald-500/20">
+                <span className="font-bold text-white block">{d.supplier_name}</span>
+                {d.status === "SUCCESS" ? (
+                  <span className="text-gray-400 text-[11px]">
+                    Imported: <span className="text-emerald-400 font-semibold">{d.imported}</span> | Changes: <span className="text-indigo-400 font-semibold">{d.changed}</span>
+                  </span>
+                ) : (
+                  <span className="text-rose-400 text-[11px]">{d.error}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 5 KPI Cards (Spec Section 24) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">

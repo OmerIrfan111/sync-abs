@@ -42,6 +42,16 @@ def list_products(
         total_pages=total_pages
     )
 
+@router.get("/filters/options")
+def get_filter_options(db: Session = Depends(get_db)):
+    """Return distinct non-empty brands and categories for catalog filtering."""
+    brands = [b[0] for b in db.query(Product.brand).filter(Product.brand.isnot(None), Product.brand != "").distinct().order_by(Product.brand).all()]
+    categories = [c[0] for c in db.query(Product.category).filter(Product.category.isnot(None), Product.category != "").distinct().order_by(Product.category).all()]
+    return {
+        "brands": brands,
+        "categories": categories
+    }
+
 @router.get("/{product_id}", response_model=ProductResponse)
 def get_product(product_id: int, db: Session = Depends(get_db)):
     service = CatalogService(db)
