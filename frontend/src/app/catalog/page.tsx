@@ -18,7 +18,8 @@ import {
   SlidersHorizontal,
   Info,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Sparkles
 } from "lucide-react";
 import { fetchApi, Product } from "@/lib/api";
 
@@ -51,7 +52,7 @@ export default function CatalogPage() {
     try {
       const channel = marketplaces.find(m => m.id === channelId);
       const channelName = channel ? channel.name : "Your Store";
-      const res = await fetchApi<any>("/listings/publish", {
+      await fetchApi<any>("/listings/publish", {
         method: "POST",
         body: JSON.stringify({
           product_id: product.id,
@@ -137,98 +138,94 @@ export default function CatalogPage() {
   const hasActiveFilters = Boolean(searchQuery || selectedBrand || selectedCategory || inStockOnly);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-7 max-w-7xl mx-auto pb-12">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0e1526] p-6 rounded-2xl border border-gray-800 shadow-xl">
+      <div className="glass-card p-8 rounded-[2rem] shadow-wandor-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-white tracking-tight">Products to Sell</h1>
-            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-3xl font-black text-[#0a0a0a] tracking-tight">Products to Sell</h1>
+            <span className="text-xs font-semibold px-3 py-0.5 rounded-full bg-[#905831]/10 text-[#905831] border border-[#905831]/20">
               Wholesale Catalog
             </span>
           </div>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-[#767676] mt-1.5 max-w-2xl leading-relaxed">
             Browse all products provided by your suppliers. Pick what you want to sell and list them on your stores with one click.
           </p>
         </div>
-        <div className="text-right self-start sm:self-auto">
-          <span className="text-xs text-gray-400 block">Total Catalog Items</span>
-          <span className="text-2xl font-black text-white">{total.toLocaleString()}</span>
+        <div className="text-left sm:text-right self-start sm:self-auto">
+          <span className="text-xs text-[#767676] block font-medium">Total Catalog Items</span>
+          <span className="text-3xl font-black text-[#0a0a0a] tracking-tight">{total.toLocaleString()}</span>
         </div>
       </div>
 
-      {/* Search & Plain-English Filter Toolbar */}
-      <div className="p-5 bg-[#0e1526] border border-gray-800 rounded-2xl space-y-4 shadow-lg">
+      {/* Search & Filter Toolbar */}
+      <div className="glass-card p-6 rounded-[2rem] shadow-wandor-sm space-y-4">
         <div className="flex flex-col md:flex-row gap-3">
           <form onSubmit={handleSearchSubmit} className="flex-1 relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767676]" />
             <input
               type="text"
               placeholder="Search products by title, brand, or product code..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-900/80 border border-gray-700/80 rounded-xl text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition-colors"
+              className="w-full pl-11 pr-4 py-3 bg-white/90 border border-black/[0.08] rounded-full text-sm text-[#1a1a1a] placeholder-[#767676] focus:outline-none focus:border-[#0a0a0a] transition-all shadow-wandor-sm"
             />
           </form>
           <button
             onClick={() => { setPage(1); loadProducts(); }}
-            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-all shadow-md shadow-indigo-600/20 shrink-0"
+            className="px-7 py-3 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-full text-sm font-semibold transition-all shadow-wandor-md hover:shadow-wandor-lg shrink-0"
           >
             Find Products
           </button>
         </div>
 
         {/* Filters Row */}
-        <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-gray-800/80 text-xs">
-          <div className="flex items-center gap-1.5 font-bold text-gray-300">
-            <Filter className="h-3.5 w-3.5 text-indigo-400" />
+        <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-black/[0.05] text-xs">
+          <div className="flex items-center gap-1.5 font-bold text-[#1a1a1a]">
+            <Filter className="h-3.5 w-3.5 text-[#905831]" />
             <span>Filter By:</span>
           </div>
 
           {/* Brand Filter */}
-          <div className="flex items-center gap-1.5">
-            <select
-              value={selectedBrand}
-              onChange={(e) => { setSelectedBrand(e.target.value); setPage(1); }}
-              className="px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-indigo-500"
-            >
-              <option value="">All Brands</option>
-              {filterOptions.brands.map((b) => (
-                <option key={b} value={b}>{b}</option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={selectedBrand}
+            onChange={(e) => { setSelectedBrand(e.target.value); setPage(1); }}
+            className="px-4 py-2 bg-white border border-black/[0.08] rounded-full text-xs text-[#1a1a1a] font-medium focus:outline-none focus:border-[#0a0a0a] shadow-wandor-sm"
+          >
+            <option value="">All Brands</option>
+            {filterOptions.brands.map((b) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
 
           {/* Category Filter */}
-          <div className="flex items-center gap-1.5">
-            <select
-              value={selectedCategory}
-              onChange={(e) => { setSelectedCategory(e.target.value); setPage(1); }}
-              className="px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-indigo-500"
-            >
-              <option value="">All Categories</option>
-              {filterOptions.categories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={selectedCategory}
+            onChange={(e) => { setSelectedCategory(e.target.value); setPage(1); }}
+            className="px-4 py-2 bg-white border border-black/[0.08] rounded-full text-xs text-[#1a1a1a] font-medium focus:outline-none focus:border-[#0a0a0a] shadow-wandor-sm"
+          >
+            <option value="">All Categories</option>
+            {filterOptions.categories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
 
           {/* In-Stock Toggle */}
-          <label className="flex items-center gap-2 cursor-pointer select-none bg-gray-900 border border-gray-700 px-3 py-1.5 rounded-lg hover:border-gray-600 transition-colors">
+          <label className="flex items-center gap-2 cursor-pointer select-none bg-white border border-black/[0.08] px-4 py-2 rounded-full hover:border-black/[0.15] transition-colors shadow-wandor-sm">
             <input
               type="checkbox"
               checked={inStockOnly}
               onChange={(e) => { setInStockOnly(e.target.checked); setPage(1); }}
-              className="rounded border-gray-700 bg-gray-800 text-indigo-600 focus:ring-0 h-3.5 w-3.5 cursor-pointer"
+              className="rounded border-gray-300 text-[#0a0a0a] focus:ring-0 h-3.5 w-3.5 cursor-pointer accent-[#0a0a0a]"
             />
-            <span className="text-xs text-gray-300 font-medium">In Stock Only (Ready to ship)</span>
+            <span className="text-xs text-[#1a1a1a] font-medium">In Stock Only (Ready to ship)</span>
           </label>
 
           {/* Clear Filters Button */}
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="inline-flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 px-2.5 py-1.5 bg-rose-500/10 rounded-lg border border-rose-500/20 transition-colors font-medium ml-auto"
+              className="inline-flex items-center gap-1 text-xs text-rose-700 hover:text-rose-800 px-3.5 py-2 bg-rose-50 rounded-full border border-rose-200 transition-colors font-semibold ml-auto shadow-wandor-sm"
             >
               <X className="h-3 w-3" />
               <span>Reset Filters</span>
@@ -237,24 +234,24 @@ export default function CatalogPage() {
         </div>
       </div>
 
-      {/* Success Notification Bar */}
+      {/* Success Notification */}
       {publishSuccess && (
-        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 flex items-center justify-between text-xs font-semibold shadow-lg">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-900 flex items-center justify-between text-xs font-semibold shadow-wandor-sm">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
             <span>{publishSuccess} You can view and edit it anytime under &apos;Your Online Stores&apos;.</span>
           </div>
-          <button onClick={() => setPublishSuccess(null)} className="text-gray-400 hover:text-white">
+          <button onClick={() => setPublishSuccess(null)} className="text-emerald-800 hover:text-emerald-950">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
 
-      {/* Simplified Products Table (Spec Requirement 8) */}
-      <div className="bg-[#0e1526] border border-gray-800 rounded-2xl overflow-hidden shadow-xl">
+      {/* Products Table Card */}
+      <div className="glass-card rounded-[2rem] overflow-hidden shadow-wandor-sm border border-black/[0.06]">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-300">
-            <thead className="bg-[#131b2e] text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-800">
+          <table className="w-full text-left text-sm text-[#1a1a1a]">
+            <thead className="bg-black/[0.02] text-xs font-bold text-[#767676] uppercase tracking-wider border-b border-black/[0.06]">
               <tr>
                 <th className="px-6 py-4">Product</th>
                 <th className="px-4 py-4">Your Cost</th>
@@ -264,16 +261,16 @@ export default function CatalogPage() {
                 <th className="px-6 py-4 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-800/60">
+            <tbody className="divide-y divide-black/[0.05]">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-16 text-gray-500">
+                  <td colSpan={6} className="text-center py-20 text-[#767676]">
                     Loading products...
                   </td>
                 </tr>
               ) : products.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-16 text-gray-500">
+                  <td colSpan={6} className="text-center py-20 text-[#767676]">
                     No products found. Try changing your search query or filters.
                   </td>
                 </tr>
@@ -286,35 +283,35 @@ export default function CatalogPage() {
                   return (
                     <tr 
                       key={product.id} 
-                      className={`hover:bg-gray-900/40 transition-colors ${isExcluded ? "opacity-50" : ""}`}
+                      className={`hover:bg-black/[0.02] transition-colors ${isExcluded ? "opacity-50" : ""}`}
                     >
                       {/* 1. Product Image & Name */}
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3.5">
                           {product.images && product.images[0] ? (
                             <img
                               src={product.images[0]}
                               alt={product.title}
-                              className="h-12 w-12 rounded-xl object-cover bg-gray-800 border border-gray-700 shrink-0"
+                              className="h-14 w-14 rounded-2xl object-cover bg-white border border-black/[0.06] shadow-wandor-sm shrink-0"
                             />
                           ) : (
-                            <div className="h-12 w-12 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-500 shrink-0">
+                            <div className="h-14 w-14 rounded-2xl bg-white border border-black/[0.06] flex items-center justify-center text-[#767676] shadow-wandor-sm shrink-0">
                               <Layers className="h-5 w-5" />
                             </div>
                           )}
                           <div className="max-w-xs sm:max-w-md">
                             <button
                               onClick={() => setSelectedProduct(product)}
-                              className="font-bold text-white hover:text-indigo-400 text-left line-clamp-1 transition-colors"
+                              className="font-bold text-[#0a0a0a] hover:text-[#905831] text-left line-clamp-1 transition-colors"
                             >
                               {product.title}
                             </button>
-                            <div className="text-xs text-gray-400 mt-0.5">
+                            <div className="text-xs text-[#767676] mt-0.5">
                               {product.brand || "Standard Brand"} • {product.category || "General Merchandise"}
                             </div>
                             <button
                               onClick={() => setSelectedProduct(product)}
-                              className="text-[11px] text-indigo-400 hover:text-indigo-300 underline mt-0.5 block"
+                              className="text-[11px] text-[#905831] hover:underline mt-1 font-semibold block"
                             >
                               View product codes & details &rarr;
                             </button>
@@ -324,30 +321,30 @@ export default function CatalogPage() {
 
                       {/* 2. Your Cost */}
                       <td className="px-4 py-4">
-                        <div className="font-bold text-white text-base">
+                        <div className="font-bold text-[#0a0a0a] text-base">
                           {cost > 0 ? `$${cost.toFixed(2)}` : "—"}
                         </div>
-                        <div className="text-[10px] text-gray-500">What you pay supplier</div>
+                        <div className="text-[10px] text-[#767676]">What you pay supplier</div>
                       </td>
 
                       {/* 3. Suggested Selling Price */}
                       <td className="px-4 py-4">
-                        <div className="font-black text-emerald-400 text-base">
+                        <div className="font-black text-[#905831] text-base">
                           {cost > 0 ? `$${suggestedPrice}` : "—"}
                         </div>
-                        <div className="text-[10px] text-gray-500">With 15% profit markup</div>
+                        <div className="text-[10px] text-[#767676]">With 15% profit markup</div>
                       </td>
 
                       {/* 4. Stock Available */}
                       <td className="px-4 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold shadow-wandor-sm ${
                           product.total_stock > 0
-                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                            : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                            : "bg-rose-50 text-rose-800 border border-rose-200"
                         }`}>
                           {product.total_stock > 0 ? `${product.total_stock} ready to ship` : "Out of Stock"}
                         </span>
-                        <div className="text-[10px] text-gray-500 mt-0.5">
+                        <div className="text-[10px] text-[#767676] mt-1 font-medium">
                           {product.supplier_products.length} {product.supplier_products.length === 1 ? "supplier" : "suppliers"}
                         </div>
                       </td>
@@ -355,19 +352,19 @@ export default function CatalogPage() {
                       {/* 5. Live In Stores */}
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-1 flex-wrap">
-                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700">
+                          <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-black/[0.04] text-[#1a1a1a] border border-black/[0.06]">
                             Ready to List
                           </span>
                         </div>
                       </td>
 
-                      {/* 6. Prominent Action Buttons */}
+                      {/* 6. Action Buttons */}
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handlePublishToChannel(product)}
                             disabled={publishingId === product.id || isExcluded}
-                            className="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                            className="px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-full text-xs font-bold transition-all shadow-wandor-sm hover:shadow-wandor-md disabled:opacity-50 flex items-center gap-1.5 shrink-0"
                           >
                             <Store className="h-3.5 w-3.5" />
                             <span>{publishingId === product.id ? "Listing..." : "Start Selling This"}</span>
@@ -375,10 +372,10 @@ export default function CatalogPage() {
 
                           <button
                             onClick={() => toggleNotSelling(product.id)}
-                            className={`p-2 rounded-xl border text-xs transition-colors ${
+                            className={`px-3 py-2 rounded-full border text-xs transition-colors shadow-wandor-sm ${
                               isExcluded 
-                                ? "bg-amber-500/10 border-amber-500/30 text-amber-300" 
-                                : "bg-gray-900 border-gray-800 text-gray-400 hover:text-gray-200"
+                                ? "bg-amber-50 border-amber-300 text-amber-800" 
+                                : "bg-white border-black/[0.08] text-[#767676] hover:text-[#0a0a0a]"
                             }`}
                             title={isExcluded ? "Click to enable" : "Don't sell this product"}
                           >
@@ -397,42 +394,42 @@ export default function CatalogPage() {
         </div>
 
         {/* Pagination Bar */}
-        <div className="p-4 bg-[#131b2e] border-t border-gray-800 flex items-center justify-between text-xs text-gray-400">
+        <div className="p-5 bg-black/[0.02] border-t border-black/[0.05] flex items-center justify-between text-xs text-[#767676]">
           <div>
-            Showing Page <span className="text-white font-bold">{page}</span> of{" "}
-            <span className="text-white font-bold">{totalPages}</span> ({total} total products)
+            Showing Page <span className="text-[#0a0a0a] font-bold">{page}</span> of{" "}
+            <span className="text-[#0a0a0a] font-bold">{totalPages}</span> ({total} total products)
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="px-3.5 py-1.5 rounded-xl bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white font-semibold flex items-center gap-1"
+              className="px-4 py-2 rounded-full bg-white hover:bg-black/[0.02] disabled:opacity-50 text-[#1a1a1a] font-semibold border border-black/[0.08] flex items-center gap-1 shadow-wandor-sm"
             >
-              <ChevronLeft className="h-3.5 w-3.5" /> Previous Page
+              <ChevronLeft className="h-3.5 w-3.5" /> Previous
             </button>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
-              className="px-3.5 py-1.5 rounded-xl bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white font-semibold flex items-center gap-1"
+              className="px-4 py-2 rounded-full bg-white hover:bg-black/[0.02] disabled:opacity-50 text-[#1a1a1a] font-semibold border border-black/[0.08] flex items-center gap-1 shadow-wandor-sm"
             >
-              Next Page <ChevronRight className="h-3.5 w-3.5" />
+              Next <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Product Details Drawer (Collapsible Drawer per Requirement 8) */}
+      {/* Product Details Drawer / Modal */}
       {selectedProduct && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0e1526] border border-gray-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 space-y-6">
-            <div className="flex items-start justify-between pb-4 border-b border-gray-800">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white/95 backdrop-blur-2xl border border-black/[0.08] rounded-[2.5rem] max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-wandor-float p-7 space-y-6">
+            <div className="flex items-start justify-between pb-4 border-b border-black/[0.05]">
               <div>
-                <h3 className="text-lg font-bold text-white">{selectedProduct.title}</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Product Details & Wholesale Breakdown</p>
+                <h3 className="text-xl font-black text-[#0a0a0a]">{selectedProduct.title}</h3>
+                <p className="text-xs text-[#767676] mt-0.5">Product Details & Wholesale Breakdown</p>
               </div>
               <button
                 onClick={() => setSelectedProduct(null)}
-                className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800"
+                className="p-2.5 rounded-full text-[#767676] hover:text-[#0a0a0a] hover:bg-black/[0.04] transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -440,78 +437,78 @@ export default function CatalogPage() {
 
             {/* Product Overview Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3 bg-gray-900/80 rounded-xl border border-gray-800">
-                <span className="text-[11px] text-gray-400 block">Brand</span>
-                <span className="font-bold text-white text-sm">{selectedProduct.brand || "Unbranded"}</span>
+              <div className="p-3.5 bg-black/[0.02] rounded-2xl border border-black/[0.05]">
+                <span className="text-[11px] text-[#767676] block">Brand</span>
+                <span className="font-bold text-[#0a0a0a] text-sm">{selectedProduct.brand || "Unbranded"}</span>
               </div>
-              <div className="p-3 bg-gray-900/80 rounded-xl border border-gray-800">
-                <span className="text-[11px] text-gray-400 block">Category</span>
-                <span className="font-bold text-white text-sm">{selectedProduct.category || "General"}</span>
+              <div className="p-3.5 bg-black/[0.02] rounded-2xl border border-black/[0.05]">
+                <span className="text-[11px] text-[#767676] block">Category</span>
+                <span className="font-bold text-[#0a0a0a] text-sm">{selectedProduct.category || "General"}</span>
               </div>
-              <div className="p-3 bg-gray-900/80 rounded-xl border border-gray-800">
-                <span className="text-[11px] text-gray-400 block">Available Stock</span>
-                <span className="font-bold text-emerald-400 text-sm">{selectedProduct.total_stock} units</span>
+              <div className="p-3.5 bg-black/[0.02] rounded-2xl border border-black/[0.05]">
+                <span className="text-[11px] text-[#767676] block">Available Stock</span>
+                <span className="font-bold text-emerald-700 text-sm">{selectedProduct.total_stock} units</span>
               </div>
-              <div className="p-3 bg-gray-900/80 rounded-xl border border-gray-800">
-                <span className="text-[11px] text-gray-400 block">Lowest Supplier Cost</span>
-                <span className="font-bold text-white text-sm">${selectedProduct.lowest_cost ? Number(selectedProduct.lowest_cost).toFixed(2) : "0.00"}</span>
+              <div className="p-3.5 bg-black/[0.02] rounded-2xl border border-black/[0.05]">
+                <span className="text-[11px] text-[#767676] block">Lowest Cost</span>
+                <span className="font-bold text-[#0a0a0a] text-sm">${selectedProduct.lowest_cost ? Number(selectedProduct.lowest_cost).toFixed(2) : "0.00"}</span>
               </div>
             </div>
 
-            {/* Technical Identifiers (Hidden from main table, available here) */}
-            <div className="p-4 bg-gray-900/50 rounded-xl border border-gray-800 space-y-2">
-              <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider">Product Identifiers</h4>
+            {/* Technical Identifiers */}
+            <div className="p-4 bg-black/[0.02] rounded-2xl border border-black/[0.05] space-y-2">
+              <h4 className="text-xs font-bold text-[#767676] uppercase tracking-wider">Product Identifiers</h4>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
                 <div>
-                  <span className="text-gray-500 block text-[10px]">Product Code (SKU)</span>
-                  <span className="text-indigo-400 font-bold">{selectedProduct.sku}</span>
+                  <span className="text-[#767676] block text-[10px]">Product Code (SKU)</span>
+                  <span className="text-[#905831] font-bold">{selectedProduct.sku}</span>
                 </div>
                 <div>
-                  <span className="text-gray-500 block text-[10px]">Barcode (UPC)</span>
-                  <span className="text-gray-300">{selectedProduct.upc || "None"}</span>
+                  <span className="text-[#767676] block text-[10px]">Barcode (UPC)</span>
+                  <span className="text-[#1a1a1a]">{selectedProduct.upc || "None"}</span>
                 </div>
                 <div>
-                  <span className="text-gray-500 block text-[10px]">European Barcode (EAN)</span>
-                  <span className="text-gray-300">{selectedProduct.ean || "None"}</span>
+                  <span className="text-[#767676] block text-[10px]">European Barcode (EAN)</span>
+                  <span className="text-[#1a1a1a]">{selectedProduct.ean || "None"}</span>
                 </div>
                 <div>
-                  <span className="text-gray-500 block text-[10px]">Part Number (MPN)</span>
-                  <span className="text-gray-300">{selectedProduct.mpn || "None"}</span>
+                  <span className="text-[#767676] block text-[10px]">Part Number (MPN)</span>
+                  <span className="text-[#1a1a1a]">{selectedProduct.mpn || "None"}</span>
                 </div>
               </div>
             </div>
 
             {/* Description */}
             <div>
-              <h4 className="text-xs font-bold text-gray-300 mb-1">Product Description</h4>
-              <p className="text-xs text-gray-400 leading-relaxed bg-gray-900/30 p-3 rounded-xl border border-gray-800/60">
+              <h4 className="text-xs font-bold text-[#1a1a1a] mb-1.5">Product Description</h4>
+              <p className="text-xs text-[#767676] leading-relaxed bg-black/[0.02] p-4 rounded-2xl border border-black/[0.05]">
                 {selectedProduct.description || "Standard manufacturer product details."}
               </p>
             </div>
 
             {/* Distributors carrying this item */}
             <div>
-              <h4 className="text-xs font-bold text-white mb-2 flex items-center gap-2">
-                <Truck className="h-4 w-4 text-indigo-400" />
+              <h4 className="text-xs font-bold text-[#0a0a0a] mb-2.5 flex items-center gap-2">
+                <Truck className="h-4 w-4 text-[#905831]" />
                 <span>Wholesale Distributors Supplying This Item</span>
               </h4>
-              <div className="border border-gray-800 rounded-xl overflow-hidden">
+              <div className="border border-black/[0.06] rounded-2xl overflow-hidden bg-white">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-[#131b2e] text-gray-400 uppercase text-[10px]">
+                  <thead className="bg-black/[0.02] text-[#767676] uppercase text-[10px]">
                     <tr>
-                      <th className="px-4 py-2.5">Distributor</th>
-                      <th className="px-4 py-2.5">What You Pay</th>
-                      <th className="px-4 py-2.5">Stock Ready</th>
-                      <th className="px-4 py-2.5">Shipping</th>
+                      <th className="px-4 py-3">Distributor</th>
+                      <th className="px-4 py-3">What You Pay</th>
+                      <th className="px-4 py-3">Stock Ready</th>
+                      <th className="px-4 py-3">Shipping</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-800">
+                  <tbody className="divide-y divide-black/[0.05]">
                     {selectedProduct.supplier_products.map((sp) => (
-                      <tr key={sp.id} className="hover:bg-gray-900/50">
-                        <td className="px-4 py-2.5 font-bold text-white">{sp.supplier_name || "Supplier"}</td>
-                        <td className="px-4 py-2.5 font-black text-emerald-400">${Number(sp.cost).toFixed(2)}</td>
-                        <td className="px-4 py-2.5 text-gray-300 font-semibold">{sp.qty_available} units</td>
-                        <td className="px-4 py-2.5 text-gray-400">Standard Warehouse</td>
+                      <tr key={sp.id} className="hover:bg-black/[0.02]">
+                        <td className="px-4 py-3 font-bold text-[#0a0a0a]">{sp.supplier_name || "Supplier"}</td>
+                        <td className="px-4 py-3 font-black text-[#905831]">${Number(sp.cost).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-emerald-800 font-bold">{sp.qty_available} units</td>
+                        <td className="px-4 py-3 text-[#767676]">Standard Warehouse</td>
                       </tr>
                     ))}
                   </tbody>
@@ -520,13 +517,13 @@ export default function CatalogPage() {
             </div>
 
             {/* One-click list action in drawer */}
-            <div className="pt-4 border-t border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="pt-4 border-t border-black/[0.05] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-300 font-bold">Choose Store to List on:</span>
+                <span className="text-xs text-[#1a1a1a] font-bold">Choose Store to List on:</span>
                 <select
                   value={selectedChannelId}
                   onChange={(e) => setSelectedChannelId(Number(e.target.value))}
-                  className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+                  className="bg-white border border-black/[0.08] rounded-full px-4 py-2 text-xs text-[#0a0a0a] font-medium shadow-wandor-sm focus:outline-none"
                 >
                   {marketplaces.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -539,7 +536,7 @@ export default function CatalogPage() {
               <button
                 onClick={() => handlePublishToChannel(selectedProduct)}
                 disabled={publishingId === selectedProduct.id}
-                className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
+                className="px-6 py-3 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-full text-xs font-bold flex items-center gap-2 transition-all shadow-wandor-md hover:shadow-wandor-lg disabled:opacity-50"
               >
                 <Store className="h-4 w-4" />
                 <span>{publishingId === selectedProduct.id ? "Listing..." : "Start Selling on Store"}</span>

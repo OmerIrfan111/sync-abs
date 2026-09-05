@@ -44,7 +44,7 @@ export default function SuppliersPage() {
     setTestingId(id);
     setFeedback(null);
     try {
-      const res = await fetchApi<{ success: boolean; message: string }>(`/suppliers/${id}/test`, {
+      await fetchApi<{ success: boolean; message: string }>(`/suppliers/${id}/test`, {
         method: "POST"
       });
       setFeedback({ id, message: "Connection verified! Distributor API is responsive and ready.", type: "success" });
@@ -76,34 +76,34 @@ export default function SuppliersPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-7 max-w-7xl mx-auto pb-12">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0e1526] p-6 rounded-2xl border border-gray-800 shadow-xl">
+      <div className="glass-card p-8 rounded-[2rem] shadow-wandor-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-white tracking-tight">Wholesale Suppliers</h1>
-            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              Distributor Connections
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-3xl font-black text-[#0a0a0a] tracking-tight">Wholesale Suppliers</h1>
+            <span className="text-xs font-semibold px-3 py-0.5 rounded-full bg-[#905831]/10 text-[#905831] border border-[#905831]/20">
+              Distributor Feeds
             </span>
           </div>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-[#767676] mt-1.5 max-w-2xl leading-relaxed">
             Connect to distributors who provide products and ship customer orders for you. We check their inventory and wholesale prices continuously.
           </p>
         </div>
 
         <button
           onClick={loadSuppliers}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl text-xs font-semibold transition-all border border-gray-700 self-start sm:self-auto"
+          className="inline-flex items-center gap-2 px-5 py-3 bg-white hover:bg-black/[0.02] text-[#0a0a0a] rounded-full text-xs font-bold transition-all border border-black/[0.08] shadow-wandor-sm self-start sm:self-auto"
         >
-          <RefreshCw className="h-3.5 w-3.5" />
+          <RefreshCw className="h-3.5 w-3.5 text-[#767676]" />
           <span>Refresh List</span>
         </button>
       </div>
 
-      {/* Supplier Cards (Requirement 1 & 2) */}
+      {/* Supplier Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {loading ? (
-          <div className="col-span-full py-16 text-center text-gray-500">
+          <div className="col-span-full py-20 text-center text-[#767676]">
             Loading wholesale supplier connections...
           </div>
         ) : (
@@ -116,57 +116,57 @@ export default function SuppliersPage() {
             return (
               <div
                 key={sup.id}
-                className="bg-[#0e1526] border border-gray-800 rounded-2xl p-6 flex flex-col justify-between shadow-xl relative overflow-hidden space-y-4"
+                className="glass-card glass-card-hover p-7 rounded-[2rem] flex flex-col justify-between shadow-wandor-sm relative overflow-hidden space-y-4"
               >
                 <div>
                   {/* Top Row: Name & Status */}
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-xl bg-indigo-600/10 text-indigo-400 border border-indigo-500/20">
+                      <div className="p-3 rounded-2xl bg-[#905831]/10 text-[#905831]">
                         <Truck className="h-5 w-5" />
                       </div>
                       <div>
-                        <h2 className="text-base font-bold text-white">{sup.name}</h2>
-                        <span className="text-[11px] text-gray-400">Authorized Wholesale Distributor</span>
+                        <h2 className="text-base font-black text-[#0a0a0a]">{sup.name}</h2>
+                        <span className="text-[11px] text-[#767676] font-medium">Authorized Distributor</span>
                       </div>
                     </div>
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-wandor-sm ${
                       sup.is_active
-                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                        : "bg-gray-500/10 text-gray-400 border border-gray-500/20"
+                        ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                        : "bg-black/[0.04] text-[#767676] border border-black/[0.06]"
                     }`}>
-                      <span className={`h-1.5 w-1.5 rounded-full ${sup.is_active ? "bg-emerald-400" : "bg-gray-500"}`} />
+                      <span className={`h-1.5 w-1.5 rounded-full ${sup.is_active ? "bg-emerald-500" : "bg-[#767676]"}`} />
                       <span>{sup.is_active ? "Connected & Ready" : "Paused"}</span>
                     </span>
                   </div>
 
-                  {/* Plain English Metrics */}
+                  {/* Metrics */}
                   <div className="grid grid-cols-2 gap-3 my-4">
-                    <div className="p-3 bg-gray-900/60 rounded-xl border border-gray-800/80">
-                      <span className="text-[11px] text-gray-400 block">Products Available</span>
-                      <span className="text-lg font-black text-white">{sup.product_count}</span>
-                      <span className="text-[10px] text-gray-500 block">In wholesale feed</span>
+                    <div className="p-3.5 bg-black/[0.02] rounded-2xl border border-black/[0.05]">
+                      <span className="text-[11px] text-[#767676] block">Products Available</span>
+                      <span className="text-xl font-black text-[#0a0a0a]">{sup.product_count}</span>
+                      <span className="text-[10px] text-[#767676] block mt-0.5">In wholesale feed</span>
                     </div>
-                    <div className="p-3 bg-gray-900/60 rounded-xl border border-gray-800/80">
-                      <span className="text-[11px] text-gray-400 block">Last Update Check</span>
-                      <span className="text-xs font-bold text-gray-200 block truncate">
+                    <div className="p-3.5 bg-black/[0.02] rounded-2xl border border-black/[0.05]">
+                      <span className="text-[11px] text-[#767676] block">Last Update Check</span>
+                      <span className="text-xs font-bold text-[#0a0a0a] block truncate mt-1">
                         {sup.last_synced_at ? new Date(sup.last_synced_at).toLocaleTimeString() : "Pending check"}
                       </span>
-                      <span className="text-[10px] text-emerald-400 font-semibold block">Auto-sync active</span>
+                      <span className="text-[10px] text-emerald-700 font-bold block mt-0.5">Auto-sync active</span>
                     </div>
                   </div>
 
                   {/* Feedback Notification */}
                   {itemFeedback && (
-                    <div className={`p-3 rounded-xl text-xs mb-3 flex items-start gap-2 ${
+                    <div className={`p-3.5 rounded-2xl text-xs mb-3 flex items-start gap-2 shadow-wandor-sm ${
                       itemFeedback.type === "success"
-                        ? "bg-emerald-950/40 text-emerald-300 border border-emerald-800/50"
-                        : "bg-rose-950/40 text-rose-300 border border-rose-800/50"
+                        ? "bg-emerald-50 text-emerald-900 border border-emerald-200"
+                        : "bg-rose-50 text-rose-900 border border-rose-200"
                     }`}>
                       {itemFeedback.type === "success" ? (
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
                       ) : (
-                        <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+                        <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
                       )}
                       <span>{itemFeedback.message}</span>
                     </div>
@@ -174,40 +174,40 @@ export default function SuppliersPage() {
                 </div>
 
                 {/* Plain Actions */}
-                <div className="space-y-2 pt-3 border-t border-gray-800">
+                <div className="space-y-3 pt-4 border-t border-black/[0.05]">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleSyncNow(sup.id)}
                       disabled={isTesting || isSyncing}
-                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
+                      className="flex-1 px-4 py-3 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-full text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-wandor-sm hover:shadow-wandor-md disabled:opacity-50"
                     >
-                      <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+                      <RefreshCw className={`h-3.5 w-3.5 text-[#905831] ${isSyncing ? "animate-spin" : ""}`} />
                       <span>{isSyncing ? "Checking Feed..." : "Check for New Stock & Prices"}</span>
                     </button>
 
                     <button
                       onClick={() => handleTestConnection(sup.id)}
                       disabled={isTesting || isSyncing}
-                      className="px-3.5 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition-all border border-gray-700 disabled:opacity-50"
+                      className="px-4 py-3 bg-white hover:bg-black/[0.02] text-[#0a0a0a] rounded-full text-xs font-bold flex items-center justify-center gap-1.5 transition-all border border-black/[0.08] shadow-wandor-sm disabled:opacity-50"
                       title="Test API Connection"
                     >
-                      <Wifi className={`h-3.5 w-3.5 ${isTesting ? "animate-pulse text-indigo-400" : ""}`} />
+                      <Wifi className={`h-3.5 w-3.5 text-[#767676] ${isTesting ? "animate-pulse text-[#905831]" : ""}`} />
                       <span>{isTesting ? "Testing..." : "Test"}</span>
                     </button>
                   </div>
 
-                  {/* Collapsible Connection Settings (Requirement 3) */}
-                  <div className="pt-2">
+                  {/* Collapsible Connection Settings */}
+                  <div className="pt-1">
                     <button
                       onClick={() => setExpandedSettingsId(isExpanded ? null : sup.id)}
-                      className="text-[11px] text-gray-500 hover:text-gray-300 flex items-center gap-1 transition-colors"
+                      className="text-[11px] text-[#767676] hover:text-[#0a0a0a] flex items-center gap-1 transition-colors font-medium"
                     >
                       {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                       <span>Connection details (Advanced)</span>
                     </button>
 
                     {isExpanded && (
-                      <div className="mt-2 p-3 bg-gray-950/80 rounded-xl border border-gray-800 text-[11px] font-mono text-gray-400 space-y-1">
+                      <div className="mt-2.5 p-3.5 bg-black/[0.02] rounded-2xl border border-black/[0.05] text-[11px] font-mono text-[#767676] space-y-1">
                         <div>Adapter: {sup.adapter_class}</div>
                         <div>Protocol: REST / XML Feed</div>
                         <div>Encrypted at rest: AES-256 Fernet</div>

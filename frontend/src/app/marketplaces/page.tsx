@@ -14,7 +14,8 @@ import {
   ChevronUp,
   X,
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  Sparkles
 } from "lucide-react";
 import { fetchApi, Marketplace } from "@/lib/api";
 
@@ -128,38 +129,38 @@ export default function MarketplacesPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-7 max-w-7xl mx-auto pb-12">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0e1526] p-6 rounded-2xl border border-gray-800 shadow-xl">
+      <div className="glass-card p-8 rounded-[2rem] shadow-wandor-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-white tracking-tight">Connect Your Online Stores</h1>
-            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-3xl font-black text-[#0a0a0a] tracking-tight">Connect Your Online Stores</h1>
+            <span className="text-xs font-semibold px-3 py-0.5 rounded-full bg-[#905831]/10 text-[#905831] border border-[#905831]/20">
               Sales Channels
             </span>
           </div>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-[#767676] mt-1.5 max-w-2xl leading-relaxed">
             Connect the marketplaces where you want to sell products. Once connected, stock and pricing updates are delivered automatically.
           </p>
         </div>
 
         <button
           onClick={loadMarketplaces}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl text-xs font-semibold transition-all border border-gray-700 self-start sm:self-auto"
+          className="inline-flex items-center gap-2 px-5 py-3 bg-white hover:bg-black/[0.02] text-[#0a0a0a] rounded-full text-xs font-bold transition-all border border-black/[0.08] shadow-wandor-sm self-start sm:self-auto"
         >
-          <RefreshCw className="h-3.5 w-3.5" />
+          <RefreshCw className="h-3.5 w-3.5 text-[#767676]" />
           <span>Refresh Stores</span>
         </button>
       </div>
 
       {/* Feedback Banner */}
       {feedback && (
-        <div className={`p-4 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg ${
+        <div className={`p-4 rounded-2xl text-xs font-semibold flex items-center gap-2.5 shadow-wandor-sm ${
           feedback.type === "success" 
-            ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
-            : "bg-rose-500/10 border border-rose-500/30 text-rose-300"
+            ? "bg-emerald-50 border border-emerald-300 text-emerald-900"
+            : "bg-rose-50 border border-rose-300 text-rose-900"
         }`}>
-          {feedback.type === "success" ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <AlertCircle className="h-4 w-4 text-rose-400" />}
+          {feedback.type === "success" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertCircle className="h-4 w-4 text-rose-600" />}
           <span>{feedback.message}</span>
         </div>
       )}
@@ -167,7 +168,7 @@ export default function MarketplacesPage() {
       {/* Marketplace Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {loading ? (
-          <div className="col-span-full py-16 text-center text-gray-500">
+          <div className="col-span-full py-20 text-center text-[#767676]">
             Loading online store channels...
           </div>
         ) : (
@@ -182,41 +183,41 @@ export default function MarketplacesPage() {
             return (
               <div
                 key={mkt.id}
-                className="bg-[#0e1526] border border-gray-800 rounded-2xl p-6 flex flex-col justify-between shadow-xl relative overflow-hidden space-y-4"
+                className="glass-card glass-card-hover p-7 rounded-[2rem] flex flex-col justify-between shadow-wandor-sm relative overflow-hidden space-y-4"
               >
                 <div>
                   {/* Top Row: Store Name & Status */}
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-xl bg-violet-600/10 text-violet-400 border border-violet-500/20">
+                      <div className="p-3 rounded-2xl bg-black/[0.04] text-[#0a0a0a]">
                         <Store className="h-5 w-5" />
                       </div>
                       <div>
-                        <h2 className="text-base font-bold text-white">{mkt.name}</h2>
-                        <span className="text-[11px] text-gray-400">Online Marketplace</span>
+                        <h2 className="text-base font-black text-[#0a0a0a]">{mkt.name}</h2>
+                        <span className="text-[11px] text-[#767676] font-medium">Online Marketplace</span>
                       </div>
                     </div>
-                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-wandor-sm flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                       <span>Connected</span>
                     </span>
                   </div>
 
-                  <p className="text-xs text-gray-400 leading-relaxed mb-4">
+                  <p className="text-xs text-[#767676] leading-relaxed mb-4">
                     {info.summary}
                   </p>
 
                   {/* Metrics */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="p-3 bg-gray-900/60 rounded-xl border border-gray-800/80">
-                      <span className="text-[11px] text-gray-400 block">Products Live</span>
-                      <span className="text-lg font-black text-white">{mkt.active_listings_count ?? mkt.total_listings_count ?? 0}</span>
-                      <span className="text-[10px] text-emerald-400 block">Active offers</span>
+                    <div className="p-3.5 bg-black/[0.02] rounded-2xl border border-black/[0.05]">
+                      <span className="text-[11px] text-[#767676] block">Products Live</span>
+                      <span className="text-xl font-black text-[#0a0a0a]">{mkt.active_listings_count ?? mkt.total_listings_count ?? 0}</span>
+                      <span className="text-[10px] text-emerald-700 font-bold block mt-0.5">Active offers</span>
                     </div>
-                    <div className="p-3 bg-gray-900/60 rounded-xl border border-gray-800/80">
-                      <span className="text-[11px] text-gray-400 block">Security & Keys</span>
-                      <span className="text-xs font-bold text-gray-200 block truncate flex items-center gap-1 mt-1">
-                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                    <div className="p-3.5 bg-black/[0.02] rounded-2xl border border-black/[0.05]">
+                      <span className="text-[11px] text-[#767676] block">Security & Keys</span>
+                      <span className="text-xs font-bold text-[#0a0a0a] block truncate flex items-center gap-1 mt-1.5">
+                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
                         <span>Encrypted (Safe)</span>
                       </span>
                     </div>
@@ -224,22 +225,22 @@ export default function MarketplacesPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="space-y-2 pt-3 border-t border-gray-800">
+                <div className="space-y-3 pt-4 border-t border-black/[0.05]">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleTestConnection(mkt.id, mkt.name)}
                       disabled={isTesting}
-                      className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all border border-gray-700 disabled:opacity-50"
+                      className="flex-1 px-4 py-3 bg-white hover:bg-black/[0.02] text-[#0a0a0a] rounded-full text-xs font-bold flex items-center justify-center gap-1.5 transition-all border border-black/[0.08] shadow-wandor-sm disabled:opacity-50"
                     >
-                      <Wifi className={`h-3.5 w-3.5 ${isTesting ? "animate-pulse text-violet-400" : ""}`} />
+                      <Wifi className={`h-3.5 w-3.5 text-[#767676] ${isTesting ? "animate-pulse text-[#905831]" : ""}`} />
                       <span>{isTesting ? "Testing..." : "Test Store Connection"}</span>
                     </button>
 
                     <button
                       onClick={() => handleOpenConfig(mkt)}
-                      className="px-3.5 py-2 bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                      className="px-5 py-3 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-full text-xs font-bold transition-all flex items-center gap-1.5 shadow-wandor-sm"
                     >
-                      <Lock className="h-3.5 w-3.5" />
+                      <Lock className="h-3.5 w-3.5 text-[#905831]" />
                       <span>Keys</span>
                     </button>
                   </div>
@@ -248,14 +249,14 @@ export default function MarketplacesPage() {
                   <div className="pt-1">
                     <button
                       onClick={() => setExpandedId(isExpanded ? null : mkt.id)}
-                      className="text-[11px] text-gray-500 hover:text-gray-300 flex items-center gap-1 transition-colors"
+                      className="text-[11px] text-[#767676] hover:text-[#0a0a0a] flex items-center gap-1 transition-colors font-medium"
                     >
                       {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                       <span>Store API details (Advanced)</span>
                     </button>
 
                     {isExpanded && (
-                      <div className="mt-2 p-3 bg-gray-950/80 rounded-xl border border-gray-800 text-[11px] font-mono text-gray-400 space-y-1">
+                      <div className="mt-2.5 p-3.5 bg-black/[0.02] rounded-2xl border border-black/[0.05] text-[11px] font-mono text-[#767676] space-y-1">
                         <div>Adapter: {mkt.adapter_class}</div>
                         <div>Encryption: AES-256 Fernet (At rest in DB)</div>
                         <div>Setup guide: {info.guide}</div>
@@ -271,23 +272,23 @@ export default function MarketplacesPage() {
 
       {/* Store Credentials Modal */}
       {configChannel && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0e1526] border border-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-start justify-between pb-3 border-b border-gray-800">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white/95 backdrop-blur-2xl border border-black/[0.08] rounded-[2.5rem] max-w-lg w-full p-7 shadow-wandor-float space-y-5">
+            <div className="flex items-start justify-between pb-3 border-b border-black/[0.05]">
               <div>
-                <h3 className="text-base font-bold text-white">Connect {configChannel.name}</h3>
-                <p className="text-xs text-gray-400">Enter your store API credentials to enable automated publishing.</p>
+                <h3 className="text-xl font-black text-[#0a0a0a]">Connect {configChannel.name}</h3>
+                <p className="text-xs text-[#767676] mt-0.5">Enter your store API credentials to enable automated publishing.</p>
               </div>
               <button
                 onClick={() => setConfigChannel(null)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800"
+                className="p-2 rounded-full text-[#767676] hover:text-[#0a0a0a] hover:bg-black/[0.04]"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveCredentials} className="space-y-3">
-              <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-xs text-indigo-300 space-y-1">
+            <form onSubmit={handleSaveCredentials} className="space-y-4">
+              <div className="p-4 bg-[#905831]/[0.06] rounded-2xl border border-[#905831]/20 text-xs text-[#905831] space-y-1">
                 <div className="font-bold flex items-center gap-1.5">
                   <HelpCircle className="h-3.5 w-3.5" />
                   <span>Where do I find my API keys?</span>
@@ -298,32 +299,32 @@ export default function MarketplacesPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-300 mb-1">
+                <label className="block text-xs font-bold text-[#1a1a1a] mb-1.5">
                   API Keys & Credentials (Encrypted with AES-256)
                 </label>
                 <textarea
                   rows={5}
                   value={credentialsJson}
                   onChange={(e) => setCredentialsJson(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded-xl text-xs font-mono text-gray-200 focus:outline-none focus:border-violet-500"
+                  className="w-full px-4 py-3 bg-white border border-black/[0.08] rounded-2xl text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] shadow-wandor-sm"
                 />
-                <p className="text-[10px] text-gray-500 mt-1">
+                <p className="text-[10px] text-[#767676] mt-1">
                   All keys are encrypted at rest with military-grade AES-256 encryption.
                 </p>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="pt-3 border-t border-black/[0.05] flex justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setConfigChannel(null)}
-                  className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white"
+                  className="px-5 py-2.5 text-xs font-semibold text-[#767676] hover:text-[#0a0a0a]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={savingConfig}
-                  className="px-5 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold disabled:opacity-50"
+                  className="px-6 py-2.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-full text-xs font-bold disabled:opacity-50 shadow-wandor-md"
                 >
                   {savingConfig ? "Encrypting & Saving..." : "Save Store Keys"}
                 </button>
