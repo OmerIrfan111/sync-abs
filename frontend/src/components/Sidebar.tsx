@@ -31,18 +31,22 @@ export default function Sidebar() {
     <aside className="w-64 bg-white/90 backdrop-blur-2xl border-r border-black/[0.06] flex flex-col justify-between h-screen sticky top-0 z-30 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
       <div>
         {/* Brand Header */}
-        <div className="h-20 flex items-center px-6 border-b border-black/[0.05] gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-[#0a0a0a] flex items-center justify-center font-brand text-2xl text-white shadow-wandor-md">
-            س
+        <div className="h-20 flex items-center px-5 border-b border-black/[0.05] gap-3">
+          <div className="h-11 w-11 rounded-2xl bg-white border border-black/[0.08] flex items-center justify-center p-1 shadow-wandor-sm shrink-0 overflow-hidden">
+            <img
+              src="/logo.png"
+              alt="OAKAO Logo"
+              className="h-full w-full object-contain mix-blend-multiply"
+            />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-brand text-2xl text-[#0a0a0a] tracking-tight">سync</span>
-              <span className="text-[10px] uppercase font-semibold tracking-wider px-2 py-0.5 rounded-full bg-[#905831]/10 text-[#905831] border border-[#905831]/20 font-sans">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="font-brand text-xl text-[#0a0a0a] tracking-tight">سync</span>
+              <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.5 rounded-full bg-[#905831]/10 text-[#905831] border border-[#905831]/20 font-sans">
                 PRO
               </span>
             </div>
-            <div className="text-[11px] text-[#767676] font-medium mt-0.5">Inventory Orchestrator</div>
+            <div className="text-[11px] text-[#767676] font-medium mt-0.5 truncate">OAKAO Orchestrator</div>
           </div>
         </div>
 

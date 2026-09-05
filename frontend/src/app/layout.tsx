@@ -22,6 +22,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Special+Elite&display=swap"
           rel="stylesheet"
         />
+        <link rel="icon" href="/logo.png" />
       </head>
       <body className="bg-[#fbfbfa] text-[#1a1a1a] flex min-h-screen font-sans selection:bg-[#905831]/15 selection:text-[#905831]">
         <Sidebar />
