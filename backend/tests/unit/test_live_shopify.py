@@ -79,7 +79,12 @@ def test_shopify_create_listing():
     inv_set_resp.read.return_value = json.dumps({"inventory_level": {"available": 50}}).encode("utf-8")
     inv_set_resp.__enter__.return_value = inv_set_resp
 
-    with patch("urllib.request.urlopen", side_effect=[shop_resp, product_resp, locations_resp, inv_set_resp]):
+    # Mock GET /products.json (empty list: product doesn't exist yet)
+    find_resp = MagicMock()
+    find_resp.read.return_value = json.dumps({"products": []}).encode("utf-8")
+    find_resp.__enter__.return_value = find_resp
+
+    with patch("urllib.request.urlopen", side_effect=[shop_resp, find_resp, product_resp, locations_resp, inv_set_resp]):
         result = adapter.create_listing(
             sku="SKU-USB",
             title="USB Cable",
@@ -94,6 +99,44 @@ def test_shopify_create_listing():
     assert result["price"] == Decimal("19.99")
     assert result["quantity"] == 50
     assert result["status"] == "ACTIVE"
+
+
+def test_shopify_create_listing_existing_updates_in_place():
+    adapter = LiveShopifyAdapter(credentials={
+        "shop_url": "test-store.myshopify.com",
+        "access_token": "shpat_test123456"
+    })
+
+    shop_resp = MagicMock()
+    shop_resp.read.return_value = json.dumps({"shop": {"name": "Test Store"}}).encode("utf-8")
+    shop_resp.__enter__.return_value = shop_resp
+
+    existing_resp = MagicMock()
+    existing_resp.read.return_value = json.dumps({
+        "products": [
+            {
+                "id": 999111,
+                "title": "Existing Product",
+                "variants": [{"id": 888222, "sku": "SKU-EXISTING", "inventory_item_id": 777333}]
+            }
+        ]
+    }).encode("utf-8")
+    existing_resp.__enter__.return_value = existing_resp
+
+    with patch.object(adapter, "update_price") as mock_up_price, \
+         patch.object(adapter, "update_inventory") as mock_up_inv, \
+         patch("urllib.request.urlopen", side_effect=[shop_resp, existing_resp]):
+        result = adapter.create_listing(
+            sku="SKU-EXISTING",
+            title="Existing Product Updated",
+            description="Updated description",
+            price=Decimal("29.99"),
+            quantity=25
+        )
+
+    assert result["external_listing_id"] == "shopify_999111_888222"
+    mock_up_price.assert_called_once_with("shopify_999111_888222", "SKU-EXISTING", Decimal("29.99"))
+    mock_up_inv.assert_called_once_with("shopify_999111_888222", "SKU-EXISTING", 25)
 
 def test_shopify_update_price():
     adapter = LiveShopifyAdapter(credentials={

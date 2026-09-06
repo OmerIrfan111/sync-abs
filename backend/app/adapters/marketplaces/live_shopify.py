@@ -114,6 +114,18 @@ class LiveShopifyAdapter(MarketplaceAdapter):
 
         return self._location_id or 89914146974
 
+    def find_product_by_sku(self, sku: str) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
+        """Searches Shopify for an existing product and variant matching the given SKU."""
+        try:
+            res = self._request("/products.json?limit=50", method="GET")
+            for prod in res.get("products", []):
+                for var in prod.get("variants", []):
+                    if var.get("sku") == sku:
+                        return prod, var
+        except Exception as e:
+            logger.warning(f"Could not search Shopify products by SKU: {e}")
+        return None
+
     def create_listing(
         self,
         sku: str,
@@ -125,9 +137,31 @@ class LiveShopifyAdapter(MarketplaceAdapter):
     ) -> Dict[str, Any]:
         """
         Publishes a product to Shopify via POST /admin/api/2024-01/products.json
-        and synchronizes inventory level.
+        or updates existing product with matching SKU, preventing duplicate listings.
         """
         self.test_connection()
+
+        # 1. If product with this SKU already exists on Shopify, update it instead of creating a duplicate!
+        existing = self.find_product_by_sku(sku)
+        if existing:
+            prod, var = existing
+            product_id = prod["id"]
+            variant_id = var["id"]
+            external_listing_id = f"shopify_{product_id}_{variant_id}"
+            logger.info(f"Product with SKU {sku} already exists on Shopify ({external_listing_id}). Updating price and inventory.")
+            self.update_price(external_listing_id, sku, price)
+            self.update_inventory(external_listing_id, sku, quantity)
+            return {
+                "external_listing_id": external_listing_id,
+                "product_id": str(product_id),
+                "variant_id": str(variant_id),
+                "sku": sku,
+                "title": prod.get("title", title),
+                "price": Decimal(str(price)),
+                "quantity": quantity,
+                "status": "ACTIVE",
+                "marketplace": "Shopify"
+            }
 
         images_payload = [{"src": url} for url in (image_urls or []) if url]
         formatted_price = str(Decimal(str(price)).quantize(Decimal("0.01")))

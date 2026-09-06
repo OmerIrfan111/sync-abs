@@ -140,6 +140,33 @@ class ListingService:
 
         adapter = self.get_adapter_for_marketplace(marketplace)
 
+        now = datetime.now(timezone.utc)
+        if listing and listing.external_listing_id:
+            try:
+                adapter.update_price(listing.external_listing_id, product.sku, price)
+                adapter.update_inventory(listing.external_listing_id, product.sku, quantity)
+
+                listing.status = target_status
+                listing.selling_price = price
+                listing.listed_qty = quantity
+                listing.last_updated_at = now
+                self.db.commit()
+                self.db.refresh(listing)
+
+                # Audit log
+                sync_log = SyncLog(
+                    product_id=product.id,
+                    field_changed=f"updated_on_{marketplace.name.lower()}",
+                    old_value=None,
+                    new_value=f"Listing ID: {listing.external_listing_id}, Price: ${price}, Qty: {quantity}"
+                )
+                self.db.add(sync_log)
+                self.db.commit()
+
+                return listing
+            except Exception as e:
+                logger.warning(f"Could not update existing listing in-place on {marketplace.name}: {e}. Proceeding to create/sync.")
+
         try:
             adapter_result = adapter.create_listing(
                 sku=product.sku,
@@ -150,7 +177,6 @@ class ListingService:
                 image_urls=product.images or []
             )
 
-            now = datetime.now(timezone.utc)
             if not listing:
                 listing = Listing(
                     product_id=product.id,
