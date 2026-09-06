@@ -54,6 +54,17 @@ export default function MarketplacesPage() {
   const [savingConfig, setSavingConfig] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
+  // Form fields for user-friendly configuration
+  const [shopifyDomain, setShopifyDomain] = useState("");
+  const [shopifyToken, setShopifyToken] = useState("");
+  const [ebayToken, setEbayToken] = useState("");
+  const [ebayEnv, setEbayEnv] = useState("sandbox");
+  const [ebayAppId, setEbayAppId] = useState("");
+  const [ebayCertId, setEbayCertId] = useState("");
+  const [genericClientId, setGenericClientId] = useState("");
+  const [genericClientSecret, setGenericClientSecret] = useState("");
+  const [isAdvancedJson, setIsAdvancedJson] = useState(false);
+
   const loadMarketplaces = async () => {
     setLoading(true);
     try {
@@ -92,6 +103,18 @@ export default function MarketplacesPage() {
 
   const handleOpenConfig = (mkt: Marketplace) => {
     setConfigChannel(mkt);
+    setIsAdvancedJson(false);
+
+    // Reset fields
+    setShopifyDomain("");
+    setShopifyToken("");
+    setEbayToken("");
+    setEbayEnv("sandbox");
+    setEbayAppId("");
+    setEbayCertId("");
+    setGenericClientId("");
+    setGenericClientSecret("");
+
     setCredentialsJson(
       mkt.has_credentials 
         ? '{\n  "api_key": "••••••••••••••••",\n  "status": "configured_and_encrypted"\n}' 
@@ -104,12 +127,45 @@ export default function MarketplacesPage() {
     if (!configChannel) return;
     setSavingConfig(true);
     try {
-      let creds = {};
-      if (credentialsJson.trim()) {
-        try {
-          creds = JSON.parse(credentialsJson);
-        } catch (_) {
-          throw new Error("Please enter valid JSON format or leave empty");
+      let creds: Record<string, any> = {};
+
+      if (isAdvancedJson) {
+        if (credentialsJson.trim()) {
+          try {
+            creds = JSON.parse(credentialsJson);
+          } catch (_) {
+            throw new Error("Please enter valid JSON format or leave empty");
+          }
+        }
+      } else {
+        const name = configChannel.name.toLowerCase();
+        if (name.includes("shopify")) {
+          if (!shopifyDomain.trim() && !shopifyToken.trim()) {
+            throw new Error("Please enter your Shopify store domain and Admin API access token.");
+          }
+          creds = {
+            shop_url: shopifyDomain.trim(),
+            shop_domain: shopifyDomain.trim(),
+            access_token: shopifyToken.trim(),
+            adapter_class: "LiveShopifyAdapter"
+          };
+        } else if (name.includes("ebay")) {
+          if (!ebayToken.trim() && !ebayAppId.trim()) {
+            throw new Error("Please provide your eBay OAuth User Token.");
+          }
+          creds = {
+            environment: ebayEnv,
+            user_token: ebayToken.trim(),
+            app_id: ebayAppId.trim(),
+            cert_id: ebayCertId.trim(),
+            adapter_class: "LiveEBayAdapter"
+          };
+        } else {
+          creds = {
+            client_id: genericClientId.trim(),
+            client_secret: genericClientSecret.trim(),
+            api_key: genericClientId.trim()
+          };
         }
       }
 
@@ -118,7 +174,7 @@ export default function MarketplacesPage() {
         body: JSON.stringify({ credentials: creds })
       });
 
-      showFeedback(`Keys for ${configChannel.name} encrypted and saved securely!`, "success");
+      showFeedback(`Keys for ${configChannel.name} encrypted and connected successfully!`, "success");
       setConfigChannel(null);
       loadMarketplaces();
     } catch (err: any) {
@@ -197,9 +253,13 @@ export default function MarketplacesPage() {
                         <span className="text-[11px] text-[#767676]">Online Marketplace</span>
                       </div>
                     </div>
-                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                      <span>Connected</span>
+                    <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 ${
+                      mkt.has_credentials
+                        ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                        : "bg-gray-100 text-gray-700 border border-gray-200"
+                    }`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${mkt.has_credentials ? "bg-emerald-500" : "bg-gray-400"}`} />
+                      <span>{mkt.has_credentials ? "Connected" : "Not Linked"}</span>
                     </span>
                   </div>
 
@@ -218,7 +278,7 @@ export default function MarketplacesPage() {
                       <span className="text-[11px] text-[#767676] block">Security & Keys</span>
                       <span className="text-xs font-semibold text-[#0a0a0a] block truncate flex items-center gap-1 mt-1">
                         <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                        <span>Encrypted (Safe)</span>
+                        <span>{mkt.has_credentials ? "Encrypted (Safe)" : "Keys Needed"}</span>
                       </span>
                     </div>
                   </div>
@@ -241,7 +301,7 @@ export default function MarketplacesPage() {
                       className="px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shadow-sm"
                     >
                       <Lock className="h-3.5 w-3.5 text-[#905831]" />
-                      <span>Keys</span>
+                      <span>{mkt.has_credentials ? "Edit Keys" : "Connect Store"}</span>
                     </button>
                   </div>
 
@@ -277,7 +337,7 @@ export default function MarketplacesPage() {
             <div className="flex items-start justify-between pb-3 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-bold text-[#0a0a0a]">Connect {configChannel.name}</h3>
-                <p className="text-xs text-[#767676] mt-0.5">Enter your store API credentials to enable automated publishing.</p>
+                <p className="text-xs text-[#767676] mt-0.5">Enter your store API credentials to enable automated publishing and sync.</p>
               </div>
               <button
                 onClick={() => setConfigChannel(null)}
@@ -291,26 +351,147 @@ export default function MarketplacesPage() {
               <div className="p-3 bg-[#905831]/[0.06] rounded-lg border border-[#905831]/20 text-xs text-[#905831] space-y-1">
                 <div className="font-semibold flex items-center gap-1.5">
                   <HelpCircle className="h-3.5 w-3.5" />
-                  <span>Where do I find my API keys?</span>
+                  <span>How to connect {configChannel.name}:</span>
                 </div>
                 <p className="text-[11px] leading-relaxed">
                   {Object.entries(STORE_DESCRIPTIONS).find(([k]) => configChannel.name.includes(k))?.[1].guide || "Log in to your store seller account and look under Developer or API settings."}
                 </p>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
-                  API Keys & Credentials (Encrypted with AES-256)
-                </label>
-                <textarea
-                  rows={5}
-                  value={credentialsJson}
-                  onChange={(e) => setCredentialsJson(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
-                />
-                <p className="text-[10px] text-[#767676] mt-1">
-                  All keys are encrypted at rest with military-grade AES-256 encryption.
-                </p>
+              {/* Specific Form Fields */}
+              {!isAdvancedJson ? (
+                <div className="space-y-3">
+                  {configChannel.name.toLowerCase().includes("shopify") && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
+                          Shopify Store Domain / URL
+                        </label>
+                        <input
+                          type="text"
+                          value={shopifyDomain}
+                          onChange={(e) => setShopifyDomain(e.target.value)}
+                          placeholder="e.g. your-store.myshopify.com"
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
+                          Admin API Access Token
+                        </label>
+                        <input
+                          type="password"
+                          value={shopifyToken}
+                          onChange={(e) => setShopifyToken(e.target.value)}
+                          placeholder="shpat_••••••••••••••••••••••••"
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                        />
+                        <p className="text-[10px] text-[#767676] mt-1">
+                          Found in Shopify Admin ➔ Settings ➔ Apps ➔ Develop apps ➔ API credentials.
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  {configChannel.name.toLowerCase().includes("ebay") && (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
+                            Environment
+                          </label>
+                          <select
+                            value={ebayEnv}
+                            onChange={(e) => setEbayEnv(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          >
+                            <option value="sandbox">Sandbox (Testing)</option>
+                            <option value="production">Production (Live)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
+                            App ID (Client ID)
+                          </label>
+                          <input
+                            type="text"
+                            value={ebayAppId}
+                            onChange={(e) => setEbayAppId(e.target.value)}
+                            placeholder="Optional App ID"
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
+                          OAuth User Token
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={ebayToken}
+                          onChange={(e) => setEbayToken(e.target.value)}
+                          placeholder="Paste your eBay OAuth user token (v^1.1#...)"
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {!configChannel.name.toLowerCase().includes("shopify") && !configChannel.name.toLowerCase().includes("ebay") && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
+                          Client ID / API Key
+                        </label>
+                        <input
+                          type="text"
+                          value={genericClientId}
+                          onChange={(e) => setGenericClientId(e.target.value)}
+                          placeholder="Enter your Client ID or API Key..."
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
+                          Client Secret / Private Key
+                        </label>
+                        <input
+                          type="password"
+                          value={genericClientSecret}
+                          onChange={(e) => setGenericClientSecret(e.target.value)}
+                          placeholder="Enter your Client Secret..."
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
+                    Raw JSON Credentials (AES-256 Encrypted)
+                  </label>
+                  <textarea
+                    rows={5}
+                    value={credentialsJson}
+                    onChange={(e) => setCredentialsJson(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsAdvancedJson(!isAdvancedJson)}
+                  className="text-[11px] text-gray-500 hover:text-gray-900 underline font-medium"
+                >
+                  {isAdvancedJson ? "← Switch to Simple Form" : "Switch to Raw JSON →"}
+                </button>
+                <div className="flex items-center gap-1 text-[11px] text-emerald-700 font-medium">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  <span>AES-256 Encrypted</span>
+                </div>
               </div>
 
               <div className="pt-3 border-t border-gray-200 flex justify-end gap-2.5">
@@ -326,7 +507,7 @@ export default function MarketplacesPage() {
                   disabled={savingConfig}
                   className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium disabled:opacity-50 shadow-sm"
                 >
-                  {savingConfig ? "Encrypting & Saving..." : "Save Store Keys"}
+                  {savingConfig ? "Encrypting & Saving..." : "Save & Connect Store"}
                 </button>
               </div>
             </form>
@@ -336,3 +517,5 @@ export default function MarketplacesPage() {
     </div>
   );
 }
+
+
