@@ -14,6 +14,7 @@ from app.adapters.marketplaces.mock_ebay import MockEBayAdapter
 from app.adapters.marketplaces.live_ebay import LiveEBayAdapter
 from app.adapters.marketplaces.mock_amazon import MockAmazonAdapter
 from app.adapters.marketplaces.mock_shopify import MockShopifyAdapter
+from app.adapters.marketplaces.live_shopify import LiveShopifyAdapter
 from app.adapters.marketplaces.mock_walmart import MockWalmartAdapter
 from app.adapters.marketplaces.mock_newegg import MockNeweggAdapter
 
@@ -33,6 +34,7 @@ MARKETPLACE_ADAPTERS: Dict[str, Type[MarketplaceAdapter]] = {
     "LiveEBayAdapter": LiveEBayAdapter,
     "MockAmazonAdapter": MockAmazonAdapter,
     "MockShopifyAdapter": MockShopifyAdapter,
+    "LiveShopifyAdapter": LiveShopifyAdapter,
     "MockWalmartAdapter": MockWalmartAdapter,
     "MockNeweggAdapter": MockNeweggAdapter,
     "MockMarketplaceAdapter": MockEBayAdapter,
@@ -64,6 +66,10 @@ def get_marketplace_adapter(
     # If user provided real eBay tokens, automatically route to LiveEBayAdapter
     if (adapter_class in ("MockEBayAdapter", "LiveEBayAdapter") or "ebay" in adapter_class.lower()) and (creds.get("user_token") or creds.get("refresh_token")):
         return LiveEBayAdapter(credentials=credentials, config=config)
+
+    # If user provided real Shopify access token and shop URL, route to LiveShopifyAdapter
+    if (adapter_class in ("MockShopifyAdapter", "LiveShopifyAdapter") or "shopify" in adapter_class.lower()) and (creds.get("access_token") or creds.get("admin_access_token") or creds.get("shop_url") or creds.get("shop_domain")):
+        return LiveShopifyAdapter(credentials=credentials, config=config)
 
     cls = MARKETPLACE_ADAPTERS.get(adapter_class, MockEBayAdapter)
     return cls(credentials=credentials, config=config)
