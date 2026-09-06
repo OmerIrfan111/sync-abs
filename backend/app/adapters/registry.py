@@ -11,6 +11,7 @@ from app.adapters.suppliers.voicecomm import VoiceCommAdapter
 
 from app.adapters.marketplaces.base import MarketplaceAdapter
 from app.adapters.marketplaces.mock_ebay import MockEBayAdapter
+from app.adapters.marketplaces.live_ebay import LiveEBayAdapter
 from app.adapters.marketplaces.mock_amazon import MockAmazonAdapter
 from app.adapters.marketplaces.mock_shopify import MockShopifyAdapter
 from app.adapters.marketplaces.mock_walmart import MockWalmartAdapter
@@ -29,6 +30,7 @@ SUPPLIER_ADAPTERS: Dict[str, Type[SupplierAdapter]] = {
 
 MARKETPLACE_ADAPTERS: Dict[str, Type[MarketplaceAdapter]] = {
     "MockEBayAdapter": MockEBayAdapter,
+    "LiveEBayAdapter": LiveEBayAdapter,
     "MockAmazonAdapter": MockAmazonAdapter,
     "MockShopifyAdapter": MockShopifyAdapter,
     "MockWalmartAdapter": MockWalmartAdapter,
@@ -58,5 +60,10 @@ def get_marketplace_adapter(
     config: Optional[Dict[str, Any]] = None
 ) -> MarketplaceAdapter:
     """Factory to instantiate marketplace adapter by class name."""
+    creds = credentials or {}
+    # If user provided real eBay tokens, automatically route to LiveEBayAdapter
+    if (adapter_class in ("MockEBayAdapter", "LiveEBayAdapter") or "ebay" in adapter_class.lower()) and (creds.get("user_token") or creds.get("refresh_token")):
+        return LiveEBayAdapter(credentials=credentials, config=config)
+
     cls = MARKETPLACE_ADAPTERS.get(adapter_class, MockEBayAdapter)
     return cls(credentials=credentials, config=config)
