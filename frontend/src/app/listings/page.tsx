@@ -14,7 +14,8 @@ import {
   HelpCircle, 
   AlertCircle,
   CheckCircle2,
-  Sparkles
+  Sparkles,
+  Trash2
 } from "lucide-react";
 import { fetchApi, Listing, Product } from "@/lib/api";
 
@@ -36,6 +37,8 @@ export default function ListingsPage() {
   const [editQty, setEditQty] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [deleteConfirmListing, setDeleteConfirmListing] = useState<Listing | null>(null);
+  const [deletingListingId, setDeletingListingId] = useState<number | null>(null);
 
   // Add Product to Store state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -139,6 +142,24 @@ export default function ListingsPage() {
       await loadListings();
     } catch (err: any) {
       alert("Action failed: " + err.message);
+    }
+  };
+
+  const handleDeleteListing = async (listing: Listing) => {
+    try {
+      setDeletingListingId(listing.id);
+      await fetchApi(`/listings/${listing.id}`, { method: "DELETE" });
+      setFeedback(`Product removed from ${listing.marketplace_name || "store"}. You can re-add it anytime.`);
+      setTimeout(() => setFeedback(null), 3500);
+      setDeleteConfirmListing(null);
+      if (editingListing && editingListing.id === listing.id) {
+        setEditingListing(null);
+      }
+      await loadListings();
+    } catch (err: any) {
+      alert("Failed to remove product: " + err.message);
+    } finally {
+      setDeletingListingId(null);
     }
   };
 
@@ -359,6 +380,15 @@ export default function ListingsPage() {
                           >
                             <Edit3 className="h-3.5 w-3.5 text-[#767676]" />
                             <span>Edit</span>
+                          </button>
+
+                          <button
+                            onClick={() => setDeleteConfirmListing(listing)}
+                            className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 text-gray-400 text-xs transition-colors inline-flex items-center gap-1 shadow-sm font-medium"
+                            title="Completely remove product from this store"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>Remove</span>
                           </button>
                         </div>
                       </td>
@@ -601,6 +631,60 @@ export default function ListingsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Listing Confirmation Modal */}
+      {deleteConfirmListing && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2.5 text-rose-600">
+                <div className="w-9 h-9 rounded-full bg-rose-50 border border-rose-200 flex items-center justify-center">
+                  <Trash2 className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#0a0a0a]">Remove from Store?</h3>
+                  <p className="text-xs text-[#767676]">{deleteConfirmListing.marketplace_name || "Sales Channel"}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDeleteConfirmListing(null)}
+                className="p-1 rounded-lg text-[#767676] hover:text-[#0a0a0a] hover:bg-gray-100"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="text-xs text-[#444444] space-y-2 bg-gray-50 p-3.5 rounded-lg border border-gray-200">
+              <p className="font-medium text-[#0a0a0a]">
+                Are you sure you want to remove <span className="font-bold">"{deleteConfirmListing.product_title}"</span>?
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-[#666666]">
+                <li>It will be delisted and withdrawn from {deleteConfirmListing.marketplace_name || "the store"}.</li>
+                <li>It will be removed from your Active Stores table.</li>
+                <li>You can add it again from the Wholesale Catalog at any time.</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmListing(null)}
+                className="px-4 py-2 border border-gray-300 hover:bg-gray-50 rounded-lg text-xs font-medium text-[#0a0a0a] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingListingId === deleteConfirmListing.id}
+                onClick={() => handleDeleteListing(deleteConfirmListing)}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-medium transition-colors shadow-sm disabled:opacity-50"
+              >
+                {deletingListingId === deleteConfirmListing.id ? "Removing..." : "Yes, Remove from Store"}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -230,9 +230,16 @@ def withdraw_listing(listing_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/{listing_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_listing(listing_id: int, db: Session = Depends(get_db)):
+    service = ListingService(db)
     listing = db.query(Listing).filter(Listing.id == listing_id).first()
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
+    try:
+        if listing.status == "ACTIVE" and listing.external_listing_id:
+            service.withdraw_listing_from_marketplace(listing.id)
+    except Exception:
+        pass
     db.delete(listing)
     db.commit()
     return None
+
