@@ -35,7 +35,12 @@ class MarketplaceAdapter(ABC):
         """Withdraw/delist an active offer from the marketplace."""
         pass
 
+    def reactivate_listing(self, external_listing_id: str, sku: Optional[str] = None) -> bool:
+        """Reactivate/republish a withdrawn/draft listing on the marketplace."""
+        return True
+
     @abstractmethod
     def get_listing(self, external_listing_id: str) -> Dict[str, Any]:
         """Retrieve current marketplace listing details."""
         pass
+

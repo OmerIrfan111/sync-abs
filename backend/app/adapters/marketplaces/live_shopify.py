@@ -232,15 +232,18 @@ class LiveShopifyAdapter(MarketplaceAdapter):
         }
 
     def _parse_listing_ids(self, external_listing_id: str) -> Tuple[Optional[str], Optional[str]]:
-        """Extracts product_id and variant_id from external_listing_id format 'shopify_{product_id}_{variant_id}'."""
+        """Extracts product_id and variant_id from external_listing_id format."""
         if not external_listing_id:
             return None, None
-        parts = external_listing_id.split("_")
-        if len(parts) >= 3 and parts[0] == "shopify":
+        clean_id = str(external_listing_id).strip()
+        if "gid://shopify/Product/" in clean_id:
+            return clean_id.split("/")[-1], None
+        parts = clean_id.split("_")
+        if len(parts) >= 3 and parts[0] in ("shopify", "shpfy"):
             return parts[1], parts[2]
-        elif len(parts) == 2 and parts[0] == "shopify":
+        elif len(parts) == 2 and parts[0] in ("shopify", "shpfy"):
             return parts[1], None
-        return external_listing_id, None
+        return clean_id, None
 
     def update_price(self, external_listing_id: str, sku: str, price: Decimal) -> bool:
         """Revises variant price on Shopify via PUT /admin/api/2024-01/variants/{variant_id}.json."""
@@ -308,14 +311,37 @@ class LiveShopifyAdapter(MarketplaceAdapter):
 
         return False
 
-    def withdraw_listing(self, external_listing_id: str) -> bool:
+    def withdraw_listing(self, external_listing_id: str, sku: Optional[str] = None) -> bool:
         """Unpublishes / sets product status to draft on Shopify."""
         product_id, _ = self._parse_listing_ids(external_listing_id)
+        if not product_id and sku:
+            existing = self.find_product_by_sku(sku)
+            if existing:
+                product_id = existing[0]["id"]
         if product_id:
+            logger.info(f"Setting Shopify product {product_id} to draft (hidden)")
             self._request(f"/products/{product_id}.json", method="PUT", data={
                 "product": {
                     "id": int(product_id),
                     "status": "draft"
+                }
+            })
+            return True
+        return False
+
+    def reactivate_listing(self, external_listing_id: str, sku: Optional[str] = None) -> bool:
+        """Publishes / sets product status back to active on Shopify."""
+        product_id, _ = self._parse_listing_ids(external_listing_id)
+        if not product_id and sku:
+            existing = self.find_product_by_sku(sku)
+            if existing:
+                product_id = existing[0]["id"]
+        if product_id:
+            logger.info(f"Setting Shopify product {product_id} to active (unhidden/live)")
+            self._request(f"/products/{product_id}.json", method="PUT", data={
+                "product": {
+                    "id": int(product_id),
+                    "status": "active"
                 }
             })
             return True

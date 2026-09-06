@@ -84,11 +84,17 @@ class MockShopifyAdapter(MarketplaceAdapter):
         MOCK_SHOPIFY_PRODUCTS[external_listing_id]["price"] = Decimal(str(price))
         return True
 
-    def withdraw_listing(self, external_listing_id: str) -> bool:
+    def withdraw_listing(self, external_listing_id: str, sku: Optional[str] = None) -> bool:
         self.test_connection()
         if external_listing_id in MOCK_SHOPIFY_PRODUCTS:
             MOCK_SHOPIFY_PRODUCTS[external_listing_id]["status"] = "ARCHIVED"
             MOCK_SHOPIFY_PRODUCTS[external_listing_id]["quantity"] = 0
+        return True
+
+    def reactivate_listing(self, external_listing_id: str, sku: Optional[str] = None) -> bool:
+        self.test_connection()
+        if external_listing_id in MOCK_SHOPIFY_PRODUCTS:
+            MOCK_SHOPIFY_PRODUCTS[external_listing_id]["status"] = "ACTIVE"
         return True
 
     def get_listing(self, external_listing_id: str) -> Dict[str, Any]:

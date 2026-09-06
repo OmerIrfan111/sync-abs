@@ -272,9 +272,20 @@ class ListingService:
                     if new_status in ["PAUSED", "WITHDRAWN"] and listing.status == "ACTIVE":
                         if listing.external_listing_id:
                             try:
+                                adapter.withdraw_listing(listing.external_listing_id, listing.product.sku if listing.product else None)
+                            except TypeError:
                                 adapter.withdraw_listing(listing.external_listing_id)
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.warning(f"Failed to withdraw on {marketplace.name}: {e}")
+                    elif new_status == "ACTIVE" and listing.status in ["PAUSED", "WITHDRAWN"]:
+                        if listing.external_listing_id:
+                            try:
+                                adapter.reactivate_listing(listing.external_listing_id, listing.product.sku if listing.product else None)
+                            except TypeError:
+                                adapter.reactivate_listing(listing.external_listing_id)
+                            except Exception as e:
+                                logger.warning(f"Failed to reactivate on {marketplace.name}: {e}")
+
                     self.db.add(SyncLog(
                         product_id=listing.product_id,
                         field_changed=f"{marketplace.name}_status_update",
@@ -311,7 +322,10 @@ class ListingService:
 
             adapter = self.get_adapter_for_marketplace(listing.marketplace)
             if listing.external_listing_id:
-                adapter.withdraw_listing(listing.external_listing_id)
+                try:
+                    adapter.withdraw_listing(listing.external_listing_id, listing.product.sku if listing.product else None)
+                except TypeError:
+                    adapter.withdraw_listing(listing.external_listing_id)
 
             listing.status = "WITHDRAWN"
             listing.listed_qty = 0
@@ -364,10 +378,14 @@ class ListingService:
             adapter = self.get_adapter_for_marketplace(listing.marketplace)
             if listing.external_listing_id:
                 try:
+                    try:
+                        adapter.reactivate_listing(listing.external_listing_id, product.sku)
+                    except TypeError:
+                        adapter.reactivate_listing(listing.external_listing_id)
                     adapter.update_inventory(listing.external_listing_id, product.sku, active_qty)
                     adapter.update_price(listing.external_listing_id, product.sku, price)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Error during marketplace reactivation for {product.sku}: {e}")
 
             old_status = listing.status
             listing.status = "ACTIVE"

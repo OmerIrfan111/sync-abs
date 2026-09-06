@@ -169,3 +169,20 @@ def test_shopify_withdraw_listing():
     with patch("urllib.request.urlopen", return_value=draft_resp):
         success = adapter.withdraw_listing("shopify_112233_445566")
         assert success is True
+
+def test_shopify_reactivate_listing():
+    adapter = LiveShopifyAdapter(credentials={
+        "shop_url": "test-store.myshopify.com",
+        "access_token": "shpat_test123456"
+    })
+
+    active_resp = MagicMock()
+    active_resp.read.return_value = json.dumps({
+        "product": {"id": 112233, "status": "active"}
+    }).encode("utf-8")
+    active_resp.__enter__.return_value = active_resp
+
+    with patch("urllib.request.urlopen", return_value=active_resp):
+        success = adapter.reactivate_listing("shopify_112233_445566")
+        assert success is True
+
