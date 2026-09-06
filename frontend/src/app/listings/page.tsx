@@ -80,20 +80,28 @@ export default function ListingsPage() {
     loadCatalogAndChannels();
   }, []);
 
-  useEffect(() => {
-    if (selectedProductId) {
-      const prod = catalogProducts.find(p => p.id === Number(selectedProductId));
+  const updateAddPrice = (pId: number, mId: number) => {
+    const existing = listings.find(
+      l => l.product_id === pId && 
+           (l.marketplace_id === mId || 
+            (l.marketplace_name || '').toLowerCase() === marketplaces.find(m => m.id === mId)?.name.toLowerCase())
+    );
+    if (existing && Number(existing.selling_price) > 0) {
+      setAddCustomPrice(Number(existing.selling_price).toFixed(2));
+    } else {
+      const prod = catalogProducts.find(p => p.id === pId);
       if (prod) {
         const cost = Number(prod.lowest_cost || 0);
         setAddCustomPrice((cost * 1.15).toFixed(2));
       }
-      // Auto-pick the first store where this product is not yet listed
-      const unlisted = marketplaces.filter(m => !listings.some(l => l.product_id === Number(selectedProductId) && (l.marketplace_id === m.id || (l.marketplace_name || '').toLowerCase() === m.name.toLowerCase())));
-      if (unlisted.length > 0) {
-        setSelectedMarketplaceId(unlisted[0].id);
-      }
     }
-  }, [selectedProductId, catalogProducts, listings, marketplaces]);
+  };
+
+  useEffect(() => {
+    if (selectedProductId) {
+      updateAddPrice(Number(selectedProductId), selectedMarketplaceId);
+    }
+  }, [selectedProductId, selectedMarketplaceId, catalogProducts, listings, marketplaces]);
 
   const randomizeAddPrice = (cost: number) => {
     const mult = 1 + (Math.floor(Math.random() * 25) + 10) / 100; // 10% to 35% margin
@@ -169,6 +177,13 @@ export default function ListingsPage() {
 
     setAddingListing(true);
     try {
+      const targetStore = marketplaces.find(m => m.id === selectedMarketplaceId);
+      const isAlreadyListed = listings.some(
+        l => l.product_id === Number(selectedProductId) && 
+             (l.marketplace_id === selectedMarketplaceId || 
+              (l.marketplace_name || '').toLowerCase() === (targetStore?.name || '').toLowerCase())
+      );
+
       await fetchApi("/listings/publish", {
         method: "POST",
         body: JSON.stringify({
@@ -178,11 +193,12 @@ export default function ListingsPage() {
         }),
       });
       setShowAddModal(false);
-      setFeedback("Product added to your store successfully!");
+      const mName = targetStore?.name || "store";
+      setFeedback(isAlreadyListed ? `Price & stock updated on ${mName}!` : `Product added to ${mName} successfully!`);
       setTimeout(() => setFeedback(null), 3500);
       loadListings();
     } catch (err: any) {
-      alert("Could not add product: " + err.message);
+      alert("Could not save listing: " + err.message);
     } finally {
       setAddingListing(false);
     }
@@ -516,14 +532,21 @@ export default function ListingsPage() {
                 </label>
                 <select
                   value={selectedProductId}
-                  onChange={(e) => setSelectedProductId(Number(e.target.value))}
+                  onChange={(e) => {
+                    const pId = Number(e.target.value);
+                    setSelectedProductId(pId);
+                    updateAddPrice(pId, selectedMarketplaceId);
+                  }}
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a]"
                 >
-                  {catalogProducts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title} (Cost: ${Number(p.lowest_cost || 0).toFixed(2)})
-                    </option>
-                  ))}
+                  {catalogProducts.map((p) => {
+                    const listedCount = listings.filter(l => l.product_id === p.id).length;
+                    return (
+                      <option key={p.id} value={p.id}>
+                        {p.title} (Cost: ${Number(p.lowest_cost || 0).toFixed(2)}) {listedCount > 0 ? `[In ${listedCount} Store${listedCount > 1 ? "s" : ""}]` : ""}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -533,16 +556,20 @@ export default function ListingsPage() {
                 </label>
                 <select
                   value={selectedMarketplaceId}
-                  onChange={(e) => setSelectedMarketplaceId(Number(e.target.value))}
+                  onChange={(e) => {
+                    const mId = Number(e.target.value);
+                    setSelectedMarketplaceId(mId);
+                    updateAddPrice(Number(selectedProductId), mId);
+                  }}
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a]"
                 >
                   {marketplaces.map((m) => {
-                    const alreadyListed = listings.some(
+                    const existing = listings.find(
                       l => l.product_id === Number(selectedProductId) && (l.marketplace_id === m.id || (l.marketplace_name || '').toLowerCase() === m.name.toLowerCase())
                     );
                     return (
-                      <option key={m.id} value={m.id} disabled={alreadyListed}>
-                        {m.name} {alreadyListed ? "— Already Listed (Active)" : ""}
+                      <option key={m.id} value={m.id}>
+                        {m.name} {existing ? `— Listed ($${Number(existing.selling_price).toFixed(2)})` : ""}
                       </option>
                     );
                   })}
@@ -599,13 +626,32 @@ export default function ListingsPage() {
                 );
               })()}
 
-              <div className="p-3 bg-[#905831]/[0.06] rounded-lg border border-[#905831]/20 text-xs text-[#905831]">
-                <div className="font-semibold mb-0.5 flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Automated Price & Stock Sync:
-                </div>
-                <span>Your custom price will be published and maintained across sales channels.</span>
-              </div>
+              {(() => {
+                const targetStore = marketplaces.find(m => m.id === selectedMarketplaceId);
+                const isAlreadyListed = listings.some(
+                  l => l.product_id === Number(selectedProductId) && (l.marketplace_id === selectedMarketplaceId || (l.marketplace_name || '').toLowerCase() === (targetStore?.name || '').toLowerCase())
+                );
+
+                return isAlreadyListed ? (
+                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-900 space-y-1">
+                    <div className="font-semibold flex items-center gap-1.5 text-amber-800">
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      <span>Already Listed on {targetStore?.name || "this store"}</span>
+                    </div>
+                    <p className="text-[11px] text-amber-800/80">
+                      Submitting will update the price and stock for this existing listing without creating a duplicate.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-[#905831]/[0.06] rounded-lg border border-[#905831]/20 text-xs text-[#905831]">
+                    <div className="font-semibold mb-0.5 flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Automated Price & Stock Sync:
+                    </div>
+                    <span className="text-[11px] text-[#767676]">Your selling price will be published and maintained across sales channels.</span>
+                  </div>
+                );
+              })()}
 
               <div className="pt-3 flex items-center justify-end gap-2.5">
                 <button
@@ -615,20 +661,27 @@ export default function ListingsPage() {
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={
-                    addingListing ||
-                    listings.some(l => l.product_id === Number(selectedProductId) && (l.marketplace_id === selectedMarketplaceId || (l.marketplace_name || '').toLowerCase() === marketplaces.find(m => m.id === selectedMarketplaceId)?.name.toLowerCase()))
-                  }
-                  className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50"
-                >
-                  {addingListing 
-                    ? "Publishing..." 
-                    : listings.some(l => l.product_id === Number(selectedProductId) && (l.marketplace_id === selectedMarketplaceId || (l.marketplace_name || '').toLowerCase() === marketplaces.find(m => m.id === selectedMarketplaceId)?.name.toLowerCase()))
-                      ? "Already in this Store"
-                      : "Start Selling"}
-                </button>
+                {(() => {
+                  const targetStore = marketplaces.find(m => m.id === selectedMarketplaceId);
+                  const isAlreadyListed = listings.some(
+                    l => l.product_id === Number(selectedProductId) && (l.marketplace_id === selectedMarketplaceId || (l.marketplace_name || '').toLowerCase() === (targetStore?.name || '').toLowerCase())
+                  );
+
+                  return (
+                    <button
+                      type="submit"
+                      disabled={addingListing}
+                      className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {isAlreadyListed ? <RefreshCw className="h-3.5 w-3.5" /> : <Store className="h-3.5 w-3.5" />}
+                      <span>
+                        {addingListing 
+                          ? (isAlreadyListed ? "Updating..." : "Publishing...") 
+                          : (isAlreadyListed ? "Update Price on Store" : "Start Selling")}
+                      </span>
+                    </button>
+                  );
+                })()}
               </div>
             </form>
           </div>
