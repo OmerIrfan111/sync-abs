@@ -49,6 +49,20 @@ export default function CatalogPage() {
   const [listingModalProduct, setListingModalProduct] = useState<Product | null>(null);
   const [selectedModalChannelId, setSelectedModalChannelId] = useState<number>(1);
   const [existingListingsMap, setExistingListingsMap] = useState<Record<number, { id: number; marketplace_id: number; marketplace_name: string; status: string }[]>>({});
+  const [modalCustomPrice, setModalCustomPrice] = useState<string>("");
+  const [drawerCustomPrice, setDrawerCustomPrice] = useState<string>("");
+
+  const randomizeModalPrice = (cost: number) => {
+    const mult = 1 + (Math.floor(Math.random() * 25) + 10) / 100;
+    const p = Math.floor(cost * mult) + 0.99;
+    setModalCustomPrice(p.toFixed(2));
+  };
+
+  const randomizeDrawerPrice = (cost: number) => {
+    const mult = 1 + (Math.floor(Math.random() * 25) + 10) / 100;
+    const p = Math.floor(cost * mult) + 0.99;
+    setDrawerCustomPrice(p.toFixed(2));
+  };
 
   const loadListingsMap = async () => {
     try {
@@ -71,7 +85,7 @@ export default function CatalogPage() {
     }
   };
 
-  const handlePublishToChannel = async (product: Product, targetMarketplaceId: number) => {
+  const handlePublishToChannel = async (product: Product, targetMarketplaceId: number, customPrice?: number) => {
     setPublishingId(product.id);
     setPublishSuccess(null);
     try {
@@ -82,9 +96,11 @@ export default function CatalogPage() {
         body: JSON.stringify({
           product_id: product.id,
           marketplace_id: targetMarketplaceId,
+          custom_price: customPrice !== undefined && !isNaN(customPrice) ? customPrice : undefined,
         }),
       });
-      setPublishSuccess(`Successfully listed "${product.title}" on ${channelName}!`);
+      const priceText = customPrice !== undefined && !isNaN(customPrice) ? ` at $${customPrice.toFixed(2)}` : "";
+      setPublishSuccess(`Successfully listed "${product.title}" on ${channelName}${priceText}!`);
       setTimeout(() => setPublishSuccess(null), 5000);
       setListingModalProduct(null);
       await loadListingsMap();
@@ -415,17 +431,34 @@ export default function CatalogPage() {
                       {/* 6. Action Buttons */}
                       <td className="px-6 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              setListingModalProduct(product);
-                              setSelectedModalChannelId(marketplaces.length > 0 ? marketplaces[0].id : 1);
-                            }}
-                            disabled={publishingId === product.id || isExcluded}
-                            className="px-3 py-1.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5 shrink-0"
-                          >
-                            <Store className="h-3.5 w-3.5" />
-                            <span>Start Selling This</span>
-                          </button>
+                          {(() => {
+                            const listedStoreIds = (existingListingsMap[product.id] || []).map(l => l.marketplace_id);
+                            const allListed = marketplaces.length > 0 && marketplaces.every(m => listedStoreIds.includes(m.id));
+                            if (allListed) {
+                              return (
+                                <span className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 shrink-0 cursor-default" title="This product is already active in all connected stores">
+                                  <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                  <span>Listed Everywhere</span>
+                                </span>
+                              );
+                            }
+                            return (
+                              <button
+                                onClick={() => {
+                                  setListingModalProduct(product);
+                                  const unlisted = marketplaces.filter(m => !listedStoreIds.includes(m.id));
+                                  setSelectedModalChannelId(unlisted.length > 0 ? unlisted[0].id : (marketplaces[0]?.id || 1));
+                                  const cost = Number(product.lowest_cost || 0);
+                                  setModalCustomPrice((cost * 1.15).toFixed(2));
+                                }}
+                                disabled={publishingId === product.id || isExcluded}
+                                className="px-3 py-1.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                              >
+                                <Store className="h-3.5 w-3.5" />
+                                <span>Start Selling This</span>
+                              </button>
+                            );
+                          })()}
 
                           <button
                             onClick={() => toggleNotSelling(product.id)}
@@ -596,36 +629,89 @@ export default function CatalogPage() {
               return null;
             })()}
 
-            {/* Choose store & list action in drawer */}
-            <div className="pt-3.5 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-[#1a1a1a] font-semibold">Choose Store to List on:</span>
-                <select
-                  value={selectedChannelId}
-                  onChange={(e) => setSelectedChannelId(Number(e.target.value))}
-                  className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-xs text-[#0a0a0a] font-medium focus:outline-none"
-                >
-                  {marketplaces.map((m) => {
-                    const alreadyIn = (existingListingsMap[selectedProduct.id] || []).some(
-                      (l) => l.marketplace_id === m.id
-                    );
-                    return (
-                      <option key={m.id} value={m.id}>
-                        {m.name} {alreadyIn ? "(Already Listed — will update)" : ""}
-                      </option>
-                    );
-                  })}
-                </select>
+            {/* Choose store & custom price action in drawer */}
+            <div className="pt-3.5 border-t border-gray-200 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-[#1a1a1a] font-semibold block mb-1">Choose Store to List on:</label>
+                  <select
+                    value={selectedChannelId}
+                    onChange={(e) => setSelectedChannelId(Number(e.target.value))}
+                    className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs text-[#0a0a0a] font-medium focus:outline-none"
+                  >
+                    {marketplaces.map((m) => {
+                      const alreadyIn = (existingListingsMap[selectedProduct.id] || []).some(
+                        (l) => l.marketplace_id === m.id
+                      );
+                      return (
+                        <option key={m.id} value={m.id} disabled={alreadyIn}>
+                          {m.name} {alreadyIn ? "— Already Listed" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-[#1a1a1a] font-semibold block">Selling Price ($):</label>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => randomizeDrawerPrice(Number(selectedProduct.lowest_cost || 50))}
+                        className="text-[10px] text-[#905831] font-medium bg-[#905831]/10 px-1.5 py-0.5 rounded border border-[#905831]/20 flex items-center gap-0.5"
+                        title="Pick random price with 10%-35% margin"
+                      >
+                        <Sparkles className="h-2.5 w-2.5" />
+                        <span>Random Price</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDrawerCustomPrice((Number(selectedProduct.lowest_cost || 0) * 1.15).toFixed(2))}
+                        className="text-[10px] text-gray-500 underline font-medium"
+                        title="Reset to rule formula (+15% margin)"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#767676] font-medium text-xs">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={drawerCustomPrice || (Number(selectedProduct.lowest_cost || 0) * 1.15).toFixed(2)}
+                      onChange={(e) => setDrawerCustomPrice(e.target.value)}
+                      placeholder="Custom price..."
+                      className="w-full pl-6 pr-2 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <button
-                onClick={() => handlePublishToChannel(selectedProduct, selectedChannelId)}
-                disabled={publishingId === selectedProduct.id}
-                className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
-              >
-                <Store className="h-4 w-4" />
-                <span>{publishingId === selectedProduct.id ? "Listing..." : "Start Selling on Store"}</span>
-              </button>
+              <div className="flex items-center justify-end">
+                <button
+                  onClick={() => handlePublishToChannel(
+                    selectedProduct, 
+                    selectedChannelId, 
+                    drawerCustomPrice ? Number(drawerCustomPrice) : Number((Number(selectedProduct.lowest_cost || 0) * 1.15).toFixed(2))
+                  )}
+                  disabled={
+                    publishingId === selectedProduct.id ||
+                    (existingListingsMap[selectedProduct.id] || []).some(l => l.marketplace_id === selectedChannelId)
+                  }
+                  className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+                >
+                  <Store className="h-4 w-4" />
+                  <span>
+                    {publishingId === selectedProduct.id 
+                      ? "Listing..." 
+                      : (existingListingsMap[selectedProduct.id] || []).some(l => l.marketplace_id === selectedChannelId)
+                        ? "Already in this Store"
+                        : "Start Selling on Store"}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -699,26 +785,85 @@ export default function CatalogPage() {
             })()}
 
             {/* Store Selection */}
+            {(() => {
+              const liveOn = existingListingsMap[listingModalProduct.id] || [];
+              const listedIds = liveOn.map(l => l.marketplace_id);
+              const allListed = marketplaces.length > 0 && marketplaces.every(m => listedIds.includes(m.id));
+
+              if (allListed) {
+                return (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900 flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span>This product is already active in all your stores! To adjust prices or stock, use <strong>Your Online Stores</strong>.</span>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-[#1a1a1a]">
+                    Choose Target Marketplace:
+                  </label>
+                  <select
+                    value={selectedModalChannelId}
+                    onChange={(e) => setSelectedModalChannelId(Number(e.target.value))}
+                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                  >
+                    {marketplaces.map((m) => {
+                      const alreadyIn = listedIds.includes(m.id);
+                      return (
+                        <option key={m.id} value={m.id} disabled={alreadyIn}>
+                          {m.name} {alreadyIn ? "— Already Listed (Active)" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              );
+            })()}
+
+            {/* Price Selection (Custom or Random) */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-[#1a1a1a]">
-                Choose Target Marketplace:
-              </label>
-              <select
-                value={selectedModalChannelId}
-                onChange={(e) => setSelectedModalChannelId(Number(e.target.value))}
-                className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
-              >
-                {marketplaces.map((m) => {
-                  const alreadyIn = (existingListingsMap[listingModalProduct.id] || []).some(
-                    (l) => l.marketplace_id === m.id
-                  );
-                  return (
-                    <option key={m.id} value={m.id}>
-                      {m.name} {alreadyIn ? "(Already Listed — will update)" : ""}
-                    </option>
-                  );
-                })}
-              </select>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-[#1a1a1a]">
+                  Selling Price ($)
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => randomizeModalPrice(Number(listingModalProduct.lowest_cost || 50))}
+                    className="text-[11px] text-[#905831] hover:text-[#0a0a0a] font-medium flex items-center gap-1 bg-[#905831]/10 px-2 py-0.5 rounded border border-[#905831]/20 transition-colors"
+                    title="Generate a random price with 10%-35% margin"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    <span>Random Price</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalCustomPrice((Number(listingModalProduct.lowest_cost || 0) * 1.15).toFixed(2))}
+                    className="text-[11px] text-gray-500 hover:text-gray-800 underline font-medium"
+                    title="Reset to rule formula (+15% margin)"
+                  >
+                    Reset Rule
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#767676] font-medium text-sm">$</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={modalCustomPrice}
+                  onChange={(e) => setModalCustomPrice(e.target.value)}
+                  placeholder="Enter custom selling price..."
+                  className="w-full pl-7 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#0a0a0a] font-bold focus:outline-none focus:border-[#0a0a0a]"
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-[#767676]">
+                <span>Wholesale cost: ${Number(listingModalProduct.lowest_cost || 0).toFixed(2)}</span>
+                <span>Rule formula (+15%): ${(Number(listingModalProduct.lowest_cost || 0) * 1.15).toFixed(2)}</span>
+              </div>
             </div>
 
             <div className="p-3 bg-[#905831]/[0.06] rounded-lg border border-[#905831]/20 text-xs text-[#905831] space-y-0.5">
@@ -727,7 +872,7 @@ export default function CatalogPage() {
                 <span>Automated Sync:</span>
               </div>
               <p className="text-[11px] text-[#767676]">
-                Once published, the system will keep stock and price synchronized in the background.
+                Once published, the system will keep stock and your price synchronized with your store.
               </p>
             </div>
 
@@ -740,13 +885,24 @@ export default function CatalogPage() {
                 Cancel
               </button>
               <button
-                onClick={() => handlePublishToChannel(listingModalProduct, selectedModalChannelId)}
-                disabled={publishingId === listingModalProduct.id}
+                onClick={() => handlePublishToChannel(
+                  listingModalProduct, 
+                  selectedModalChannelId, 
+                  modalCustomPrice ? Number(modalCustomPrice) : undefined
+                )}
+                disabled={
+                  publishingId === listingModalProduct.id ||
+                  (existingListingsMap[listingModalProduct.id] || []).some(l => l.marketplace_id === selectedModalChannelId)
+                }
                 className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
               >
                 <Store className="h-3.5 w-3.5" />
                 <span>
-                  {publishingId === listingModalProduct.id ? "Listing..." : "Confirm & Start Selling"}
+                  {publishingId === listingModalProduct.id 
+                    ? "Listing..." 
+                    : (existingListingsMap[listingModalProduct.id] || []).some(l => l.marketplace_id === selectedModalChannelId)
+                      ? "Already in this Store"
+                      : "Confirm & Start Selling"}
                 </span>
               </button>
             </div>

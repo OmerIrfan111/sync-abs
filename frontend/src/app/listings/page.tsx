@@ -20,11 +20,11 @@ import { fetchApi, Listing, Product } from "@/lib/api";
 
 const MARKETPLACE_TABS = [
   { id: "ALL", name: "All Stores" },
-  { id: "Amazon US", name: "Amazon" },
-  { id: "eBay US", name: "eBay" },
-  { id: "Walmart US", name: "Walmart" },
-  { id: "Shopify US", name: "Shopify" },
-  { id: "Newegg US", name: "Newegg" },
+  { id: "eBay", name: "eBay" },
+  { id: "Walmart", name: "Walmart" },
+  { id: "Amazon", name: "Amazon" },
+  { id: "Shopify", name: "Shopify" },
+  { id: "Newegg", name: "Newegg" },
 ];
 
 export default function ListingsPage() {
@@ -44,6 +44,7 @@ export default function ListingsPage() {
   const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<number>(1);
   const [marketplaces, setMarketplaces] = useState<any[]>([]);
   const [addingListing, setAddingListing] = useState(false);
+  const [addCustomPrice, setAddCustomPrice] = useState("");
 
   const loadListings = async () => {
     try {
@@ -75,6 +76,27 @@ export default function ListingsPage() {
     loadListings();
     loadCatalogAndChannels();
   }, []);
+
+  useEffect(() => {
+    if (selectedProductId) {
+      const prod = catalogProducts.find(p => p.id === Number(selectedProductId));
+      if (prod) {
+        const cost = Number(prod.lowest_cost || 0);
+        setAddCustomPrice((cost * 1.15).toFixed(2));
+      }
+      // Auto-pick the first store where this product is not yet listed
+      const unlisted = marketplaces.filter(m => !listings.some(l => l.product_id === Number(selectedProductId) && (l.marketplace_id === m.id || (l.marketplace_name || '').toLowerCase() === m.name.toLowerCase())));
+      if (unlisted.length > 0) {
+        setSelectedMarketplaceId(unlisted[0].id);
+      }
+    }
+  }, [selectedProductId, catalogProducts, listings, marketplaces]);
+
+  const randomizeAddPrice = (cost: number) => {
+    const mult = 1 + (Math.floor(Math.random() * 25) + 10) / 100; // 10% to 35% margin
+    const p = Math.floor(cost * mult) + 0.99;
+    setAddCustomPrice(p.toFixed(2));
+  };
 
   const openEditModal = (listing: Listing) => {
     setEditingListing(listing);
@@ -131,6 +153,7 @@ export default function ListingsPage() {
         body: JSON.stringify({
           product_id: Number(selectedProductId),
           marketplace_id: selectedMarketplaceId,
+          custom_price: addCustomPrice ? Number(addCustomPrice) : undefined,
         }),
       });
       setShowAddModal(false);
@@ -146,7 +169,9 @@ export default function ListingsPage() {
 
   const filteredListings = listings.filter((l) => {
     if (selectedTab === "ALL") return true;
-    return l.marketplace_name?.toLowerCase().includes(selectedTab.toLowerCase());
+    const mName = (l.marketplace_name || "").toLowerCase();
+    const tabTarget = selectedTab.toLowerCase();
+    return mName.includes(tabTarget) || tabTarget.includes(mName);
   });
 
   return (
@@ -197,7 +222,9 @@ export default function ListingsPage() {
           const isActive = selectedTab === tab.id;
           const count = listings.filter((l) => {
             if (tab.id === "ALL") return true;
-            return l.marketplace_name?.toLowerCase().includes(tab.id.toLowerCase());
+            const mName = (l.marketplace_name || "").toLowerCase();
+            const tabTarget = tab.id.toLowerCase();
+            return mName.includes(tabTarget) || tabTarget.includes(mName);
           }).length;
 
           return (
@@ -479,20 +506,75 @@ export default function ListingsPage() {
                   onChange={(e) => setSelectedMarketplaceId(Number(e.target.value))}
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a]"
                 >
-                  {marketplaces.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
+                  {marketplaces.map((m) => {
+                    const alreadyListed = listings.some(
+                      l => l.product_id === Number(selectedProductId) && (l.marketplace_id === m.id || (l.marketplace_name || '').toLowerCase() === m.name.toLowerCase())
+                    );
+                    return (
+                      <option key={m.id} value={m.id} disabled={alreadyListed}>
+                        {m.name} {alreadyListed ? "— Already Listed (Active)" : ""}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
+
+              {/* 3. Selling Price (Custom or Random) */}
+              {(() => {
+                const prod = catalogProducts.find(p => p.id === Number(selectedProductId));
+                const cost = Number(prod?.lowest_cost || 0);
+                const formulaPrice = (cost * 1.15).toFixed(2);
+                return (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-[#1a1a1a]">
+                        3. Selling Price ($)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => randomizeAddPrice(cost || 50)}
+                          className="text-[11px] text-[#905831] hover:text-[#0a0a0a] font-medium flex items-center gap-1 bg-[#905831]/10 px-2 py-0.5 rounded border border-[#905831]/20 transition-colors"
+                          title="Generate a random price with 10%-35% margin"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          <span>Random Price</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAddCustomPrice(formulaPrice)}
+                          className="text-[11px] text-gray-500 hover:text-gray-800 underline font-medium"
+                          title="Reset to rule formula (+15% margin)"
+                        >
+                          Reset Rule
+                        </button>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#767676] font-medium text-sm">$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={addCustomPrice}
+                        onChange={(e) => setAddCustomPrice(e.target.value)}
+                        placeholder="Enter custom selling price..."
+                        className="w-full pl-7 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#0a0a0a] font-semibold focus:outline-none focus:border-[#0a0a0a]"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-[#767676] mt-1">
+                      <span>Wholesale cost: ${cost.toFixed(2)}</span>
+                      <span>Formula (+15%): ${formulaPrice}</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="p-3 bg-[#905831]/[0.06] rounded-lg border border-[#905831]/20 text-xs text-[#905831]">
                 <div className="font-semibold mb-0.5 flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5" />
-                  Automated Price & Stock:
+                  Automated Price & Stock Sync:
                 </div>
-                <span>Your pricing rule markup and safety buffer will be applied automatically.</span>
+                <span>Your custom price will be published and maintained across sales channels.</span>
               </div>
 
               <div className="pt-3 flex items-center justify-end gap-2.5">
@@ -505,10 +587,17 @@ export default function ListingsPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={addingListing}
+                  disabled={
+                    addingListing ||
+                    listings.some(l => l.product_id === Number(selectedProductId) && (l.marketplace_id === selectedMarketplaceId || (l.marketplace_name || '').toLowerCase() === marketplaces.find(m => m.id === selectedMarketplaceId)?.name.toLowerCase()))
+                  }
                   className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50"
                 >
-                  {addingListing ? "Publishing..." : "Start Selling"}
+                  {addingListing 
+                    ? "Publishing..." 
+                    : listings.some(l => l.product_id === Number(selectedProductId) && (l.marketplace_id === selectedMarketplaceId || (l.marketplace_name || '').toLowerCase() === marketplaces.find(m => m.id === selectedMarketplaceId)?.name.toLowerCase()))
+                      ? "Already in this Store"
+                      : "Start Selling"}
                 </button>
               </div>
             </form>
