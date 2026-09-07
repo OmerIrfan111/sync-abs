@@ -96,7 +96,9 @@ def publish_listing(payload: ListingPublishRequest, db: Session = Depends(get_db
             product_id=payload.product_id,
             marketplace_id=payload.marketplace_id,
             custom_price=payload.custom_price,
-            custom_qty=payload.custom_qty
+            custom_qty=payload.custom_qty,
+            custom_title=payload.custom_title,
+            custom_description=payload.custom_description
         )
         return ListingResponse(
             id=listing.id,

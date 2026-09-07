@@ -39,6 +39,10 @@ class MarketplaceAdapter(ABC):
         """Reactivate/republish a withdrawn/draft listing on the marketplace."""
         return True
 
+    def update_product_details(self, external_listing_id: str, title: Optional[str] = None, description: Optional[str] = None) -> bool:
+        """Update live listing title/description on the marketplace if supported."""
+        return True
+
     @abstractmethod
     def get_listing(self, external_listing_id: str) -> Dict[str, Any]:
         """Retrieve current marketplace listing details."""

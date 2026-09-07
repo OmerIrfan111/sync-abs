@@ -85,10 +85,13 @@ class ListingService:
         product_id: int,
         marketplace_id: int,
         custom_price: Optional[Decimal] = None,
-        custom_qty: Optional[int] = None
+        custom_qty: Optional[int] = None,
+        custom_title: Optional[str] = None,
+        custom_description: Optional[str] = None
     ) -> Listing:
         """
         Publishes a canonical product to a selected marketplace channel.
+        Allows custom title, description, price, and stock overrides.
         """
         product = self.db.query(Product).filter(Product.id == product_id).first()
         if not product:
@@ -97,6 +100,15 @@ class ListingService:
         marketplace = self.db.query(Marketplace).filter(Marketplace.id == marketplace_id).first()
         if not marketplace:
             raise ValueError(f"Marketplace {marketplace_id} not found")
+
+        # Optionally persist title and description updates to canonical product
+        if custom_title and custom_title.strip():
+            product.title = custom_title.strip()
+        if custom_description and custom_description.strip():
+            product.description = custom_description.strip()
+        if (custom_title and custom_title.strip()) or (custom_description and custom_description.strip()):
+            self.db.commit()
+            self.db.refresh(product)
 
         # Check existing listing
         listing = self.db.query(Listing).filter(
@@ -145,6 +157,15 @@ class ListingService:
             try:
                 adapter.update_price(listing.external_listing_id, product.sku, price)
                 adapter.update_inventory(listing.external_listing_id, product.sku, quantity)
+                if hasattr(adapter, "update_product_details") and (custom_title or custom_description):
+                    try:
+                        adapter.update_product_details(
+                            listing.external_listing_id,
+                            title=custom_title,
+                            description=custom_description
+                        )
+                    except Exception as details_err:
+                        logger.warning(f"Could not update details on {marketplace.name}: {details_err}")
 
                 listing.status = target_status
                 listing.selling_price = price
@@ -170,8 +191,8 @@ class ListingService:
         try:
             adapter_result = adapter.create_listing(
                 sku=product.sku,
-                title=product.title,
-                description=product.description or product.title,
+                title=custom_title or product.title,
+                description=custom_description or product.description or product.title,
                 price=price,
                 quantity=quantity,
                 image_urls=product.images or []

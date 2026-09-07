@@ -17,6 +17,8 @@ class ListingPublishRequest(BaseModel):
     marketplace_id: int
     custom_price: Optional[Decimal] = None
     custom_qty: Optional[int] = None
+    custom_title: Optional[str] = None
+    custom_description: Optional[str] = None
 
 class ListingUpdate(BaseModel):
     selling_price: Optional[Decimal] = None

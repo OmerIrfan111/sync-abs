@@ -347,6 +347,21 @@ class LiveShopifyAdapter(MarketplaceAdapter):
             return True
         return False
 
+    def update_product_details(self, external_listing_id: str, title: Optional[str] = None, description: Optional[str] = None) -> bool:
+        """Updates product title and/or description on Shopify."""
+        product_id, _ = self._parse_listing_ids(external_listing_id)
+        if product_id:
+            payload: Dict[str, Any] = {"id": int(product_id)}
+            if title:
+                payload["title"] = title
+            if description:
+                payload["body_html"] = description
+            if len(payload) > 1:
+                logger.info(f"Updating Shopify product {product_id} details (title/desc)")
+                self._request(f"/products/{product_id}.json", method="PUT", data={"product": payload})
+                return True
+        return False
+
     def get_listing(self, external_listing_id: str) -> Dict[str, Any]:
         """Fetches product details from Shopify."""
         product_id, _ = self._parse_listing_ids(external_listing_id)

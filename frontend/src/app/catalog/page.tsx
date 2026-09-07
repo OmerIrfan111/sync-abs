@@ -52,6 +52,12 @@ export default function CatalogPage() {
   const [existingListingsMap, setExistingListingsMap] = useState<Record<number, { id: number; marketplace_id: number; marketplace_name: string; status: string; selling_price: number }[]>>({});
   const [modalCustomPrice, setModalCustomPrice] = useState<string>("");
   const [drawerCustomPrice, setDrawerCustomPrice] = useState<string>("");
+  const [modalCustomTitle, setModalCustomTitle] = useState<string>("");
+  const [modalCustomDescription, setModalCustomDescription] = useState<string>("");
+  const [drawerCustomTitle, setDrawerCustomTitle] = useState<string>("");
+  const [drawerCustomDescription, setDrawerCustomDescription] = useState<string>("");
+  const [showModalContentEdit, setShowModalContentEdit] = useState<boolean>(false);
+  const [showDrawerContentEdit, setShowDrawerContentEdit] = useState<boolean>(false);
 
   const randomizeModalPrice = (cost: number) => {
     const mult = 1 + (Math.floor(Math.random() * 25) + 10) / 100;
@@ -87,7 +93,13 @@ export default function CatalogPage() {
     }
   };
 
-  const handlePublishToChannel = async (product: Product, targetMarketplaceId: number, customPrice?: number) => {
+  const handlePublishToChannel = async (
+    product: Product, 
+    targetMarketplaceId: number, 
+    customPrice?: number,
+    customTitle?: string,
+    customDescription?: string
+  ) => {
     setPublishingId(product.id);
     setPublishSuccess(null);
     try {
@@ -101,13 +113,15 @@ export default function CatalogPage() {
           product_id: product.id,
           marketplace_id: targetMarketplaceId,
           custom_price: customPrice !== undefined && !isNaN(customPrice) ? customPrice : undefined,
+          custom_title: customTitle?.trim() || undefined,
+          custom_description: customDescription?.trim() || undefined,
         }),
       });
       const priceText = customPrice !== undefined && !isNaN(customPrice) ? ` at $${customPrice.toFixed(2)}` : "";
       setPublishSuccess(
         isUpdate 
-          ? `Successfully updated price for "${product.title}" on ${channelName}${priceText}!` 
-          : `Successfully listed "${product.title}" on ${channelName}${priceText}!`
+          ? `Successfully updated "${customTitle || product.title}" on ${channelName}${priceText}!` 
+          : `Successfully listed "${customTitle || product.title}" on ${channelName}${priceText}!`
       );
       setTimeout(() => setPublishSuccess(null), 5000);
       setListingModalProduct(null);
@@ -116,6 +130,21 @@ export default function CatalogPage() {
       alert("Action failed: " + err.message);
     } finally {
       setPublishingId(null);
+    }
+  };
+
+  const handleOpenProductDetails = (product: Product) => {
+    setSelectedProduct(product);
+    setDrawerCustomTitle(product.title || "");
+    setDrawerCustomDescription(product.description || "");
+    setShowDrawerContentEdit(false);
+    const live = existingListingsMap[product.id] || [];
+    const existing = live.find(l => l.marketplace_id === selectedChannelId);
+    if (existing && existing.selling_price > 0) {
+      setDrawerCustomPrice(existing.selling_price.toFixed(2));
+    } else {
+      const cost = Number(product.lowest_cost || 0);
+      setDrawerCustomPrice((cost * 1.15).toFixed(2));
     }
   };
 
@@ -357,7 +386,7 @@ export default function CatalogPage() {
                           )}
                           <div className="max-w-xs sm:max-w-md">
                             <button
-                              onClick={() => setSelectedProduct(product)}
+                              onClick={() => handleOpenProductDetails(product)}
                               className="font-semibold text-[#0a0a0a] hover:text-[#905831] text-left line-clamp-1 transition-colors"
                             >
                               {product.title}
@@ -366,7 +395,7 @@ export default function CatalogPage() {
                               {product.brand || "Standard Brand"} • {product.category || "General Merchandise"}
                             </div>
                             <button
-                              onClick={() => setSelectedProduct(product)}
+                              onClick={() => handleOpenProductDetails(product)}
                               className="text-[11px] text-[#905831] hover:underline mt-0.5 font-medium block"
                             >
                               View product codes & details &rarr;
@@ -447,6 +476,9 @@ export default function CatalogPage() {
 
                             const handleOpenModal = () => {
                               setListingModalProduct(product);
+                              setModalCustomTitle(product.title || "");
+                              setModalCustomDescription(product.description || "");
+                              setShowModalContentEdit(false);
                               const unlisted = marketplaces.filter(m => !listedStoreIds.includes(m.id));
                               const targetChannelId = unlisted.length > 0 ? unlisted[0].id : (marketplaces[0]?.id || 1);
                               setSelectedModalChannelId(targetChannelId);
@@ -732,10 +764,59 @@ export default function CatalogPage() {
                     </div>
                   </div>
 
+                  {/* Title & Description Customization (Collapsible) */}
+                  <div className="border border-gray-200 rounded-lg p-3 bg-gray-50/70 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowDrawerContentEdit(!showDrawerContentEdit)}
+                      className="w-full flex items-center justify-between text-xs font-semibold text-[#0a0a0a]"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-[#905831]" />
+                        <span>Customize Title & Description</span>
+                        {(drawerCustomTitle !== selectedProduct.title || drawerCustomDescription !== (selectedProduct.description || "")) && (
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium">Modified</span>
+                        )}
+                      </span>
+                      <span className="text-[11px] text-[#905831] font-medium">
+                        {showDrawerContentEdit ? "Hide fields" : "Edit before listing"}
+                      </span>
+                    </button>
+
+                    {showDrawerContentEdit && (
+                      <div className="space-y-3 pt-2 border-t border-gray-200">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[#1a1a1a] mb-1">
+                            Store Listing Title
+                          </label>
+                          <input
+                            type="text"
+                            value={drawerCustomTitle}
+                            onChange={(e) => setDrawerCustomTitle(e.target.value)}
+                            placeholder="Enter listing title..."
+                            className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[#1a1a1a] mb-1">
+                            Store Product Description
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={drawerCustomDescription}
+                            onChange={(e) => setDrawerCustomDescription(e.target.value)}
+                            placeholder="Enter custom product description..."
+                            className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {isDrawerStoreListed && (
                     <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-900 flex items-center gap-2">
                       <RefreshCw className="h-3.5 w-3.5 text-amber-700 shrink-0" />
-                      <span>Already listed in this store. Submitting will update the price and stock without creating duplicates.</span>
+                      <span>Already listed in this store. Submitting will update the title, price, and stock without creating duplicates.</span>
                     </div>
                   )}
 
@@ -744,7 +825,9 @@ export default function CatalogPage() {
                       onClick={() => handlePublishToChannel(
                         selectedProduct, 
                         selectedChannelId, 
-                        drawerCustomPrice ? Number(drawerCustomPrice) : Number((Number(selectedProduct.lowest_cost || 0) * 1.15).toFixed(2))
+                        drawerCustomPrice ? Number(drawerCustomPrice) : Number((Number(selectedProduct.lowest_cost || 0) * 1.15).toFixed(2)),
+                        drawerCustomTitle,
+                        drawerCustomDescription
                       )}
                       disabled={publishingId === selectedProduct.id}
                       className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
@@ -753,7 +836,7 @@ export default function CatalogPage() {
                       <span>
                         {publishingId === selectedProduct.id 
                           ? (isDrawerStoreListed ? "Updating..." : "Listing...") 
-                          : (isDrawerStoreListed ? "Update Price on Store" : "Start Selling on Store")}
+                          : (isDrawerStoreListed ? "Update Listing on Store" : "Start Selling on Store")}
                       </span>
                     </button>
                   </div>
@@ -923,6 +1006,55 @@ export default function CatalogPage() {
               </div>
             </div>
 
+            {/* Title & Description Customization (Collapsible) */}
+            <div className="border border-gray-200 rounded-lg p-3 bg-gray-50/70 space-y-2">
+              <button
+                type="button"
+                onClick={() => setShowModalContentEdit(!showModalContentEdit)}
+                className="w-full flex items-center justify-between text-xs font-semibold text-[#0a0a0a]"
+              >
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-[#905831]" />
+                  <span>Customize Title & Description</span>
+                  {(modalCustomTitle !== listingModalProduct.title || modalCustomDescription !== (listingModalProduct.description || "")) && (
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium">Modified</span>
+                  )}
+                </span>
+                <span className="text-[11px] text-[#905831] font-medium">
+                  {showModalContentEdit ? "Hide fields" : "Edit before listing"}
+                </span>
+              </button>
+
+              {showModalContentEdit && (
+                <div className="space-y-3 pt-2 border-t border-gray-200">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#1a1a1a] mb-1">
+                      Store Listing Title
+                    </label>
+                    <input
+                      type="text"
+                      value={modalCustomTitle}
+                      onChange={(e) => setModalCustomTitle(e.target.value)}
+                      placeholder="Enter listing title..."
+                      className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#1a1a1a] mb-1">
+                      Store Product Description
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={modalCustomDescription}
+                      onChange={(e) => setModalCustomDescription(e.target.value)}
+                      placeholder="Enter custom product description..."
+                      className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="p-3 bg-[#905831]/[0.06] rounded-lg border border-[#905831]/20 text-xs text-[#905831] space-y-0.5">
               <div className="font-semibold flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5" />
@@ -950,7 +1082,9 @@ export default function CatalogPage() {
                     onClick={() => handlePublishToChannel(
                       listingModalProduct, 
                       selectedModalChannelId, 
-                      modalCustomPrice ? Number(modalCustomPrice) : undefined
+                      modalCustomPrice ? Number(modalCustomPrice) : undefined,
+                      modalCustomTitle,
+                      modalCustomDescription
                     )}
                     disabled={publishingId === listingModalProduct.id}
                     className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
@@ -959,7 +1093,7 @@ export default function CatalogPage() {
                     <span>
                       {publishingId === listingModalProduct.id 
                         ? (isModalStoreListed ? "Updating..." : "Listing...") 
-                        : (isModalStoreListed ? "Update Price on Store" : "Confirm & Start Selling")}
+                        : (isModalStoreListed ? "Update Listing on Store" : "Confirm & Start Selling")}
                     </span>
                   </button>
                 </div>
