@@ -58,7 +58,8 @@ export default function MarketplacesPage() {
   const [shopifyDomain, setShopifyDomain] = useState("");
   const [shopifyToken, setShopifyToken] = useState("");
   const [ebayToken, setEbayToken] = useState("");
-  const [ebayEnv, setEbayEnv] = useState("sandbox");
+  const [ebayRefreshToken, setEbayRefreshToken] = useState("");
+  const [ebayEnv, setEbayEnv] = useState("production");
   const [ebayAppId, setEbayAppId] = useState("");
   const [ebayCertId, setEbayCertId] = useState("");
   const [genericClientId, setGenericClientId] = useState("");
@@ -109,7 +110,8 @@ export default function MarketplacesPage() {
     setShopifyDomain("");
     setShopifyToken("");
     setEbayToken("");
-    setEbayEnv("sandbox");
+    setEbayRefreshToken("");
+    setEbayEnv("production");
     setEbayAppId("");
     setEbayCertId("");
     setGenericClientId("");
@@ -151,11 +153,12 @@ export default function MarketplacesPage() {
           };
         } else if (name.includes("ebay")) {
           if (!ebayToken.trim() && !ebayAppId.trim()) {
-            throw new Error("Please provide your eBay OAuth User Token.");
+            throw new Error("Please provide your eBay OAuth User Token or App credentials.");
           }
           creds = {
             environment: ebayEnv,
             user_token: ebayToken.trim(),
+            refresh_token: ebayRefreshToken.trim(),
             app_id: ebayAppId.trim(),
             cert_id: ebayCertId.trim(),
             adapter_class: "LiveEBayAdapter"
@@ -405,8 +408,8 @@ export default function MarketplacesPage() {
                             onChange={(e) => setEbayEnv(e.target.value)}
                             className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
                           >
-                            <option value="sandbox">Sandbox (Testing)</option>
-                            <option value="production">Production (Live)</option>
+                            <option value="production">Production (Live eBay)</option>
+                            <option value="sandbox">Sandbox (Test Mode)</option>
                           </select>
                         </div>
                         <div>
@@ -417,22 +420,51 @@ export default function MarketplacesPage() {
                             type="text"
                             value={ebayAppId}
                             onChange={(e) => setEbayAppId(e.target.value)}
-                            placeholder="Optional App ID"
+                            placeholder="e.g. YourCompany-Sync-PRD-..."
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
+                            Cert ID (Client Secret)
+                          </label>
+                          <input
+                            type="password"
+                            value={ebayCertId}
+                            onChange={(e) => setEbayCertId(e.target.value)}
+                            placeholder="e.g. PRD-...-cert"
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
+                            Refresh Token (Optional)
+                          </label>
+                          <input
+                            type="password"
+                            value={ebayRefreshToken}
+                            onChange={(e) => setEbayRefreshToken(e.target.value)}
+                            placeholder="Optional refresh token"
                             className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
                           />
                         </div>
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
-                          OAuth User Token
+                          OAuth User Token (Required)
                         </label>
                         <textarea
                           rows={3}
                           value={ebayToken}
                           onChange={(e) => setEbayToken(e.target.value)}
-                          placeholder="Paste your eBay OAuth user token (v^1.1#...)"
+                          placeholder="Paste your eBay OAuth user token (starts with v^1.1#...)"
                           className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
                         />
+                        <p className="text-[10px] text-[#767676] mt-1">
+                          Generated in <strong>eBay Developer Portal ➔ User Tokens ➔ Get a User Token Here</strong> (Production).
+                        </p>
                       </div>
                     </>
                   )}

@@ -41,7 +41,7 @@ class LiveEBayAdapter(MarketplaceAdapter):
 
     def _get_auth_header(self) -> Dict[str, str]:
         """Returns HTTP headers for authenticated eBay REST requests."""
-        token = self.user_token
+        token = self.user_token.replace("Bearer ", "").strip()
         return {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
