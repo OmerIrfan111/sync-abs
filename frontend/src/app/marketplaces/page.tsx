@@ -39,6 +39,7 @@ export default function MarketplacesPage() {
   const [loading, setLoading] = useState(true);
   const [testingId, setTestingId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [testResults, setTestResults] = useState<Record<number, { status: "success" | "error"; message: string }>>({});
 
   // Configure Modal
   const [configChannel, setConfigChannel] = useState<Marketplace | null>(null);
@@ -85,12 +86,17 @@ export default function MarketplacesPage() {
 
   const showFeedback = (message: string, type: "success" | "error") => {
     setFeedback({ message, type });
-    setTimeout(() => setFeedback(null), 5000);
+    setTimeout(() => setFeedback(null), 6000);
   };
 
   const handleTestConnection = async (id: number, name: string, hasCredentials: boolean) => {
     if (!hasCredentials) {
-      showFeedback(`No API credentials configured for ${name}. Click "Connect Store" to enter your live keys before testing.`, "error");
+      const msg = `No API credentials configured for ${name}. Click "Connect Store" to enter your live keys before testing.`;
+      showFeedback(msg, "error");
+      setTestResults(prev => ({
+        ...prev,
+        [id]: { status: "error", message: msg }
+      }));
       return;
     }
     setTestingId(id);
@@ -98,9 +104,19 @@ export default function MarketplacesPage() {
       const res = await fetchApi<{ success: boolean; message: string }>(`/marketplaces/${id}/test`, {
         method: "POST"
       });
-      showFeedback(res.message || `${name} is connected and responding quickly!`, "success");
+      const msg = res.message || `${name} is verified and responding!`;
+      showFeedback(msg, "success");
+      setTestResults(prev => ({
+        ...prev,
+        [id]: { status: "success", message: msg }
+      }));
     } catch (err: any) {
-      showFeedback(err.message || `Could not connect to ${name}`, "error");
+      const msg = err.message || `Could not connect to ${name}`;
+      showFeedback(msg, "error");
+      setTestResults(prev => ({
+        ...prev,
+        [id]: { status: "error", message: msg }
+      }));
     } finally {
       setTestingId(null);
     }
@@ -256,6 +272,7 @@ export default function MarketplacesPage() {
               summary: "Automated ecommerce sales channel with live price & inventory feeds.",
               guide: "Paste your API keys from your store developer settings."
             };
+            const testInfo = testResults[mkt.id];
             const isExpanded = expandedId === mkt.id;
 
             return (
@@ -275,14 +292,27 @@ export default function MarketplacesPage() {
                         <span className="text-[11px] text-[#767676]">Online Marketplace</span>
                       </div>
                     </div>
-                    <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 ${
-                      mkt.has_credentials
-                        ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                        : "bg-gray-100 text-gray-700 border border-gray-200"
-                    }`}>
-                      <span className={`h-1.5 w-1.5 rounded-full ${mkt.has_credentials ? "bg-emerald-500" : "bg-gray-400"}`} />
-                      <span>{mkt.has_credentials ? "Connected" : "Not Linked"}</span>
-                    </span>
+                    {testInfo?.status === "error" ? (
+                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 bg-rose-50 text-rose-800 border border-rose-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />
+                        <span>Auth Error</span>
+                      </span>
+                    ) : testInfo?.status === "success" ? (
+                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        <span>Live & Verified</span>
+                      </span>
+                    ) : mkt.has_credentials ? (
+                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        <span>Keys Saved</span>
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 bg-gray-100 text-gray-700 border border-gray-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                        <span>Not Linked</span>
+                      </span>
+                    )}
                   </div>
 
                   <p className="text-xs text-[#767676] leading-relaxed mb-3.5">
@@ -299,11 +329,41 @@ export default function MarketplacesPage() {
                     <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                       <span className="text-[11px] text-[#767676] block">Security & Keys</span>
                       <span className="text-xs font-semibold text-[#0a0a0a] block truncate flex items-center gap-1 mt-1">
-                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                        <span>{mkt.has_credentials ? "Encrypted (Safe)" : "Keys Needed"}</span>
+                        {testInfo?.status === "error" ? (
+                          <>
+                            <AlertCircle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                            <span className="text-rose-700 font-semibold">Invalid / Expired</span>
+                          </>
+                        ) : testInfo?.status === "success" ? (
+                          <>
+                            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                            <span className="text-emerald-700 font-semibold">Verified Live</span>
+                          </>
+                        ) : mkt.has_credentials ? (
+                          <>
+                            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                            <span>Encrypted (Saved)</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                            <span className="text-[#767676]">Keys Needed</span>
+                          </>
+                        )}
                       </span>
                     </div>
                   </div>
+
+                  {/* Error Notification Card if test failed */}
+                  {testInfo?.status === "error" && (
+                    <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[11px] flex items-start gap-2 mb-3">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-rose-600" />
+                      <div>
+                        <span className="font-semibold block">Authorization Failed (401)</span>
+                        <span className="opacity-90">{testInfo.message}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Actions */}
