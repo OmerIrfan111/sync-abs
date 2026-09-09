@@ -119,7 +119,7 @@ export default function DashboardPage() {
     {
       num: 4,
       title: "Choose your online stores",
-      description: "Connect Amazon, eBay, Shopify, Walmart, or Newegg to sell to buyers.",
+      description: "Connect Amazon, eBay, or Shopify to sell to buyers.",
       href: "/marketplaces",
       done: hasMarketplaces,
       actionText: "Connect Stores"

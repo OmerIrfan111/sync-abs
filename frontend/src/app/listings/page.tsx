@@ -22,10 +22,8 @@ import { fetchApi, Listing, Product } from "@/lib/api";
 const MARKETPLACE_TABS = [
   { id: "ALL", name: "All Stores" },
   { id: "eBay", name: "eBay" },
-  { id: "Walmart", name: "Walmart" },
   { id: "Amazon", name: "Amazon" },
   { id: "Shopify", name: "Shopify" },
-  { id: "Newegg", name: "Newegg" },
 ];
 
 export default function ListingsPage() {

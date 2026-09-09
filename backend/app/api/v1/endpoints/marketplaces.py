@@ -108,14 +108,25 @@ def test_marketplace_connection(marketplace_id: int, db: Session = Depends(get_d
     if not m:
         raise HTTPException(status_code=404, detail="Marketplace channel not found")
 
+    if not m.credentials_encrypted and not m.adapter_class.startswith("Mock"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"No API credentials configured for {m.name}. Please click 'Connect Store', enter your credentials, and save before testing."
+        )
+
     credentials = {}
-    if m.credentials_encrypted:
-        try:
-            decrypted = decrypt_credential(m.credentials_encrypted)
-            if decrypted:
-                credentials = json.loads(decrypted)
-        except Exception:
-            pass
+    try:
+        decrypted = decrypt_credential(m.credentials_encrypted)
+        if decrypted:
+            credentials = json.loads(decrypted)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to decrypt credentials: {str(e)}")
+
+    if not m.adapter_class.startswith("Mock") and (not credentials or not any(str(v).strip() for v in credentials.values() if v is not None)):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Credentials for {m.name} are empty. Please enter your valid keys or tokens."
+        )
 
     adapter = get_marketplace_adapter(m.adapter_class, credentials=credentials)
     try:
@@ -124,7 +135,8 @@ def test_marketplace_connection(marketplace_id: int, db: Session = Depends(get_d
             "success": success,
             "marketplace": m.name,
             "adapter": m.adapter_class,
-            "message": f"Connection to {m.name} via {m.adapter_class} verified successfully."
+            "message": f"Real connection to {m.name} verified successfully!"
         }
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=f"{m.name} Connection Error: {str(exc)}")
+

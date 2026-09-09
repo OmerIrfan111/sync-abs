@@ -4,16 +4,12 @@ import pytest
 from app.adapters.marketplaces.mock_ebay import MockEBayAdapter
 from app.adapters.marketplaces.mock_amazon import MockAmazonAdapter
 from app.adapters.marketplaces.mock_shopify import MockShopifyAdapter
-from app.adapters.marketplaces.mock_walmart import MockWalmartAdapter
-from app.adapters.marketplaces.mock_newegg import MockNeweggAdapter
 from app.adapters.registry import get_marketplace_adapter
 
 ALL_MARKETPLACE_CLASSES = [
     MockEBayAdapter,
     MockAmazonAdapter,
     MockShopifyAdapter,
-    MockWalmartAdapter,
-    MockNeweggAdapter
 ]
 
 @pytest.mark.parametrize("adapter_cls", ALL_MARKETPLACE_CLASSES)
@@ -76,8 +72,3 @@ def test_marketplace_registry_factory():
     ad3 = get_marketplace_adapter("MockShopifyAdapter")
     assert isinstance(ad3, MockShopifyAdapter)
 
-    ad4 = get_marketplace_adapter("MockWalmartAdapter")
-    assert isinstance(ad4, MockWalmartAdapter)
-
-    ad5 = get_marketplace_adapter("MockNeweggAdapter")
-    assert isinstance(ad5, MockNeweggAdapter)

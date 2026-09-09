@@ -43,6 +43,57 @@ DEFAULT_SEED_DATA = {
             "stock_status": "IN_STOCK",
             "shipping_info": {"weight_lbs": 16.5, "lead_time_days": 1},
             "availability_status": "ACTIVE"
+        },
+        {
+            "supplier_sku": "ING-SAMS-T7-1TB",
+            "upc": "887276435342",
+            "ean": "0887276435342",
+            "mpn": "MU-PC1T0T/AM",
+            "title": "Samsung T7 Portable SSD 1TB USB 3.2 Gen 2",
+            "brand": "Samsung",
+            "description": "Lightning fast external storage transferring files at up to 1050MB/s.",
+            "category": "Storage",
+            "images": ["https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?w=500&auto=format&fit=crop"],
+            "specs": {"capacity": "1TB", "interface": "USB 3.2 Gen 2", "color": "Titan Gray"},
+            "cost": Decimal("91.00"),
+            "quantity": 40,
+            "stock_status": "IN_STOCK",
+            "shipping_info": {"weight_lbs": 0.5, "lead_time_days": 2},
+            "availability_status": "ACTIVE"
+        },
+        {
+            "supplier_sku": "ING-COR-DDR5-32G",
+            "upc": "840006659914",
+            "ean": "0840006659914",
+            "mpn": "CMK32GX5M2B5600C36",
+            "title": "Corsair Vengeance 32GB (2x16GB) DDR5 5600MHz RAM",
+            "brand": "Corsair",
+            "description": "High performance DDR5 desktop memory with onboard power management.",
+            "category": "Components",
+            "images": ["https://images.unsplash.com/photo-1541029071515-84cc54f84dc5?w=500&auto=format&fit=crop"],
+            "specs": {"capacity": "32GB", "speed": "5600MHz", "type": "DDR5"},
+            "cost": Decimal("95.00"),
+            "quantity": 30,
+            "stock_status": "IN_STOCK",
+            "shipping_info": {"weight_lbs": 0.4, "lead_time_days": 2},
+            "availability_status": "ACTIVE"
+        },
+        {
+            "supplier_sku": "ING-ANKER-65W-CHG",
+            "upc": "194644022884",
+            "ean": "0194644022884",
+            "mpn": "A2663111",
+            "title": "Anker Nano II 65W GaN Fast Wall Charger",
+            "brand": "Anker",
+            "description": "Ultra-compact fast USB-C charger for phone, tablet, and notebook.",
+            "category": "Mobile Accessories",
+            "images": ["https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500&auto=format&fit=crop"],
+            "specs": {"wattage": "65W", "technology": "GaN II", "ports": "1 USB-C"},
+            "cost": Decimal("24.00"),
+            "quantity": 120,
+            "stock_status": "IN_STOCK",
+            "shipping_info": {"weight_lbs": 0.3, "lead_time_days": 1},
+            "availability_status": "ACTIVE"
         }
     ],
     "D&H": [
@@ -64,6 +115,23 @@ DEFAULT_SEED_DATA = {
             "availability_status": "ACTIVE"
         },
         {
+            "supplier_sku": "DH-TEST-001",
+            "upc": "840080500111",
+            "ean": "0840080500111",
+            "mpn": "TEST-001",
+            "title": "Enterprise 4K UltraHD Pro Monitor 32-inch",
+            "brand": "TechPro",
+            "description": "Professional color-accurate IPS display with Thunderbolt 4 docking.",
+            "category": "Monitors",
+            "images": ["https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=500&auto=format&fit=crop"],
+            "specs": {"resolution": "3840x2160", "refresh_rate": "144Hz", "panel": "IPS"},
+            "cost": Decimal("510.00"),
+            "quantity": 15,
+            "stock_status": "IN_STOCK",
+            "shipping_info": {"weight_lbs": 16.5, "lead_time_days": 2},
+            "availability_status": "ACTIVE"
+        },
+        {
             "supplier_sku": "DH-SAMS-T7-1TB",
             "upc": "887276435342",
             "ean": "0887276435342",
@@ -79,30 +147,9 @@ DEFAULT_SEED_DATA = {
             "stock_status": "IN_STOCK",
             "shipping_info": {"weight_lbs": 0.5, "lead_time_days": 1},
             "availability_status": "ACTIVE"
-        }
-    ],
-    "TD SYNNEX": [
+        },
         {
-            "supplier_sku": "TD-LOGI-MXKEYS",
-            "upc": "097855149367",
-            "ean": "5099206085800",
-            "mpn": "920-009400",
-            "title": "Logitech MX Keys Advanced Wireless Keyboard",
-            "brand": "Logitech",
-            "description": "Fluid typing keys with proximity hand detection backlight.",
-            "category": "Computer Accessories",
-            "images": ["https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=500&auto=format&fit=crop"],
-            "specs": {"connectivity": "Bluetooth/USB Receiver", "color": "Space Gray", "backlight": "Yes"},
-            "cost": Decimal("48.00"),
-            "quantity": 0,
-            "stock_status": "OUT_OF_STOCK",
-            "shipping_info": {"weight_lbs": 2.2, "lead_time_days": 2},
-            "availability_status": "ACTIVE"
-        }
-    ],
-    "Ma Labs": [
-        {
-            "supplier_sku": "MAL-COR-DDR5-32G",
+            "supplier_sku": "DH-COR-DDR5-32G",
             "upc": "840006659914",
             "ean": "0840006659914",
             "mpn": "CMK32GX5M2B5600C36",
@@ -112,16 +159,14 @@ DEFAULT_SEED_DATA = {
             "category": "Components",
             "images": ["https://images.unsplash.com/photo-1541029071515-84cc54f84dc5?w=500&auto=format&fit=crop"],
             "specs": {"capacity": "32GB", "speed": "5600MHz", "type": "DDR5"},
-            "cost": Decimal("95.00"),
-            "quantity": 30,
+            "cost": Decimal("97.00"),
+            "quantity": 25,
             "stock_status": "IN_STOCK",
             "shipping_info": {"weight_lbs": 0.4, "lead_time_days": 2},
             "availability_status": "ACTIVE"
-        }
-    ],
-    "VoiceComm": [
+        },
         {
-            "supplier_sku": "VC-ANKER-65W-CHG",
+            "supplier_sku": "DH-ANKER-65W-CHG",
             "upc": "194644022884",
             "ean": "0194644022884",
             "mpn": "A2663111",
@@ -131,8 +176,8 @@ DEFAULT_SEED_DATA = {
             "category": "Mobile Accessories",
             "images": ["https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500&auto=format&fit=crop"],
             "specs": {"wattage": "65W", "technology": "GaN II", "ports": "1 USB-C"},
-            "cost": Decimal("24.00"),
-            "quantity": 120,
+            "cost": Decimal("25.00"),
+            "quantity": 80,
             "stock_status": "IN_STOCK",
             "shipping_info": {"weight_lbs": 0.3, "lead_time_days": 1},
             "availability_status": "ACTIVE"

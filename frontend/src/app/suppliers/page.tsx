@@ -28,7 +28,11 @@ export default function SuppliersPage() {
   const loadSuppliers = async () => {
     try {
       const data = await fetchApi<Supplier[]>("/suppliers");
-      setSuppliers(data);
+      // Keep only Ingram Micro and D&H
+      const supported = data.filter(s => 
+        ["ingram", "d&h", "d and h", "dandh"].some(k => s.name.toLowerCase().includes(k))
+      );
+      setSuppliers(supported);
     } catch (err) {
       console.error("Failed to load suppliers:", err);
     } finally {

@@ -25,20 +25,12 @@ const STORE_DESCRIPTIONS: Record<string, { summary: string; guide: string }> = {
     guide: "Log in to your eBay Developer Portal, generate a Production User Token, and paste your Client ID and Client Secret."
   },
   "Amazon": {
-    summary: "Sell products on Amazon US. We handle pricing formulas and stock synchronization automatically.",
-    guide: "Go to Seller Central > Partner Network > Develop Apps, and generate an LWA Refresh Token."
-  },
-  "Walmart": {
-    summary: "Reach shoppers on Walmart.com with automated inventory and order feeds.",
-    guide: "Log in to Walmart Developer Portal, generate API Keys, and paste your Client ID and Client Secret."
+    summary: "Sell products on Amazon US via SP-API. We handle pricing formulas and stock synchronization automatically.",
+    guide: "Go to Seller Central > Partner Network > Develop Apps, and generate your LWA credentials and Refresh Token."
   },
   "Shopify": {
     summary: "Connect your personal branded storefront for seamless inventory management.",
     guide: "In Shopify Admin, go to Settings > Apps > Custom apps, create an app, and copy the Admin API Access Token."
-  },
-  "Newegg": {
-    summary: "Sell electronics, hardware, and accessories on Newegg Marketplace.",
-    guide: "Log in to Newegg Seller Portal > Manage Account > API Settings, and copy your Seller ID and Secret Key."
   }
 };
 
@@ -74,7 +66,11 @@ export default function MarketplacesPage() {
     setLoading(true);
     try {
       const res = await fetchApi<Marketplace[]>("/marketplaces");
-      setMarketplaces(res);
+      // Keep only eBay, Amazon, and Shopify
+      const supported = res.filter(m => 
+        ["ebay", "amazon", "shopify"].some(k => m.name.toLowerCase().includes(k))
+      );
+      setMarketplaces(supported);
     } catch (err: any) {
       console.error("Failed to load marketplaces:", err);
       showFeedback(err.message || "Failed to load channels", "error");
@@ -89,10 +85,14 @@ export default function MarketplacesPage() {
 
   const showFeedback = (message: string, type: "success" | "error") => {
     setFeedback({ message, type });
-    setTimeout(() => setFeedback(null), 4000);
+    setTimeout(() => setFeedback(null), 5000);
   };
 
-  const handleTestConnection = async (id: number, name: string) => {
+  const handleTestConnection = async (id: number, name: string, hasCredentials: boolean) => {
+    if (!hasCredentials) {
+      showFeedback(`No API credentials configured for ${name}. Click "Connect Store" to enter your live keys before testing.`, "error");
+      return;
+    }
     setTestingId(id);
     try {
       const res = await fetchApi<{ success: boolean; message: string }>(`/marketplaces/${id}/test`, {
@@ -310,7 +310,7 @@ export default function MarketplacesPage() {
                 <div className="space-y-2.5 pt-3.5 border-t border-gray-100">
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => handleTestConnection(mkt.id, mkt.name)}
+                      onClick={() => handleTestConnection(mkt.id, mkt.name, mkt.has_credentials)}
                       disabled={isTesting}
                       className="flex-1 px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all border border-gray-300 shadow-sm disabled:opacity-50"
                     >

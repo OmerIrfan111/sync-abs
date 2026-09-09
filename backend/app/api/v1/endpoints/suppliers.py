@@ -131,11 +131,18 @@ def test_supplier_connection(supplier_id: int, db: Session = Depends(get_db)):
     supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
+
+    if not supplier.credentials_encrypted and not supplier.adapter_class.startswith("Mock"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"No account credentials configured for {supplier.name}. Real distributor API/FTP credentials are required to verify live connection."
+        )
+
     service = SyncService(db)
     adapter = service.get_adapter_for_supplier(supplier)
     try:
         success = adapter.test_connection()
-        return {"success": success, "message": "Supplier connection test succeeded"}
+        return {"success": success, "message": f"Live connection to {supplier.name} verified successfully."}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
