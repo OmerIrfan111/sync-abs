@@ -230,7 +230,7 @@ def withdraw_listing(listing_id: int, db: Session = Depends(get_db)):
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-@router.delete("/{listing_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{listing_id}")
 def delete_listing(listing_id: int, db: Session = Depends(get_db)):
     service = ListingService(db)
     listing = db.query(Listing).filter(Listing.id == listing_id).first()
@@ -243,5 +243,5 @@ def delete_listing(listing_id: int, db: Session = Depends(get_db)):
         pass
     db.delete(listing)
     db.commit()
-    return None
+    return {"success": True, "message": "Listing removed from store successfully"}
 
