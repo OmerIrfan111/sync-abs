@@ -118,6 +118,18 @@ class LiveEBayAdapter(MarketplaceAdapter):
         # Ensure connection / valid token
         self.test_connection()
 
+        # Extract brand for eBay required item specifics
+        brand = "Generic"
+        t_lower = (title or "").lower()
+        if "anker" in t_lower:
+            brand = "Anker"
+        elif "corsair" in t_lower:
+            brand = "Corsair"
+        elif "samsung" in t_lower:
+            brand = "Samsung"
+        elif "logitech" in t_lower:
+            brand = "Logitech"
+
         url = f"{self.base_url}/sell/inventory/v1/inventory_item/{urllib.parse.quote(sku)}"
         payload = {
             "availability": {
@@ -129,6 +141,10 @@ class LiveEBayAdapter(MarketplaceAdapter):
             "product": {
                 "title": (title or "Product")[:80],
                 "description": description or title,
+                "aspects": {
+                    "Brand": [brand],
+                    "Type": ["Electronics"]
+                },
                 "imageUrls": (image_urls or [])[:12]
             }
         }
@@ -150,7 +166,10 @@ class LiveEBayAdapter(MarketplaceAdapter):
                 logger.error(f"eBay create_listing HTTP {e.code}: {err_body}")
                 raise RuntimeError(f"eBay API error {e.code}: {err_body}")
 
-        external_id = f"ebay_live_{sku}"
+        # Automatically publish live consumer offer to assign real eBay Item Number
+        live_listing_id = self._publish_offer_if_possible(sku, price, quantity)
+        external_id = live_listing_id or f"ebay_live_{sku}"
+
         return {
             "external_listing_id": external_id,
             "sku": sku,
@@ -162,6 +181,80 @@ class LiveEBayAdapter(MarketplaceAdapter):
             "published_at": time.time(),
             "live_synced": True
         }
+
+    def _publish_offer_if_possible(self, sku: str, price: Decimal, quantity: int) -> Optional[str]:
+        """Attempts to create and publish a live consumer offer on eBay, returning listingId."""
+        try:
+            # 1. Ensure default warehouse location exists
+            loc_url = f"{self.base_url}/sell/inventory/v1/location/default_warehouse"
+            loc_req = urllib.request.Request(
+                loc_url,
+                data=json.dumps({
+                    "name": "Main Warehouse",
+                    "location": {
+                        "address": {
+                            "addressLine1": "100 Main St",
+                            "city": "Dallas",
+                            "stateOrProvince": "TX",
+                            "postalCode": "75201",
+                            "country": "US"
+                        }
+                    },
+                    "locationTypes": ["WAREHOUSE"]
+                }).encode(),
+                method="POST",
+                headers=self._get_auth_header()
+            )
+            try:
+                with urllib.request.urlopen(loc_req, timeout=8):
+                    pass
+            except Exception:
+                pass
+
+            # 2. Use seller's active fulfillment, payment, and return policies
+            fulfillment_id = "137419252015"
+            payment_id = "240485170015"
+            return_id = "246630508015"
+
+            # 3. Create or update offer
+            offer_url = f"{self.base_url}/sell/inventory/v1/offer"
+            offer_payload = {
+                "sku": sku,
+                "marketplaceId": "EBAY_US",
+                "format": "FIXED_PRICE",
+                "availableQuantity": max(1, int(quantity)),
+                "categoryId": "123417",
+                "listingPolicies": {
+                    "fulfillmentPolicyId": fulfillment_id,
+                    "paymentPolicyId": payment_id,
+                    "returnPolicyId": return_id
+                },
+                "pricingSummary": {
+                    "price": {
+                        "value": str(Decimal(str(price)).quantize(Decimal("0.01"))),
+                        "currency": "USD"
+                    }
+                },
+                "merchantLocationKey": "default_warehouse"
+            }
+            offer_req = urllib.request.Request(offer_url, data=json.dumps(offer_payload).encode(), method="POST", headers=self._get_auth_header())
+            with urllib.request.urlopen(offer_req, timeout=10) as off_resp:
+                off_data = json.loads(off_resp.read().decode())
+                offer_id = off_data.get("offerId")
+
+            if offer_id:
+                # 4. Publish offer to make it active on eBay
+                pub_url = f"{self.base_url}/sell/inventory/v1/offer/{offer_id}/publish"
+                pub_req = urllib.request.Request(pub_url, data=b"", method="POST", headers=self._get_auth_header())
+                with urllib.request.urlopen(pub_req, timeout=12) as pub_resp:
+                    pub_data = json.loads(pub_resp.read().decode())
+                    listing_id = pub_data.get("listingId")
+                    if listing_id:
+                        logger.info(f"Successfully published live eBay offer! Listing ID: {listing_id}")
+                        return str(listing_id)
+        except Exception as e:
+            logger.warning(f"Notice on eBay offer publish (inventory item preserved): {e}")
+        return None
 
     def update_inventory(self, external_listing_id: str, sku: str, quantity: int) -> bool:
         """Updates live stock quantity on eBay (PUT /sell/inventory/v1/inventory_item/{sku})."""
