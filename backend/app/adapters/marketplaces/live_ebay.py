@@ -136,13 +136,19 @@ class LiveEBayAdapter(MarketplaceAdapter):
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(url, data=data, method="PUT", headers=self._get_auth_header())
 
-        try:
-            with urllib.request.urlopen(req, timeout=12) as resp:
-                logger.info(f"Live eBay item PUT returned HTTP {resp.status} for SKU {sku}")
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode()
-            logger.error(f"eBay create_listing HTTP {e.code}: {err_body}")
-            raise RuntimeError(f"eBay API error {e.code}: {err_body}")
+        for attempt in range(2):
+            try:
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    logger.info(f"Live eBay item PUT returned HTTP {resp.status} for SKU {sku}")
+                    break
+            except urllib.error.HTTPError as e:
+                err_body = e.read().decode()
+                if e.code in (500, 502, 503) and attempt == 0:
+                    logger.warning(f"eBay returned transient HTTP {e.code}, retrying in 1.5s...")
+                    time.sleep(1.5)
+                    continue
+                logger.error(f"eBay create_listing HTTP {e.code}: {err_body}")
+                raise RuntimeError(f"eBay API error {e.code}: {err_body}")
 
         external_id = f"ebay_live_{sku}"
         return {
