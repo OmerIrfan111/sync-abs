@@ -23,6 +23,7 @@ class LiveAmazonAdapter(MarketplaceAdapter):
 
     DEFAULT_MARKETPLACE_ID = "ATVPDKIKX0DER"  # Amazon US
     NA_SP_API_ENDPOINT = "https://sellingpartnerapi-na.amazon.com"
+    SANDBOX_SP_API_ENDPOINT = "https://sandbox.sellingpartnerapi-na.amazon.com"
     LWA_TOKEN_URL = "https://api.amazon.com/auth/o2/token"
 
     def __init__(self, credentials: Optional[Dict[str, Any]] = None, config: Optional[Dict[str, Any]] = None):
@@ -33,6 +34,10 @@ class LiveAmazonAdapter(MarketplaceAdapter):
         self.client_secret = (self.credentials.get("client_secret") or self.credentials.get("lwa_client_secret") or "").strip()
         self.refresh_token = (self.credentials.get("refresh_token") or self.credentials.get("lwa_refresh_token") or "").strip()
         self.marketplace_id = self.credentials.get("marketplace_id") or self.DEFAULT_MARKETPLACE_ID
+
+        env = (self.credentials.get("environment") or "").lower()
+        self.environment = "sandbox" if env == "sandbox" else "production"
+        self.sp_api_endpoint = self.SANDBOX_SP_API_ENDPOINT if self.environment == "sandbox" else self.NA_SP_API_ENDPOINT
 
         self._access_token: Optional[str] = None
         self._token_expires_at: float = 0
@@ -89,8 +94,9 @@ class LiveAmazonAdapter(MarketplaceAdapter):
     def test_connection(self) -> bool:
         """
         Validates connection by querying Amazon SP-API Marketplace Participations.
+        Automatically checks Sandbox endpoint if Production returns 401/403.
         """
-        url = f"{self.NA_SP_API_ENDPOINT}/sellers/v1/marketplaceParticipations"
+        url = f"{self.sp_api_endpoint}/sellers/v1/marketplaceParticipations"
         headers = self._get_headers()
         req = urllib.request.Request(url, headers=headers, method="GET")
 
@@ -98,10 +104,21 @@ class LiveAmazonAdapter(MarketplaceAdapter):
             with urllib.request.urlopen(req, timeout=12) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 participations = data.get("payload", [])
-                logger.info(f"Connected successfully to Amazon SP-API. Participations: {len(participations)}")
+                logger.info(f"Connected successfully to Amazon SP-API ({self.environment}). Participations: {len(participations)}")
                 return True
         except urllib.error.HTTPError as err:
             err_body = err.read().decode("utf-8", errors="ignore")
+            if err.code in (401, 403) and self.sp_api_endpoint != self.SANDBOX_SP_API_ENDPOINT:
+                try:
+                    s_req = urllib.request.Request(f"{self.SANDBOX_SP_API_ENDPOINT}/sellers/v1/marketplaceParticipations", headers=headers, method="GET")
+                    with urllib.request.urlopen(s_req, timeout=12) as s_resp:
+                        self.sp_api_endpoint = self.SANDBOX_SP_API_ENDPOINT
+                        self.environment = "sandbox"
+                        logger.info("Connected successfully to Amazon SP-API (Sandbox Mode).")
+                        return True
+                except Exception:
+                    pass
+
             logger.error(f"Amazon SP-API Error [{err.code}]: {err_body}")
             if err.code == 401:
                 raise PermissionError(f"Amazon SP-API 401 Unauthorized: Invalid access token or unauthorized developer credentials.")
@@ -127,7 +144,7 @@ class LiveAmazonAdapter(MarketplaceAdapter):
         """
         self.test_connection()
         seller_id = self.seller_id or "default_seller"
-        url = f"{self.NA_SP_API_ENDPOINT}/listings/2021-08-01/items/{seller_id}/{urllib.parse.quote(sku)}?marketplaceIds={self.marketplace_id}"
+        url = f"{self.sp_api_endpoint}/listings/2021-08-01/items/{seller_id}/{urllib.parse.quote(sku)}?marketplaceIds={self.marketplace_id}"
         formatted_price = str(Decimal(str(price)).quantize(Decimal("0.01")))
 
         payload = {
@@ -176,7 +193,7 @@ class LiveAmazonAdapter(MarketplaceAdapter):
         Updates live selling price on Amazon.
         """
         seller_id = self.seller_id or "default_seller"
-        url = f"{self.NA_SP_API_ENDPOINT}/listings/2021-08-01/items/{seller_id}/{urllib.parse.quote(sku)}?marketplaceIds={self.marketplace_id}"
+        url = f"{self.sp_api_endpoint}/listings/2021-08-01/items/{seller_id}/{urllib.parse.quote(sku)}?marketplaceIds={self.marketplace_id}"
         formatted_price = str(Decimal(str(price)).quantize(Decimal("0.01")))
 
         payload = {
@@ -210,7 +227,7 @@ class LiveAmazonAdapter(MarketplaceAdapter):
         Updates fulfillment availability quantity on Amazon.
         """
         seller_id = self.seller_id or "default_seller"
-        url = f"{self.NA_SP_API_ENDPOINT}/listings/2021-08-01/items/{seller_id}/{urllib.parse.quote(sku)}?marketplaceIds={self.marketplace_id}"
+        url = f"{self.sp_api_endpoint}/listings/2021-08-01/items/{seller_id}/{urllib.parse.quote(sku)}?marketplaceIds={self.marketplace_id}"
 
         payload = {
             "productType": "PRODUCT",
@@ -250,7 +267,7 @@ class LiveAmazonAdapter(MarketplaceAdapter):
     def get_listing(self, external_listing_id: str) -> Dict[str, Any]:
         seller_id = self.seller_id or "default_seller"
         sku = external_listing_id.split("_")[-1]
-        url = f"{self.NA_SP_API_ENDPOINT}/listings/2021-08-01/items/{seller_id}/{urllib.parse.quote(sku)}?marketplaceIds={self.marketplace_id}"
+        url = f"{self.sp_api_endpoint}/listings/2021-08-01/items/{seller_id}/{urllib.parse.quote(sku)}?marketplaceIds={self.marketplace_id}"
         req = urllib.request.Request(url, headers=self._get_headers(), method="GET")
         with urllib.request.urlopen(req, timeout=12) as resp:
             return json.loads(resp.read().decode("utf-8"))
