@@ -64,3 +64,26 @@ Every marketplace integration implements:
 
 ### 3. Distributed Concurrency & Locking
 To prevent race conditions during parallel Celery tasks updating the same product or marketplace listing, Redis distributed locks (`sync:lock:product:{id}` and `sync:lock:listing:{id}`) are acquired with TTLs and exponential backoff retry.
+
+---
+
+## Adapter Safety Pattern: Two-Tier Architecture (Mock vs. Live)
+
+To guarantee that tests and development never accidentally alter or bill real seller accounts, every integration adheres to the **Two-Tier Adapter Principle**:
+
+1. **`Mock...Adapter` (Testing & CI/CD Sandbox)**:
+   - Provides safe in-memory data and mocks real response payloads without external network calls.
+   - Used by `pytest` test suites and CI/CD pipelines to verify pricing formulas, safety buffers, stock zeroing, and error handling.
+   - **Guarantees zero risk of accidental listing fees, account suspensions, or API rate limit penalties on real accounts.**
+
+2. **`Live...Adapter` (Production Execution)**:
+   - Connects to official production APIs (e.g. Amazon SP-API, eBay Sell Inventory, Shopify Admin).
+   - Only instantiated through [`registry.py`](backend/app/adapters/registry.py) when real, valid API credentials exist in encrypted storage (`credentials_encrypted`).
+   - Handles real authentication, token refreshes, and live inventory pushes.
+
+3. **Rule for Adding Future Marketplaces or Suppliers**:
+   - Whenever a new marketplace (e.g. Etsy, TikTok Shop) or supplier is added in the future:
+     - **Step 1**: Create `Mock[Name]Adapter` adhering to the base interface for tests.
+     - **Step 2**: Create `Live[Name]Adapter` for real API calls.
+     - **Step 3**: Register both in `registry.py` with automatic credential gatekeeping.
+
