@@ -62,6 +62,10 @@ export default function MarketplacesPage() {
   const [ebayEnv, setEbayEnv] = useState("production");
   const [ebayAppId, setEbayAppId] = useState("");
   const [ebayCertId, setEbayCertId] = useState("");
+  const [amazonSellerId, setAmazonSellerId] = useState("");
+  const [amazonClientId, setAmazonClientId] = useState("");
+  const [amazonClientSecret, setAmazonClientSecret] = useState("");
+  const [amazonRefreshToken, setAmazonRefreshToken] = useState("");
   const [genericClientId, setGenericClientId] = useState("");
   const [genericClientSecret, setGenericClientSecret] = useState("");
   const [isAdvancedJson, setIsAdvancedJson] = useState(false);
@@ -114,6 +118,10 @@ export default function MarketplacesPage() {
     setEbayEnv("production");
     setEbayAppId("");
     setEbayCertId("");
+    setAmazonSellerId("");
+    setAmazonClientId("");
+    setAmazonClientSecret("");
+    setAmazonRefreshToken("");
     setGenericClientId("");
     setGenericClientSecret("");
 
@@ -162,6 +170,17 @@ export default function MarketplacesPage() {
             app_id: ebayAppId.trim(),
             cert_id: ebayCertId.trim(),
             adapter_class: "LiveEBayAdapter"
+          };
+        } else if (name.includes("amazon")) {
+          if (!amazonClientId.trim() || !amazonClientSecret.trim() || !amazonRefreshToken.trim()) {
+            throw new Error("Please provide your Amazon LWA Client ID, Client Secret, and Refresh Token.");
+          }
+          creds = {
+            seller_id: amazonSellerId.trim(),
+            client_id: amazonClientId.trim(),
+            client_secret: amazonClientSecret.trim(),
+            refresh_token: amazonRefreshToken.trim(),
+            adapter_class: "LiveAmazonAdapter"
           };
         } else {
           creds = {
@@ -469,7 +488,65 @@ export default function MarketplacesPage() {
                     </>
                   )}
 
-                  {!configChannel.name.toLowerCase().includes("shopify") && !configChannel.name.toLowerCase().includes("ebay") && (
+                  {configChannel.name.toLowerCase().includes("amazon") && (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
+                            Seller ID / Merchant ID
+                          </label>
+                          <input
+                            type="text"
+                            value={amazonSellerId}
+                            onChange={(e) => setAmazonSellerId(e.target.value)}
+                            placeholder="e.g. A21TJRUUN4KGV..."
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
+                            LWA Client ID
+                          </label>
+                          <input
+                            type="text"
+                            value={amazonClientId}
+                            onChange={(e) => setAmazonClientId(e.target.value)}
+                            placeholder="amzn1.application-oa2-client..."
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
+                          LWA Client Secret
+                        </label>
+                        <input
+                          type="password"
+                          value={amazonClientSecret}
+                          onChange={(e) => setAmazonClientSecret(e.target.value)}
+                          placeholder="amzn1.oa2-cs.v1...."
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
+                          LWA Refresh Token
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={amazonRefreshToken}
+                          onChange={(e) => setAmazonRefreshToken(e.target.value)}
+                          placeholder="Paste your Amazon LWA refresh token (starts with Atzr|...)"
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                        />
+                        <p className="text-[10px] text-[#767676] mt-1">
+                          Found in <strong>Seller Central ➔ Partner Network ➔ Develop Apps ➔ View LWA Credentials & Authorize</strong>.
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  {!configChannel.name.toLowerCase().includes("shopify") && !configChannel.name.toLowerCase().includes("ebay") && !configChannel.name.toLowerCase().includes("amazon") && (
                     <>
                       <div>
                         <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">

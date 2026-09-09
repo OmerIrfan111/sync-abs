@@ -13,6 +13,7 @@ from app.adapters.marketplaces.base import MarketplaceAdapter
 from app.adapters.marketplaces.mock_ebay import MockEBayAdapter
 from app.adapters.marketplaces.live_ebay import LiveEBayAdapter
 from app.adapters.marketplaces.mock_amazon import MockAmazonAdapter
+from app.adapters.marketplaces.live_amazon import LiveAmazonAdapter
 from app.adapters.marketplaces.mock_shopify import MockShopifyAdapter
 from app.adapters.marketplaces.live_shopify import LiveShopifyAdapter
 from app.adapters.marketplaces.mock_walmart import MockWalmartAdapter
@@ -33,6 +34,7 @@ MARKETPLACE_ADAPTERS: Dict[str, Type[MarketplaceAdapter]] = {
     "MockEBayAdapter": MockEBayAdapter,
     "LiveEBayAdapter": LiveEBayAdapter,
     "MockAmazonAdapter": MockAmazonAdapter,
+    "LiveAmazonAdapter": LiveAmazonAdapter,
     "MockShopifyAdapter": MockShopifyAdapter,
     "LiveShopifyAdapter": LiveShopifyAdapter,
     "MockWalmartAdapter": MockWalmartAdapter,
