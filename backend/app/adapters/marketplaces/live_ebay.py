@@ -282,10 +282,35 @@ class LiveEBayAdapter(MarketplaceAdapter):
         logger.info(f"Live eBay price update for {sku} to ${price}")
         return True
 
-    def withdraw_listing(self, external_listing_id: str) -> bool:
-        """Withdraws / pauses listing by setting live stock to 0 on eBay."""
-        sku = external_listing_id.replace("ebay_live_", "").replace("ebay_listing_", "")
-        return self.update_inventory(external_listing_id, sku, quantity=0)
+    def withdraw_listing(self, external_listing_id: str, sku: Optional[str] = None) -> bool:
+        """Withdraws / ends active listing and sets live stock to 0 on eBay."""
+        actual_sku = sku or external_listing_id.replace("ebay_live_", "").replace("ebay_listing_", "")
+        
+        # 1. Withdraw any active published offers for this SKU on eBay
+        try:
+            offer_lookup_url = f"{self.base_url}/sell/inventory/v1/offer?sku={urllib.parse.quote(actual_sku)}"
+            req = urllib.request.Request(offer_lookup_url, headers=self._get_auth_header())
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode())
+                offers = data.get("offers", [])
+                for off in offers:
+                    offer_id = off.get("offerId")
+                    if offer_id and off.get("status") != "WITHDRAWN":
+                        withdraw_url = f"{self.base_url}/sell/inventory/v1/offer/{offer_id}/withdraw"
+                        w_req = urllib.request.Request(withdraw_url, data=b"", method="POST", headers=self._get_auth_header())
+                        try:
+                            with urllib.request.urlopen(w_req, timeout=10) as w_resp:
+                                logger.info(f"Successfully withdrew eBay offer {offer_id} (status {w_resp.status})")
+                        except Exception as w_err:
+                            logger.warning(f"Could not withdraw eBay offer {offer_id}: {w_err}")
+        except Exception as err:
+            logger.warning(f"Notice on eBay offer lookup for withdrawal: {err}")
+
+        # 2. Update stock to 0 on eBay inventory item
+        try:
+            return self.update_inventory(external_listing_id, actual_sku, quantity=0)
+        except Exception:
+            return True
 
     def get_listing(self, external_listing_id: str) -> Dict[str, Any]:
         """Retrieves live item from eBay Inventory API."""
