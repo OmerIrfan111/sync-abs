@@ -148,7 +148,15 @@ class LiveShopifyAdapter(MarketplaceAdapter):
             product_id = prod["id"]
             variant_id = var["id"]
             external_listing_id = f"shopify_{product_id}_{variant_id}"
-            logger.info(f"Product with SKU {sku} already exists on Shopify ({external_listing_id}). Updating price and inventory.")
+            logger.info(f"Product with SKU {sku} already exists on Shopify ({external_listing_id}). Activating, updating price and inventory.")
+            # Ensure product is published and active (not left in draft)
+            try:
+                self._request(f"/products/{product_id}.json", method="PUT", data={
+                    "product": {"id": int(product_id), "status": "active"}
+                })
+            except Exception as act_err:
+                logger.warning(f"Could not activate Shopify product {product_id}: {act_err}")
+
             self.update_price(external_listing_id, sku, price)
             self.update_inventory(external_listing_id, sku, quantity)
             return {

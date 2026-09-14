@@ -245,3 +245,67 @@ def delete_listing(listing_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"success": True, "message": "Listing removed from store successfully"}
 
+
+@router.post("/reconcile-store/{marketplace_id}")
+def reconcile_store_listings(marketplace_id: int, db: Session = Depends(get_db)):
+    """
+    Fetches all live products directly from the connected store (e.g. Shopify),
+    reconciles their statuses, external IDs, and prices, and populates or updates
+    the local Listings table.
+    """
+    marketplace = db.query(Marketplace).filter(Marketplace.id == marketplace_id).first()
+    if not marketplace:
+        raise HTTPException(status_code=404, detail="Marketplace not found")
+
+    service = ListingService(db)
+    adapter = service.get_adapter_for_marketplace(marketplace)
+
+    # For Shopify
+    if "Shopify" in marketplace.adapter_class or "shopify" in marketplace.name.lower():
+        try:
+            res = adapter._request("/products.json?limit=50", method="GET")
+            shopify_products = res.get("products", [])
+            synced_count = 0
+            for sp in shopify_products:
+                sp_id = sp.get("id")
+                sp_status = sp.get("status", "active").upper()
+                db_status = "ACTIVE" if sp_status == "ACTIVE" else "WITHDRAWN"
+                for v in sp.get("variants", []):
+                    sku = v.get("sku")
+                    var_id = v.get("id")
+                    price = Decimal(str(v.get("price", "0.00")))
+                    qty = v.get("inventory_quantity", 0)
+                    ext_id = f"shopify_{sp_id}_{var_id}"
+                    
+                    prod = db.query(Product).filter(Product.sku == sku).first()
+                    if not prod:
+                        continue
+                    
+                    listing = db.query(Listing).filter(
+                        Listing.product_id == prod.id,
+                        Listing.marketplace_id == marketplace.id
+                    ).first()
+                    
+                    if not listing:
+                        listing = Listing(
+                            product_id=prod.id,
+                            marketplace_id=marketplace.id,
+                            external_listing_id=ext_id,
+                            status=db_status,
+                            selling_price=price,
+                            listed_qty=qty
+                        )
+                        db.add(listing)
+                    else:
+                        listing.external_listing_id = ext_id
+                        listing.status = db_status
+                        listing.selling_price = price
+                        listing.listed_qty = qty
+                    synced_count += 1
+            db.commit()
+            return {"success": True, "synced_count": synced_count, "message": f"Successfully synced {synced_count} listings from {marketplace.name}"}
+        except Exception as err:
+            raise HTTPException(status_code=500, detail=f"Failed to reconcile store listings: {err}")
+
+    return {"success": True, "synced_count": 0, "message": f"Reconciliation not required for {marketplace.name}"}
+

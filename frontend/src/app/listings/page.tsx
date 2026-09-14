@@ -46,6 +46,22 @@ export default function ListingsPage() {
   const [marketplaces, setMarketplaces] = useState<any[]>([]);
   const [addingListing, setAddingListing] = useState(false);
   const [addCustomPrice, setAddCustomPrice] = useState("");
+  const [reconciling, setReconciling] = useState(false);
+
+  const handleReconcile = async () => {
+    setReconciling(true);
+    try {
+      const shopifyMarket = marketplaces.find(m => m.name.toLowerCase().includes("shopify"));
+      const marketId = shopifyMarket ? shopifyMarket.id : 4;
+      const res = await fetchApi<{ success: boolean; synced_count: number; message: string }>(`/listings/reconcile-store/${marketId}`, { method: "POST" });
+      setFeedback(res.message || "Successfully synced store listings!");
+      await loadListings();
+    } catch (err: any) {
+      setFeedback("Failed to sync store listings: " + (err.message || String(err)));
+    } finally {
+      setReconciling(false);
+    }
+  };
 
   const loadListings = async () => {
     try {
@@ -232,6 +248,15 @@ export default function ListingsPage() {
           >
             <Plus className="h-4 w-4" />
             <span>List a Product</span>
+          </button>
+          <button
+            onClick={handleReconcile}
+            disabled={reconciling}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-[#1a1a1a] rounded-lg text-xs font-medium transition-all border border-gray-300 shadow-sm"
+            title="Pull existing products and statuses directly from connected store"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 text-[#767676] ${reconciling ? "animate-spin" : ""}`} />
+            <span>{reconciling ? "Syncing Store..." : "Sync Store Listings"}</span>
           </button>
           <button
             onClick={loadListings}
