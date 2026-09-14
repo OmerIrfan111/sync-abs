@@ -50,7 +50,7 @@ class LiveEBayAdapter(MarketplaceAdapter):
         }
 
     def _refresh_access_token_if_needed(self) -> bool:
-        """Exchanges refresh_token for a new user access token."""
+        """Exchanges refresh_token for a new user access token and persists it."""
         if not self.refresh_token or not self.app_id or not self.cert_id:
             return False
 
@@ -59,7 +59,6 @@ class LiveEBayAdapter(MarketplaceAdapter):
             data = urllib.parse.urlencode({
                 "grant_type": "refresh_token",
                 "refresh_token": self.refresh_token,
-                "scope": "https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/sell.inventory"
             }).encode()
 
             req = urllib.request.Request(
@@ -76,6 +75,22 @@ class LiveEBayAdapter(MarketplaceAdapter):
                     self.user_token = result["access_token"]
                     self.credentials["user_token"] = self.user_token
                     logger.info("Successfully refreshed eBay OAuth user token")
+
+                    try:
+                        from app.core.database import SessionLocal
+                        from app.models.marketplace import Marketplace
+                        from app.core.security import encrypt_credential
+                        db = SessionLocal()
+                        m = db.query(Marketplace).filter(Marketplace.adapter_class == "LiveEBayAdapter").first()
+                        if m:
+                            creds = self.credentials.copy()
+                            creds["user_token"] = self.user_token
+                            m.credentials_encrypted = encrypt_credential(json.dumps(creds))
+                            db.commit()
+                        db.close()
+                    except Exception as save_err:
+                        logger.warning(f"Could not persist refreshed eBay token to DB: {save_err}")
+
                     return True
         except Exception as e:
             logger.warning(f"Could not refresh eBay token: {e}")
@@ -96,7 +111,16 @@ class LiveEBayAdapter(MarketplaceAdapter):
                     req2 = urllib.request.Request(url, headers=self._get_auth_header())
                     with urllib.request.urlopen(req2, timeout=8) as resp2:
                         return resp2.status == 200
-                raise PermissionError(f"eBay Live API Authorization Error (401): {err.reason}")
+                if not self.refresh_token:
+                    raise PermissionError(
+                        "Your eBay OAuth User Token has expired (access tokens strictly expire after 2 hours). "
+                        "To fix this permanently, open eBay Developer Portal (User Tokens -> OAuth), "
+                        "copy your Refresh Token, and paste it into Connect Stores -> eBay -> Edit Keys."
+                    )
+                raise PermissionError(
+                    f"eBay Live API Authorization Error (401): {err.reason}. "
+                    "Your Refresh Token or User Token could not be verified by eBay."
+                )
             raise ConnectionError(f"eBay API error (HTTP {err.code}): {err.reason}")
         except Exception as err:
             raise ConnectionError(f"eBay server unreachable: {err}")
