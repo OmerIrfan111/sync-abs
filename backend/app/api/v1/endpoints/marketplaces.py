@@ -140,3 +140,76 @@ def test_marketplace_connection(marketplace_id: int, db: Session = Depends(get_d
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"{m.name} Connection Error: {str(exc)}")
 
+
+@router.post("/ebay/exchange-code")
+def exchange_ebay_code(payload: dict, db: Session = Depends(get_db)):
+    """
+    Exchanges an eBay OAuth authorization code for an 18-month refresh token and access token,
+    saving both to the eBay marketplace credentials.
+    """
+    code = payload.get("code")
+    if not code:
+        raise HTTPException(status_code=400, detail="Authorization code is required")
+
+    ebay = db.query(Marketplace).filter(Marketplace.id == 1).first()
+    if not ebay:
+        raise HTTPException(status_code=404, detail="eBay marketplace not found")
+
+    creds = {}
+    if ebay.credentials_encrypted:
+        try:
+            creds = json.loads(decrypt_credential(ebay.credentials_encrypted))
+        except Exception:
+            pass
+
+    app_id = creds.get("app_id")
+    cert_id = creds.get("cert_id")
+    ru_name = creds.get("ru_name", "")
+
+    if not app_id or not cert_id:
+        raise HTTPException(status_code=400, detail="eBay App ID and Cert ID must be configured in store settings.")
+
+    import urllib.request, urllib.parse, urllib.error, base64
+    auth_str = base64.b64encode(f"{app_id}:{cert_id}".encode()).decode()
+    data = urllib.parse.urlencode({
+        "grant_type": "authorization_code",
+        "code": code.strip(),
+        "redirect_uri": ru_name
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://api.ebay.com/identity/v1/oauth2/token",
+        data=data,
+        headers={
+            "Authorization": f"Basic {auth_str}",
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            res = json.loads(resp.read().decode())
+            access_token = res.get("access_token")
+            refresh_token = res.get("refresh_token")
+            if not access_token:
+                raise RuntimeError("eBay did not return an access token")
+
+            creds["user_token"] = access_token
+            if refresh_token:
+                creds["refresh_token"] = refresh_token
+            creds["ru_name"] = ru_name
+
+            ebay.credentials_encrypted = encrypt_credential(json.dumps(creds))
+            db.commit()
+
+            return {
+                "success": True,
+                "message": "eBay OAuth tokens exchanged and saved successfully! Refresh token active for 18 months.",
+                "has_refresh_token": bool(refresh_token)
+            }
+    except urllib.error.HTTPError as err:
+        err_body = err.read().decode("utf-8", errors="ignore")
+        raise HTTPException(status_code=400, detail=f"eBay OAuth exchange failed ({err.code}): {err_body}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
