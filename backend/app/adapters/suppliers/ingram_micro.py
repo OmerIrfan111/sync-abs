@@ -139,65 +139,81 @@ class IngramMicroAdapter(MockSupplierAdapter):
 
         return True
 
-    def fetch_catalog(self) -> List[NormalizedProduct]:
+    def fetch_catalog(self, max_products: int = 250) -> List[NormalizedProduct]:
         """
-        Fetches live products from the Ingram Micro Sandbox / Production catalog API.
+        Fetches live products from the Ingram Micro Sandbox / Production catalog API with pagination.
         """
         if not self.is_live():
             return super().fetch_catalog()
 
+        products: List[NormalizedProduct] = []
+        page = 1
+        page_size = 50
+
         try:
             token = self.get_access_token()
-            url = f"{self.base_url}/catalog?pageNumber=1&pageSize=25"
-            req = urllib.request.Request(url, headers=self._get_headers(token), method="GET")
+            headers = self._get_headers(token)
 
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                catalog_items = data.get("catalog") or []
+            while len(products) < max_products and page <= 10:
+                url = f"{self.base_url}/catalog?pageNumber={page}&pageSize={page_size}"
+                req = urllib.request.Request(url, headers=headers, method="GET")
 
-                if catalog_items:
-                    products: List[NormalizedProduct] = []
-                    for item in catalog_items:
-                        sku = str(item.get("ingramPartNumber") or item.get("vendorPartNumber") or "").strip()
-                        if not sku:
-                            continue
+                try:
+                    with urllib.request.urlopen(req, timeout=20) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        catalog_items = data.get("catalog") or []
+                        if not catalog_items:
+                            break
 
-                        title = item.get("description") or f"{item.get('vendorName', '')} {sku}".strip()
-                        brand = item.get("vendorName") or "Ingram Micro"
-                        upc = item.get("upcCode") or None
-                        mpn = item.get("vendorPartNumber") or None
-                        category = item.get("category") or "Computer Systems"
+                        for item in catalog_items:
+                            sku = str(item.get("ingramPartNumber") or item.get("vendorPartNumber") or "").strip()
+                            if not sku:
+                                continue
 
-                        # Estimate standard wholesale cost or use listed price
-                        raw_cost = item.get("customerPrice") or item.get("retailPrice") or "199.99"
-                        cost = Decimal(str(raw_cost))
-                        qty = 25
+                            title = item.get("description") or f"{item.get('vendorName', '')} {sku}".strip()
+                            brand = item.get("vendorName") or "Ingram Micro"
+                            upc = item.get("upcCode") or None
+                            mpn = item.get("vendorPartNumber") or None
+                            category = item.get("category") or "Computer Systems"
 
-                        products.append(NormalizedProduct(
-                            supplier_sku=sku,
-                            upc=upc,
-                            ean=None,
-                            mpn=mpn,
-                            title=title,
-                            brand=brand,
-                            description=item.get("extraDescription") or title,
-                            category=category,
-                            images=[
-                                "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=500&auto=format&fit=crop"
-                            ],
-                            specs={
-                                "subCategory": item.get("subCategory", ""),
-                                "productType": item.get("productType", "")
-                            },
-                            cost=cost,
-                            quantity=qty,
-                            stock_status="IN_STOCK",
-                            shipping_info={"weight_lbs": 3.5, "lead_time_days": 2},
-                            availability_status="ACTIVE"
-                        ))
-                    if products:
-                        logger.info(f"Retrieved {len(products)} real products from Ingram Micro sandbox catalog.")
-                        return products
+                            raw_cost = item.get("customerPrice") or item.get("retailPrice") or "199.99"
+                            cost = Decimal(str(raw_cost))
+                            qty = 25
+
+                            products.append(NormalizedProduct(
+                                supplier_sku=sku,
+                                upc=upc,
+                                ean=None,
+                                mpn=mpn,
+                                title=title,
+                                brand=brand,
+                                description=item.get("extraDescription") or title,
+                                category=category,
+                                images=[
+                                    "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=500&auto=format&fit=crop"
+                                ],
+                                specs={
+                                    "subCategory": item.get("subCategory", ""),
+                                    "productType": item.get("productType", "")
+                                },
+                                cost=cost,
+                                quantity=qty,
+                                stock_status="IN_STOCK",
+                                shipping_info={"weight_lbs": 3.5, "lead_time_days": 2},
+                                availability_status="ACTIVE"
+                            ))
+
+                            if len(products) >= max_products:
+                                break
+
+                        page += 1
+                except Exception as page_err:
+                    logger.warning(f"Error fetching catalog page {page}: {page_err}")
+                    break
+
+            if products:
+                logger.info(f"Retrieved {len(products)} live products across {page-1} pages from Ingram Micro {self.environment} catalog.")
+                return products
         except Exception as exc:
             logger.error(f"Ingram Micro live catalog fetch error: {exc}. Falling back to default catalog.")
 
