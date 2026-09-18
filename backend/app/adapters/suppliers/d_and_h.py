@@ -152,6 +152,15 @@ class DAndHAdapter(MockSupplierAdapter):
                             dims = item.get("shippingDimensions") or {}
                             weight = float(dims.get("weight") or 1.0)
 
+                            from app.adapters.suppliers.image_resolver import resolve_product_imagery
+                            images = resolve_product_imagery(
+                                brand=brand,
+                                category=category,
+                                subcategory=sub_category,
+                                title=title,
+                                sku=sku
+                            )
+
                             products.append(NormalizedProduct(
                                 supplier_sku=sku,
                                 upc=upc,
@@ -161,9 +170,7 @@ class DAndHAdapter(MockSupplierAdapter):
                                 brand=brand,
                                 description=f"{title} ({sub_category})".strip(),
                                 category=category,
-                                images=[
-                                    "https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=500&auto=format&fit=crop"
-                                ],
+                                images=images,
                                 specs={
                                     "subcategory": sub_category,
                                     "itemType": item.get("itemType", ""),

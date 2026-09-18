@@ -65,6 +65,9 @@ class CatalogService:
                 old_value=None,
                 new_value=product.sku
             ))
+        else:
+            if item.images and (not product.images or product.images != item.images):
+                product.images = item.images
 
         # 2. Check existing supplier product link
         supplier_prod = self.db.query(SupplierProduct).filter(
