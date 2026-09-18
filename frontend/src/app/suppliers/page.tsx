@@ -225,12 +225,24 @@ export default function SuppliersPage() {
                         </div>
                         <div className="flex justify-between">
                           <span>Environment:</span>
-                          <span className="text-emerald-700 font-semibold">{sup.name.toLowerCase().includes("ingram") ? "Production (OAuth 2.0)" : "REST / Feed"}</span>
+                          <span className="text-emerald-700 font-semibold">
+                            {sup.name.toLowerCase().includes("ingram")
+                              ? "Production (OAuth 2.0)"
+                              : sup.name.toLowerCase().includes("d&h")
+                              ? "Test Gateway (Axway REST)"
+                              : "REST / Feed"}
+                          </span>
                         </div>
                         {sup.name.toLowerCase().includes("ingram") && (
                           <div className="flex justify-between">
                             <span>Account ID:</span>
                             <span className="text-[#0a0a0a]">21-186632</span>
+                          </div>
+                        )}
+                        {sup.name.toLowerCase().includes("d&h") && (
+                          <div className="flex justify-between">
+                            <span>Account ID:</span>
+                            <span className="text-[#0a0a0a]">3302610000</span>
                           </div>
                         )}
                         <div className="flex justify-between">

@@ -29,7 +29,16 @@ class SyncService:
                 credentials["client_id"] = settings.INGRAM_MICRO_CLIENT_ID
                 credentials["client_secret"] = settings.INGRAM_MICRO_CLIENT_SECRET
                 credentials["customer_number"] = getattr(settings, "INGRAM_MICRO_CUSTOMER_NUMBER", "21-186632")
-                credentials["environment"] = getattr(settings, "INGRAM_MICRO_ENVIRONMENT", "sandbox")
+                credentials["environment"] = getattr(settings, "INGRAM_MICRO_ENVIRONMENT", "production")
+
+        if ("d&h" in supplier.name.lower() or "dandh" in supplier.name.lower()) and not credentials.get("bearer_token"):
+            if getattr(settings, "DANDH_BEARER_TOKEN", None):
+                credentials["bearer_token"] = settings.DANDH_BEARER_TOKEN
+                credentials["account_number"] = getattr(settings, "DANDH_ACCOUNT_NUMBER", "3302610000")
+                credentials["client_id"] = getattr(settings, "DANDH_CLIENT_ID", "")
+                credentials["client_secret"] = getattr(settings, "DANDH_CLIENT_SECRET", "")
+                credentials["tenant"] = getattr(settings, "DANDH_TENANT", "dhus")
+                credentials["environment"] = getattr(settings, "DANDH_ENVIRONMENT", "test")
 
         from app.adapters.registry import get_supplier_adapter
         return get_supplier_adapter(

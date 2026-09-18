@@ -39,7 +39,14 @@ class Settings(BaseSettings):
     INGRAM_MICRO_CLIENT_ID: Optional[str] = None
     INGRAM_MICRO_CLIENT_SECRET: Optional[str] = None
     INGRAM_MICRO_CUSTOMER_NUMBER: Optional[str] = None
-    INGRAM_MICRO_ENVIRONMENT: str = "sandbox"
+    INGRAM_MICRO_ENVIRONMENT: str = "production"
+
+    DANDH_CLIENT_ID: Optional[str] = None
+    DANDH_CLIENT_SECRET: Optional[str] = None
+    DANDH_ACCOUNT_NUMBER: Optional[str] = "3302610000"
+    DANDH_BEARER_TOKEN: Optional[str] = None
+    DANDH_TENANT: str = "dhus"
+    DANDH_ENVIRONMENT: str = "test"
 
 
     model_config = SettingsConfigDict(
