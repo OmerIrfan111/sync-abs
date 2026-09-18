@@ -377,7 +377,12 @@ export default function CatalogPage() {
                             <img
                               src={product.images[0]}
                               alt={product.title}
-                              className="h-12 w-12 rounded-lg object-cover bg-white border border-gray-200 shrink-0"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&auto=format&fit=crop&q=80";
+                              }}
+                              className="h-12 w-12 rounded-lg object-cover bg-white border border-gray-200 shrink-0 shadow-sm"
                             />
                           ) : (
                             <div className="h-12 w-12 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-[#767676] shrink-0">

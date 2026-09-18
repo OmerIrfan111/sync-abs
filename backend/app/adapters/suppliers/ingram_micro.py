@@ -247,7 +247,8 @@ class IngramMicroAdapter(MockSupplierAdapter):
                                 category=category,
                                 subcategory=sub_cat,
                                 title=title,
-                                sku=sku
+                                sku=sku,
+                                upc=upc
                             )
 
                             products.append(NormalizedProduct(
