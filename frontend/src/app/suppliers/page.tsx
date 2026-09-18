@@ -225,7 +225,7 @@ export default function SuppliersPage() {
                         </div>
                         <div className="flex justify-between">
                           <span>Environment:</span>
-                          <span className="text-emerald-700 font-semibold">{sup.name.toLowerCase().includes("ingram") ? "Sandbox (OAuth 2.0)" : "REST / Feed"}</span>
+                          <span className="text-emerald-700 font-semibold">{sup.name.toLowerCase().includes("ingram") ? "Production (OAuth 2.0)" : "REST / Feed"}</span>
                         </div>
                         {sup.name.toLowerCase().includes("ingram") && (
                           <div className="flex justify-between">
