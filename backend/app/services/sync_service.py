@@ -23,6 +23,14 @@ class SyncService:
             except Exception:
                 pass
 
+        from app.core.config import settings
+        if "ingram" in supplier.name.lower() and not credentials.get("client_id"):
+            if getattr(settings, "INGRAM_MICRO_CLIENT_ID", None):
+                credentials["client_id"] = settings.INGRAM_MICRO_CLIENT_ID
+                credentials["client_secret"] = settings.INGRAM_MICRO_CLIENT_SECRET
+                credentials["customer_number"] = getattr(settings, "INGRAM_MICRO_CUSTOMER_NUMBER", "21-186632")
+                credentials["environment"] = getattr(settings, "INGRAM_MICRO_ENVIRONMENT", "sandbox")
+
         from app.adapters.registry import get_supplier_adapter
         return get_supplier_adapter(
             adapter_class=supplier.adapter_class,

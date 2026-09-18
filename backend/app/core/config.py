@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     FIRST_SUPERUSER_EMAIL: str = "admin@syncplatform.io"
     FIRST_SUPERUSER_PASSWORD: str = "adminpassword123"
 
+    INGRAM_MICRO_CLIENT_ID: Optional[str] = None
+    INGRAM_MICRO_CLIENT_SECRET: Optional[str] = None
+    INGRAM_MICRO_CUSTOMER_NUMBER: Optional[str] = None
+    INGRAM_MICRO_ENVIRONMENT: str = "sandbox"
+
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

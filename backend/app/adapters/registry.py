@@ -65,19 +65,20 @@ def get_marketplace_adapter(
     act_lower = adapter_class.lower()
 
     # Route specifically by marketplace type
+    if adapter_class == "MockAmazonAdapter":
+        return MockAmazonAdapter(credentials=credentials, config=config)
+    if adapter_class == "MockShopifyAdapter":
+        return MockShopifyAdapter(credentials=credentials, config=config)
+    if adapter_class == "MockEBayAdapter":
+        return MockEBayAdapter(credentials=credentials, config=config)
+
     if "amazon" in act_lower or creds.get("seller_id") or creds.get("lwa_client_id"):
-        if adapter_class == "MockAmazonAdapter" and not creds.get("refresh_token"):
-            return MockAmazonAdapter(credentials=credentials, config=config)
         return LiveAmazonAdapter(credentials=credentials, config=config)
 
     if "shopify" in act_lower or creds.get("shop_url") or creds.get("shop_domain"):
-        if adapter_class == "MockShopifyAdapter" and not creds.get("access_token"):
-            return MockShopifyAdapter(credentials=credentials, config=config)
         return LiveShopifyAdapter(credentials=credentials, config=config)
 
     if "ebay" in act_lower or creds.get("user_token") or creds.get("cert_id"):
-        if adapter_class == "MockEBayAdapter" and not (creds.get("user_token") or creds.get("cert_id")):
-            return MockEBayAdapter(credentials=credentials, config=config)
         return LiveEBayAdapter(credentials=credentials, config=config)
 
     cls = MARKETPLACE_ADAPTERS.get(adapter_class, MockEBayAdapter)

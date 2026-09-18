@@ -218,10 +218,25 @@ export default function SuppliersPage() {
                     </button>
 
                     {isExpanded && (
-                      <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200 text-[11px] font-mono text-[#767676] space-y-0.5">
-                        <div>Adapter: {sup.adapter_class}</div>
-                        <div>Protocol: REST / XML Feed</div>
-                        <div>Encrypted at rest: AES-256 Fernet</div>
+                      <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200 text-[11px] font-mono text-[#767676] space-y-1">
+                        <div className="flex justify-between">
+                          <span>Adapter:</span>
+                          <span className="text-[#0a0a0a] font-semibold">{sup.adapter_class}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Environment:</span>
+                          <span className="text-emerald-700 font-semibold">{sup.name.toLowerCase().includes("ingram") ? "Sandbox (OAuth 2.0)" : "REST / Feed"}</span>
+                        </div>
+                        {sup.name.toLowerCase().includes("ingram") && (
+                          <div className="flex justify-between">
+                            <span>Account ID:</span>
+                            <span className="text-[#0a0a0a]">21-186632</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span>Security:</span>
+                          <span className="text-[#767676]">AES-128 Fernet Encrypted</span>
+                        </div>
                       </div>
                     )}
                   </div>
