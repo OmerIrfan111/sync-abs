@@ -229,7 +229,7 @@ export default function MarketplacesPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-bold text-[#0a0a0a] tracking-tight">Connect Your Online Stores</h1>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#905831]/10 text-[#905831] border border-[#905831]/20">
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#6C5DD3]/10 text-[#6C5DD3] border border-[#6C5DD3]/20">
               Sales Channels
             </span>
           </div>
@@ -278,7 +278,7 @@ export default function MarketplacesPage() {
             return (
               <div
                 key={mkt.id}
-                className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between space-y-4"
+                className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between space-y-4"
               >
                 <div>
                   {/* Top Row: Store Name & Status */}
@@ -374,7 +374,7 @@ export default function MarketplacesPage() {
                       disabled={isTesting}
                       className="flex-1 px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all border border-gray-300 shadow-sm disabled:opacity-50"
                     >
-                      <Wifi className={`h-3.5 w-3.5 text-[#767676] ${isTesting ? "animate-pulse text-[#905831]" : ""}`} />
+                      <Wifi className={`h-3.5 w-3.5 text-[#767676] ${isTesting ? "animate-pulse text-[#6C5DD3]" : ""}`} />
                       <span>{isTesting ? "Testing..." : "Test Connection"}</span>
                     </button>
 
@@ -382,7 +382,7 @@ export default function MarketplacesPage() {
                       onClick={() => handleOpenConfig(mkt)}
                       className="px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shadow-sm"
                     >
-                      <Lock className="h-3.5 w-3.5 text-[#905831]" />
+                      <Lock className="h-3.5 w-3.5 text-[#6C5DD3]" />
                       <span>{mkt.has_credentials ? "Edit Keys" : "Connect Store"}</span>
                     </button>
                   </div>
@@ -400,7 +400,7 @@ export default function MarketplacesPage() {
                     {isExpanded && (
                       <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200 text-[11px] font-mono text-[#767676] space-y-0.5">
                         <div>Adapter: {mkt.adapter_class}</div>
-                        <div>Encryption: AES-256 Fernet (At rest in DB)</div>
+                        <div>Encryption: AES-128 Fernet (At rest in DB)</div>
                         <div>Setup guide: {info.guide}</div>
                       </div>
                     )}
@@ -415,7 +415,7 @@ export default function MarketplacesPage() {
       {/* Store Credentials Modal */}
       {configChannel && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm max-w-lg w-full p-6 shadow-xl space-y-4">
             <div className="flex items-start justify-between pb-3 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-bold text-[#0a0a0a]">Connect {configChannel.name}</h3>
@@ -430,7 +430,7 @@ export default function MarketplacesPage() {
             </div>
 
             <form onSubmit={handleSaveCredentials} className="space-y-4">
-              <div className="p-3 bg-[#905831]/[0.06] rounded-lg border border-[#905831]/20 text-xs text-[#905831] space-y-1">
+              <div className="p-3 bg-[#6C5DD3]/[0.06] rounded-lg border border-[#6C5DD3]/20 text-xs text-[#6C5DD3] space-y-1">
                 <div className="font-semibold flex items-center gap-1.5">
                   <HelpCircle className="h-3.5 w-3.5" />
                   <span>How to connect {configChannel.name}:</span>
@@ -454,7 +454,7 @@ export default function MarketplacesPage() {
                           value={shopifyDomain}
                           onChange={(e) => setShopifyDomain(e.target.value)}
                           placeholder="e.g. your-store.myshopify.com"
-                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                         />
                       </div>
                       <div>
@@ -466,7 +466,7 @@ export default function MarketplacesPage() {
                           value={shopifyToken}
                           onChange={(e) => setShopifyToken(e.target.value)}
                           placeholder="shpat_••••••••••••••••••••••••"
-                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                         />
                         <p className="text-[10px] text-[#767676] mt-1">
                           Found in Shopify Admin ➔ Settings ➔ Apps ➔ Develop apps ➔ API credentials.
@@ -485,7 +485,7 @@ export default function MarketplacesPage() {
                           <select
                             value={ebayEnv}
                             onChange={(e) => setEbayEnv(e.target.value)}
-                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                           >
                             <option value="production">Production (Live eBay)</option>
                             <option value="sandbox">Sandbox (Test Mode)</option>
@@ -500,7 +500,7 @@ export default function MarketplacesPage() {
                             value={ebayAppId}
                             onChange={(e) => setEbayAppId(e.target.value)}
                             placeholder="e.g. YourCompany-Sync-PRD-..."
-                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                           />
                         </div>
                       </div>
@@ -514,7 +514,7 @@ export default function MarketplacesPage() {
                             value={ebayCertId}
                             onChange={(e) => setEbayCertId(e.target.value)}
                             placeholder="e.g. PRD-...-cert"
-                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                           />
                         </div>
                         <div>
@@ -526,7 +526,7 @@ export default function MarketplacesPage() {
                             value={ebayRefreshToken}
                             onChange={(e) => setEbayRefreshToken(e.target.value)}
                             placeholder="Optional refresh token"
-                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                           />
                         </div>
                       </div>
@@ -539,7 +539,7 @@ export default function MarketplacesPage() {
                           value={ebayToken}
                           onChange={(e) => setEbayToken(e.target.value)}
                           placeholder="Paste your eBay OAuth user token (starts with v^1.1#...)"
-                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                         />
                         <p className="text-[10px] text-[#767676] mt-1">
                           Generated in <strong>eBay Developer Portal ➔ User Tokens ➔ Get a User Token Here</strong> (Production).
@@ -560,7 +560,7 @@ export default function MarketplacesPage() {
                             value={amazonSellerId}
                             onChange={(e) => setAmazonSellerId(e.target.value)}
                             placeholder="e.g. A21TJRUUN4KGV..."
-                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                           />
                         </div>
                         <div>
@@ -572,7 +572,7 @@ export default function MarketplacesPage() {
                             value={amazonClientId}
                             onChange={(e) => setAmazonClientId(e.target.value)}
                             placeholder="amzn1.application-oa2-client..."
-                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                           />
                         </div>
                       </div>
@@ -585,7 +585,7 @@ export default function MarketplacesPage() {
                           value={amazonClientSecret}
                           onChange={(e) => setAmazonClientSecret(e.target.value)}
                           placeholder="amzn1.oa2-cs.v1...."
-                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                         />
                       </div>
                       <div>
@@ -597,7 +597,7 @@ export default function MarketplacesPage() {
                           value={amazonRefreshToken}
                           onChange={(e) => setAmazonRefreshToken(e.target.value)}
                           placeholder="Paste your Amazon LWA refresh token (starts with Atzr|...)"
-                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                         />
                         <p className="text-[10px] text-[#767676] mt-1">
                           Found in <strong>Seller Central ➔ Partner Network ➔ Develop Apps ➔ View LWA Credentials & Authorize</strong>.
@@ -617,7 +617,7 @@ export default function MarketplacesPage() {
                           value={genericClientId}
                           onChange={(e) => setGenericClientId(e.target.value)}
                           placeholder="Enter your Client ID or API Key..."
-                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                         />
                       </div>
                       <div>
@@ -629,7 +629,7 @@ export default function MarketplacesPage() {
                           value={genericClientSecret}
                           onChange={(e) => setGenericClientSecret(e.target.value)}
                           placeholder="Enter your Client Secret..."
-                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                         />
                       </div>
                     </>
@@ -644,7 +644,7 @@ export default function MarketplacesPage() {
                     rows={5}
                     value={credentialsJson}
                     onChange={(e) => setCredentialsJson(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-mono text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                   />
                 </div>
               )}

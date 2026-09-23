@@ -229,7 +229,7 @@ export default function CatalogPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-bold text-[#0a0a0a] tracking-tight">Products to Sell</h1>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#905831]/10 text-[#905831] border border-[#905831]/20">
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#6C5DD3]/10 text-[#6C5DD3] border border-[#6C5DD3]/20">
               Wholesale Catalog
             </span>
           </div>
@@ -244,7 +244,7 @@ export default function CatalogPage() {
       </div>
 
       {/* Search & Filter Toolbar */}
-      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-3.5">
+      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-3.5">
         <div className="flex flex-col md:flex-row gap-3">
           <form onSubmit={handleSearchSubmit} className="flex-1 relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767676]" />
@@ -253,7 +253,7 @@ export default function CatalogPage() {
               placeholder="Search products by title, brand, or product code..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-lg text-sm text-[#1a1a1a] placeholder-[#767676] focus:outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a] transition-all"
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-lg text-sm text-[#1a1a1a] placeholder-[#767676] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06] focus:ring-1 focus:ring-[#0a0a0a] transition-all"
             />
           </form>
           <button
@@ -267,7 +267,7 @@ export default function CatalogPage() {
         {/* Filters Row */}
         <div className="flex flex-wrap items-center gap-2.5 pt-3 border-t border-gray-100 text-xs">
           <div className="flex items-center gap-1.5 font-semibold text-[#1a1a1a]">
-            <Filter className="h-3.5 w-3.5 text-[#905831]" />
+            <Filter className="h-3.5 w-3.5 text-[#6C5DD3]" />
             <span>Filter By:</span>
           </div>
 
@@ -275,7 +275,7 @@ export default function CatalogPage() {
           <select
             value={selectedBrand}
             onChange={(e) => { setSelectedBrand(e.target.value); setPage(1); }}
-            className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#1a1a1a] font-medium focus:outline-none focus:border-[#0a0a0a]"
+            className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#1a1a1a] font-medium focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
           >
             <option value="">All Brands</option>
             {filterOptions.brands.map((b) => (
@@ -287,7 +287,7 @@ export default function CatalogPage() {
           <select
             value={selectedCategory}
             onChange={(e) => { setSelectedCategory(e.target.value); setPage(1); }}
-            className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#1a1a1a] font-medium focus:outline-none focus:border-[#0a0a0a]"
+            className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#1a1a1a] font-medium focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
           >
             <option value="">All Categories</option>
             {filterOptions.categories.map((c) => (
@@ -333,7 +333,7 @@ export default function CatalogPage() {
       )}
 
       {/* Products Table Card */}
-      <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+      <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-[#1a1a1a]">
             <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
@@ -392,7 +392,7 @@ export default function CatalogPage() {
                           <div className="max-w-xs sm:max-w-md">
                             <button
                               onClick={() => handleOpenProductDetails(product)}
-                              className="font-semibold text-[#0a0a0a] hover:text-[#905831] text-left line-clamp-1 transition-colors"
+                              className="font-semibold text-[#0a0a0a] hover:text-[#6C5DD3] text-left line-clamp-1 transition-colors"
                             >
                               {product.title}
                             </button>
@@ -401,7 +401,7 @@ export default function CatalogPage() {
                             </div>
                             <button
                               onClick={() => handleOpenProductDetails(product)}
-                              className="text-[11px] text-[#905831] hover:underline mt-0.5 font-medium block"
+                              className="text-[11px] text-[#6C5DD3] hover:underline mt-0.5 font-medium block"
                             >
                               View product codes & details &rarr;
                             </button>
@@ -419,7 +419,7 @@ export default function CatalogPage() {
 
                       {/* 3. Suggested Selling Price */}
                       <td className="px-4 py-3.5">
-                        <div className="font-bold text-[#905831] text-sm">
+                        <div className="font-bold text-[#6C5DD3] text-sm">
                           {cost > 0 ? `$${suggestedPrice}` : "—"}
                         </div>
                         <div className="text-[11px] text-[#767676]">With 15% profit markup</div>
@@ -579,75 +579,91 @@ export default function CatalogPage() {
       {/* Product Details Drawer / Modal */}
       {selectedProduct && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl p-6 space-y-5">
-            <div className="flex items-start justify-between pb-3 border-b border-gray-200">
+          <div className="relative bg-white border border-gray-100 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+            <button
+              onClick={() => setSelectedProduct(null)}
+              className="absolute top-4 right-4 z-10 p-1.5 rounded-full bg-white/90 text-[#767676] hover:text-[#0a0a0a] hover:bg-white shadow-sm transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Image + Summary Hero */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-6 pb-4">
               <div>
-                <h3 className="text-lg font-bold text-[#0a0a0a]">{selectedProduct.title}</h3>
-                <p className="text-xs text-[#767676] mt-0.5">Product Details & Wholesale Breakdown</p>
+                {selectedProduct.images && selectedProduct.images.length > 0 ? (
+                  <img
+                    src={selectedProduct.images[0]}
+                    alt={selectedProduct.title}
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&auto=format&fit=crop&q=80";
+                    }}
+                    className="w-full aspect-square object-cover rounded-2xl bg-gray-50 border border-gray-100"
+                  />
+                ) : (
+                  <div className="w-full aspect-square rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-[#767676]">
+                    <Layers className="h-10 w-10" />
+                  </div>
+                )}
+                {selectedProduct.images && selectedProduct.images.length > 1 && (
+                  <div className="flex gap-2 mt-2.5">
+                    {selectedProduct.images.slice(0, 5).map((img, i) => (
+                      <img
+                        key={i}
+                        src={img}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        className="h-12 w-12 rounded-lg object-cover bg-gray-50 border border-gray-100"
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-              <button
-                onClick={() => setSelectedProduct(null)}
-                className="p-1.5 rounded-lg text-[#767676] hover:text-[#0a0a0a] hover:bg-gray-100 transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
+
+              <div className="flex flex-col">
+                <span className="text-[11px] font-semibold text-[#6C5DD3] uppercase tracking-wide">
+                  {selectedProduct.brand || "Unbranded"} · {selectedProduct.category || "General"}
+                </span>
+                <h3 className="text-lg font-bold text-[#0a0a0a] mt-1 leading-snug">{selectedProduct.title}</h3>
+
+                <div className="flex items-baseline gap-2 mt-3">
+                  <span className="text-2xl font-bold text-[#0a0a0a]">
+                    ${selectedProduct.lowest_cost ? (Number(selectedProduct.lowest_cost) * 1.15).toFixed(2) : "0.00"}
+                  </span>
+                  <span className="text-xs text-[#767676]">suggested selling price</span>
+                </div>
+                <div className="text-xs text-[#767676] mt-0.5">
+                  Your cost: ${selectedProduct.lowest_cost ? Number(selectedProduct.lowest_cost).toFixed(2) : "0.00"}
+                </div>
+
+                <span className={`inline-flex items-center gap-1.5 mt-3 self-start px-2.5 py-1 rounded-full text-xs font-medium ${
+                  selectedProduct.total_stock > 0
+                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                    : "bg-rose-50 text-rose-800 border border-rose-200"
+                }`}>
+                  {selectedProduct.total_stock > 0 ? `${selectedProduct.total_stock} in stock` : "Out of stock"}
+                </span>
+
+                <p className="text-xs text-[#767676] leading-relaxed mt-4">
+                  {selectedProduct.description || "No manufacturer description provided for this item."}
+                </p>
+
+                <div className="mt-4 pt-3 border-t border-gray-100 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] font-mono text-[#767676]">
+                  <div>SKU: <span className="text-[#1a1a1a]">{selectedProduct.sku}</span></div>
+                  <div>UPC: <span className="text-[#1a1a1a]">{selectedProduct.upc || "None"}</span></div>
+                  <div>EAN: <span className="text-[#1a1a1a]">{selectedProduct.ean || "None"}</span></div>
+                  <div>MPN: <span className="text-[#1a1a1a]">{selectedProduct.mpn || "None"}</span></div>
+                </div>
+              </div>
             </div>
 
-            {/* Product Overview Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <span className="text-[11px] text-[#767676] block">Brand</span>
-                <span className="font-semibold text-[#0a0a0a] text-sm">{selectedProduct.brand || "Unbranded"}</span>
-              </div>
-              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <span className="text-[11px] text-[#767676] block">Category</span>
-                <span className="font-semibold text-[#0a0a0a] text-sm">{selectedProduct.category || "General"}</span>
-              </div>
-              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <span className="text-[11px] text-[#767676] block">Available Stock</span>
-                <span className="font-semibold text-emerald-700 text-sm">{selectedProduct.total_stock} units</span>
-              </div>
-              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <span className="text-[11px] text-[#767676] block">Lowest Cost</span>
-                <span className="font-semibold text-[#0a0a0a] text-sm">${selectedProduct.lowest_cost ? Number(selectedProduct.lowest_cost).toFixed(2) : "0.00"}</span>
-              </div>
-            </div>
-
-            {/* Technical Identifiers */}
-            <div className="p-3.5 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
-              <h4 className="text-xs font-semibold text-[#767676] uppercase tracking-wider">Product Identifiers</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-                <div>
-                  <span className="text-[#767676] block text-[10px]">Product Code (SKU)</span>
-                  <span className="text-[#905831] font-semibold">{selectedProduct.sku}</span>
-                </div>
-                <div>
-                  <span className="text-[#767676] block text-[10px]">Barcode (UPC)</span>
-                  <span className="text-[#1a1a1a]">{selectedProduct.upc || "None"}</span>
-                </div>
-                <div>
-                  <span className="text-[#767676] block text-[10px]">European Barcode (EAN)</span>
-                  <span className="text-[#1a1a1a]">{selectedProduct.ean || "None"}</span>
-                </div>
-                <div>
-                  <span className="text-[#767676] block text-[10px]">Part Number (MPN)</span>
-                  <span className="text-[#1a1a1a]">{selectedProduct.mpn || "None"}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Description */}
-            <div>
-              <h4 className="text-xs font-semibold text-[#1a1a1a] mb-1">Product Description</h4>
-              <p className="text-xs text-[#767676] leading-relaxed bg-gray-50 p-3.5 rounded-lg border border-gray-200">
-                {selectedProduct.description || "Standard manufacturer product details."}
-              </p>
-            </div>
+            <div className="px-6 pb-6 space-y-5">
 
             {/* Distributors carrying this item */}
             <div>
               <h4 className="text-xs font-semibold text-[#0a0a0a] mb-2 flex items-center gap-2">
-                <Truck className="h-4 w-4 text-[#905831]" />
+                <Truck className="h-4 w-4 text-[#6C5DD3]" />
                 <span>Wholesale Distributors Supplying This Item</span>
               </h4>
               <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
@@ -664,9 +680,11 @@ export default function CatalogPage() {
                     {selectedProduct.supplier_products.map((sp) => (
                       <tr key={sp.id} className="hover:bg-gray-50/60">
                         <td className="px-3.5 py-2.5 font-medium text-[#0a0a0a]">{sp.supplier_name || "Supplier"}</td>
-                        <td className="px-3.5 py-2.5 font-semibold text-[#905831]">${Number(sp.cost).toFixed(2)}</td>
+                        <td className="px-3.5 py-2.5 font-semibold text-[#6C5DD3]">${Number(sp.cost).toFixed(2)}</td>
                         <td className="px-3.5 py-2.5 text-emerald-800 font-medium">{sp.qty_available} units</td>
-                        <td className="px-3.5 py-2.5 text-[#767676]">Standard Warehouse</td>
+                        <td className="px-3.5 py-2.5 text-[#767676]">
+                          {sp.shipping_info?.lead_time_days != null ? `Ships in ${sp.shipping_info.lead_time_days} day(s)` : "—"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -687,7 +705,7 @@ export default function CatalogPage() {
                           key={l.id}
                           className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200"
                         >
-                          ✓ {l.marketplace_name} ({l.status === "ACTIVE" ? "Live" : "Hidden"})
+                          {l.marketplace_name} ({l.status === "ACTIVE" ? "Live" : "Hidden"})
                         </span>
                       ))}
                     </div>
@@ -739,7 +757,7 @@ export default function CatalogPage() {
                           <button
                             type="button"
                             onClick={() => randomizeDrawerPrice(Number(selectedProduct.lowest_cost || 50))}
-                            className="text-[10px] text-[#905831] font-medium bg-[#905831]/10 px-1.5 py-0.5 rounded border border-[#905831]/20 flex items-center gap-0.5"
+                            className="text-[10px] text-[#6C5DD3] font-medium bg-[#6C5DD3]/10 px-1.5 py-0.5 rounded border border-[#6C5DD3]/20 flex items-center gap-0.5"
                             title="Pick random price with 10%-35% margin"
                           >
                             <Sparkles className="h-2.5 w-2.5" />
@@ -763,7 +781,7 @@ export default function CatalogPage() {
                           value={drawerCustomPrice || (Number(selectedProduct.lowest_cost || 0) * 1.15).toFixed(2)}
                           onChange={(e) => setDrawerCustomPrice(e.target.value)}
                           placeholder="Custom price..."
-                          className="w-full pl-6 pr-2 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          className="w-full pl-6 pr-2 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                         />
                       </div>
                     </div>
@@ -777,13 +795,13 @@ export default function CatalogPage() {
                       className="w-full flex items-center justify-between text-xs font-semibold text-[#0a0a0a]"
                     >
                       <span className="flex items-center gap-1.5">
-                        <Sparkles className="h-3.5 w-3.5 text-[#905831]" />
+                        <Sparkles className="h-3.5 w-3.5 text-[#6C5DD3]" />
                         <span>Customize Title & Description</span>
                         {(drawerCustomTitle !== selectedProduct.title || drawerCustomDescription !== (selectedProduct.description || "")) && (
                           <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium">Modified</span>
                         )}
                       </span>
-                      <span className="text-[11px] text-[#905831] font-medium">
+                      <span className="text-[11px] text-[#6C5DD3] font-medium">
                         {showDrawerContentEdit ? "Hide fields" : "Edit before listing"}
                       </span>
                     </button>
@@ -799,7 +817,7 @@ export default function CatalogPage() {
                             value={drawerCustomTitle}
                             onChange={(e) => setDrawerCustomTitle(e.target.value)}
                             placeholder="Enter listing title..."
-                            className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                            className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                           />
                         </div>
                         <div>
@@ -811,7 +829,7 @@ export default function CatalogPage() {
                             value={drawerCustomDescription}
                             onChange={(e) => setDrawerCustomDescription(e.target.value)}
                             placeholder="Enter custom product description..."
-                            className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                            className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                           />
                         </div>
                       </div>
@@ -848,6 +866,7 @@ export default function CatalogPage() {
                 </div>
               );
             })()}
+            </div>
           </div>
         </div>
       )}
@@ -855,7 +874,7 @@ export default function CatalogPage() {
       {/* Start Selling / List on Store Modal */}
       {listingModalProduct && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm max-w-lg w-full p-6 shadow-xl space-y-4">
             <div className="flex items-start justify-between pb-3 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-bold text-[#0a0a0a]">Select Store to Sell On</h3>
@@ -883,7 +902,7 @@ export default function CatalogPage() {
                 </div>
                 <div>
                   <span className="text-[10px] text-[#767676] block">Selling Price</span>
-                  <span className="font-bold text-[#905831]">
+                  <span className="font-bold text-[#6C5DD3]">
                     ${(Number(listingModalProduct.lowest_cost || 0) * 1.15).toFixed(2)}
                   </span>
                 </div>
@@ -909,7 +928,7 @@ export default function CatalogPage() {
                           key={l.id}
                           className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200"
                         >
-                          ✓ {l.marketplace_name} ({l.status === "ACTIVE" ? "Live" : "Hidden"})
+                          {l.marketplace_name} ({l.status === "ACTIVE" ? "Live" : "Hidden"})
                         </span>
                       ))}
                     </div>
@@ -944,7 +963,7 @@ export default function CatalogPage() {
                           setModalCustomPrice((cost * 1.15).toFixed(2));
                         }
                       }}
-                      className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                      className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                     >
                       {marketplaces.map((m) => {
                         const existing = liveOn.find(l => l.marketplace_id === m.id);
@@ -977,7 +996,7 @@ export default function CatalogPage() {
                   <button
                     type="button"
                     onClick={() => randomizeModalPrice(Number(listingModalProduct.lowest_cost || 50))}
-                    className="text-[11px] text-[#905831] hover:text-[#0a0a0a] font-medium flex items-center gap-1 bg-[#905831]/10 px-2 py-0.5 rounded border border-[#905831]/20 transition-colors"
+                    className="text-[11px] text-[#6C5DD3] hover:text-[#0a0a0a] font-medium flex items-center gap-1 bg-[#6C5DD3]/10 px-2 py-0.5 rounded border border-[#6C5DD3]/20 transition-colors"
                     title="Generate a random price with 10%-35% margin"
                   >
                     <Sparkles className="h-3 w-3" />
@@ -1002,7 +1021,7 @@ export default function CatalogPage() {
                   value={modalCustomPrice}
                   onChange={(e) => setModalCustomPrice(e.target.value)}
                   placeholder="Enter custom selling price..."
-                  className="w-full pl-7 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#0a0a0a] font-bold focus:outline-none focus:border-[#0a0a0a]"
+                  className="w-full pl-7 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#0a0a0a] font-bold focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                 />
               </div>
               <div className="flex items-center justify-between text-[11px] text-[#767676]">
@@ -1019,13 +1038,13 @@ export default function CatalogPage() {
                 className="w-full flex items-center justify-between text-xs font-semibold text-[#0a0a0a]"
               >
                 <span className="flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-[#905831]" />
+                  <Sparkles className="h-3.5 w-3.5 text-[#6C5DD3]" />
                   <span>Customize Title & Description</span>
                   {(modalCustomTitle !== listingModalProduct.title || modalCustomDescription !== (listingModalProduct.description || "")) && (
                     <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium">Modified</span>
                   )}
                 </span>
-                <span className="text-[11px] text-[#905831] font-medium">
+                <span className="text-[11px] text-[#6C5DD3] font-medium">
                   {showModalContentEdit ? "Hide fields" : "Edit before listing"}
                 </span>
               </button>
@@ -1041,7 +1060,7 @@ export default function CatalogPage() {
                       value={modalCustomTitle}
                       onChange={(e) => setModalCustomTitle(e.target.value)}
                       placeholder="Enter listing title..."
-                      className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                      className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                     />
                   </div>
                   <div>
@@ -1053,21 +1072,11 @@ export default function CatalogPage() {
                       value={modalCustomDescription}
                       onChange={(e) => setModalCustomDescription(e.target.value)}
                       placeholder="Enter custom product description..."
-                      className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                      className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                     />
                   </div>
                 </div>
               )}
-            </div>
-
-            <div className="p-3 bg-[#905831]/[0.06] rounded-lg border border-[#905831]/20 text-xs text-[#905831] space-y-0.5">
-              <div className="font-semibold flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Automated Sync:</span>
-              </div>
-              <p className="text-[11px] text-[#767676]">
-                Once saved, the system keeps distributor stock and your selling price synchronized across connected channels.
-              </p>
             </div>
 
             {/* Modal Actions */}

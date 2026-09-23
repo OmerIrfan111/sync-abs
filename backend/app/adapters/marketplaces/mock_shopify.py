@@ -102,3 +102,44 @@ class MockShopifyAdapter(MarketplaceAdapter):
         if external_listing_id not in MOCK_SHOPIFY_PRODUCTS:
             raise KeyError(f"Listing ID {external_listing_id} not found on Shopify")
         return MOCK_SHOPIFY_PRODUCTS[external_listing_id]
+
+    # ── V2: Mock Order Methods ──
+
+    def fetch_orders(self, since_datetime=None) -> list:
+        """Returns simulated Shopify orders for testing."""
+        from datetime import datetime, timezone
+        return [
+            {
+                "order_id": f"shopify-{uuid.uuid4().hex[:8]}",
+                "buyer_username": "shopify_customer",
+                "buyer_name": "Shopify Test Customer",
+                "shipping_address": {
+                    "name": "Shopify Test Customer",
+                    "street": "789 Elm Street",
+                    "city": "Austin",
+                    "state": "TX",
+                    "zip": "73301",
+                    "country": "US",
+                },
+                "order_total": Decimal("199.99"),
+                "marketplace_fees": Decimal("5.80"),
+                "currency": "USD",
+                "ordered_at": datetime.now(timezone.utc),
+                "items": [
+                    {
+                        "item_id": f"shopify-item-{uuid.uuid4().hex[:6]}",
+                        "sku": "ING-TEST-001",
+                        "title": "Enterprise 4K UltraHD Pro Monitor 32-inch",
+                        "quantity": 1,
+                        "unit_price": Decimal("199.99"),
+                    }
+                ],
+            }
+        ]
+
+    def update_tracking(self, marketplace_order_id: str, tracking_number: str, carrier: str) -> bool:
+        return True
+
+    def acknowledge_order(self, marketplace_order_id: str) -> bool:
+        return True
+

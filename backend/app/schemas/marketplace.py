@@ -18,6 +18,7 @@ class MarketplaceResponse(MarketplaceBase):
     has_credentials: bool
     active_listings_count: int
     total_listings_count: int
+    credentials_expires_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)

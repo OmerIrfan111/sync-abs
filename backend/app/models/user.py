@@ -11,3 +11,9 @@ class User(Base, TimestampMixin):
     full_name = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
+    # Phase 5: staff roles/permissions. "admin" can manage credentials, users,
+    # and destructive actions (delete); "operator" can run day-to-day
+    # operations (sync, publish, route orders, edit rules); "viewer" is
+    # read-only. is_superuser is kept for backward compatibility and always
+    # implies "admin" regardless of this field.
+    role = Column(String(20), default="operator", nullable=False)

@@ -138,7 +138,7 @@ export default function LogsPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-bold text-[#0a0a0a] tracking-tight">Store Activity & Alerts</h1>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#905831]/10 text-[#905831] border border-[#905831]/20">
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#6C5DD3]/10 text-[#6C5DD3] border border-[#6C5DD3]/20">
               Audit Logs
             </span>
           </div>
@@ -190,7 +190,7 @@ export default function LogsPage() {
       {activeTab === "sync" ? (
         <div className="space-y-4">
           <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200 text-xs text-[#767676] flex items-start gap-2.5">
-            <HelpCircle className="h-4 w-4 text-[#905831] flex-shrink-0 mt-0.5" />
+            <HelpCircle className="h-4 w-4 text-[#6C5DD3] flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-[#0a0a0a]">Continuous Automatic Record</p>
               <p className="mt-0.5 leading-relaxed">
@@ -199,7 +199,7 @@ export default function LogsPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+          <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-[#1a1a1a]">
                 <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
@@ -216,7 +216,7 @@ export default function LogsPage() {
                   {loading ? (
                     <tr>
                       <td colSpan={6} className="text-center py-20 text-[#767676]">
-                        <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-[#905831]" />
+                        <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-[#6C5DD3]" />
                         Loading recent updates...
                       </td>
                     </tr>
@@ -243,7 +243,7 @@ export default function LogsPage() {
                             minute: "2-digit",
                           })}
                         </td>
-                        <td className="px-6 py-3.5 font-mono font-medium text-[#905831]">
+                        <td className="px-6 py-3.5 font-mono font-medium text-[#6C5DD3]">
                           {log.product_sku || "Main Product"}
                         </td>
                         <td className="px-6 py-3.5 text-[#0a0a0a] font-medium">
@@ -333,7 +333,7 @@ export default function LogsPage() {
                             </span>
                           )}
                           {err.product_sku && (
-                            <span className="px-2 py-0.5 rounded-md bg-[#905831]/10 text-[#905831] text-xs font-mono font-medium border border-[#905831]/20">
+                            <span className="px-2 py-0.5 rounded-md bg-[#6C5DD3]/10 text-[#6C5DD3] text-xs font-mono font-medium border border-[#6C5DD3]/20">
                               Product: {err.product_sku}
                             </span>
                           )}
@@ -346,7 +346,7 @@ export default function LogsPage() {
                             <span className="text-[#1a1a1a]">{guidance.what}</span>
                           </div>
                           <div>
-                            <span className="font-semibold text-[#905831]">Why it matters: </span>
+                            <span className="font-semibold text-[#6C5DD3]">Why it matters: </span>
                             <span className="text-[#1a1a1a]">{guidance.why}</span>
                           </div>
                           <div>

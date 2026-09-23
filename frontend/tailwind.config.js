@@ -10,26 +10,26 @@ module.exports = {
     extend: {
       colors: {
         wandor: {
-          dark: "#0a0a0a",
+          dark: "#1B1B2F",
           text: "#1a1a1a",
           muted: "#767676",
-          prompt: "#905831",
+          prompt: "#6C5DD3",
           bg: "#ffffff",
-          surface: "#fafafa",
+          surface: "#F6F6FB",
           border: "#e5e7eb",
           card: "#ffffff",
         },
         brand: {
-          50: "#fdf8f4",
-          100: "#faede3",
-          500: "#905831",
-          600: "#7b4724",
-          700: "#64381b",
-          900: "#3d1e0a",
+          50: "#F3F1FD",
+          100: "#E4DFFA",
+          500: "#6C5DD3",
+          600: "#5B4BD1",
+          700: "#4A3BAE",
+          900: "#2E2470",
         },
       },
       fontFamily: {
-        sans: ["Geist", "system-ui", "sans-serif"],
+        sans: ['"IBM Plex Sans"', "system-ui", "sans-serif"],
         brand: ['"Special Elite"', "cursive"],
       },
       boxShadow: {

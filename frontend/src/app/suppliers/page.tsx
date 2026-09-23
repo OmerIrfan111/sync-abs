@@ -86,7 +86,7 @@ export default function SuppliersPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-bold text-[#0a0a0a] tracking-tight">Wholesale Suppliers</h1>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#905831]/10 text-[#905831] border border-[#905831]/20">
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#6C5DD3]/10 text-[#6C5DD3] border border-[#6C5DD3]/20">
               Distributor Feeds
             </span>
           </div>
@@ -120,13 +120,13 @@ export default function SuppliersPage() {
             return (
               <div
                 key={sup.id}
-                className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between space-y-4"
+                className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between space-y-4"
               >
                 <div>
                   {/* Top Row: Name & Status */}
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-lg bg-[#905831]/10 text-[#905831]">
+                      <div className="p-2.5 rounded-lg bg-[#6C5DD3]/10 text-[#6C5DD3]">
                         <Truck className="h-4 w-4" />
                       </div>
                       <div>
@@ -192,7 +192,7 @@ export default function SuppliersPage() {
                       disabled={isTesting || isSyncing}
                       className="flex-1 px-3 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
                     >
-                      <RefreshCw className={`h-3.5 w-3.5 text-[#905831] ${isSyncing ? "animate-spin" : ""}`} />
+                      <RefreshCw className={`h-3.5 w-3.5 text-[#6C5DD3] ${isSyncing ? "animate-spin" : ""}`} />
                       <span>{isSyncing ? "Checking..." : "Check Stock & Prices"}</span>
                     </button>
 
@@ -202,7 +202,7 @@ export default function SuppliersPage() {
                       className="px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all border border-gray-300 shadow-sm disabled:opacity-50"
                       title="Test API Connection"
                     >
-                      <Wifi className={`h-3.5 w-3.5 text-[#767676] ${isTesting ? "animate-pulse text-[#905831]" : ""}`} />
+                      <Wifi className={`h-3.5 w-3.5 text-[#767676] ${isTesting ? "animate-pulse text-[#6C5DD3]" : ""}`} />
                       <span>{isTesting ? "Testing..." : "Test"}</span>
                     </button>
                   </div>
@@ -233,18 +233,6 @@ export default function SuppliersPage() {
                               : "REST / Feed"}
                           </span>
                         </div>
-                        {sup.name.toLowerCase().includes("ingram") && (
-                          <div className="flex justify-between">
-                            <span>Account ID:</span>
-                            <span className="text-[#0a0a0a]">21-186632</span>
-                          </div>
-                        )}
-                        {sup.name.toLowerCase().includes("d&h") && (
-                          <div className="flex justify-between">
-                            <span>Account ID:</span>
-                            <span className="text-[#0a0a0a]">3302610000</span>
-                          </div>
-                        )}
                         <div className="flex justify-between">
                           <span>Security:</span>
                           <span className="text-[#767676]">AES-128 Fernet Encrypted</span>

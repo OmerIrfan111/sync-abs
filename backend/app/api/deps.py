@@ -47,3 +47,22 @@ def get_current_active_superuser(
             status_code=400, detail="The user doesn't have enough privileges"
         )
     return current_user
+
+def require_role(*allowed_roles: str):
+    """
+    Dependency factory: restricts an endpoint to specific staff roles.
+    is_superuser always passes, regardless of role, for backward
+    compatibility with the original single-admin-flag setup.
+
+    Usage: Depends(require_role("admin")) or Depends(require_role("admin", "operator")).
+    """
+    def checker(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.is_superuser:
+            return current_user
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail=f"This action requires one of these roles: {', '.join(allowed_roles)}. Your role: {current_user.role}."
+            )
+        return current_user
+    return checker

@@ -8,7 +8,7 @@ from app.models.supplier_product import SupplierProduct
 from app.schemas.supplier import SupplierCreate, SupplierUpdate, SupplierResponse
 from app.services.sync_service import SyncService
 from app.core.security import encrypt_credential
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_role
 
 router = APIRouter()
 
@@ -118,7 +118,7 @@ def update_supplier(supplier_id: int, payload: SupplierUpdate, db: Session = Dep
     )
 
 @router.delete("/{supplier_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
+def delete_supplier(supplier_id: int, db: Session = Depends(get_db), _: object = Depends(require_role("admin"))):
     supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
@@ -172,3 +172,41 @@ def sync_supplier(
         return result
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(exc)}")
+
+
+@router.get("/{supplier_id}/warehouses")
+def get_supplier_warehouses(supplier_id: int, db: Session = Depends(get_db)):
+    """
+    Lists this supplier's known warehouse locations and their aggregate
+    stock across all products (Phase 3: multi-warehouse support). Only
+    populated for suppliers whose API reports per-location breakdown
+    (currently D&H); suppliers reporting only an aggregate quantity
+    (e.g. Ingram Micro) will simply show no warehouses here.
+    """
+    supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+    from app.models.warehouse import Warehouse, WarehouseStock
+    from sqlalchemy import func
+
+    warehouses = db.query(Warehouse).filter(Warehouse.supplier_id == supplier_id).all()
+    results = []
+    for w in warehouses:
+        total_stock = db.query(func.sum(WarehouseStock.qty_available)).filter(
+            WarehouseStock.warehouse_id == w.id
+        ).scalar() or 0
+        product_count = db.query(func.count(WarehouseStock.id)).filter(
+            WarehouseStock.warehouse_id == w.id,
+            WarehouseStock.qty_available > 0,
+        ).scalar() or 0
+        results.append({
+            "id": w.id,
+            "code": w.code,
+            "name": w.name,
+            "is_active": w.is_active,
+            "total_stock": int(total_stock),
+            "products_in_stock": product_count,
+        })
+
+    return {"supplier_id": supplier_id, "supplier_name": supplier.name, "warehouses": results}

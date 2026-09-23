@@ -1,3 +1,6 @@
+from datetime import datetime, timezone, timedelta
+from decimal import Decimal
+from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc, func
@@ -8,6 +11,7 @@ from app.models.supplier import Supplier
 from app.models.marketplace import Marketplace
 from app.models.listing import Listing
 from app.models.error_log import ErrorLog
+from app.models.order import Order
 from app.schemas.dashboard import DashboardStats, SupplierHealthStatus, MarketplaceHealthStatus
 from app.schemas.sync import ErrorLogResponse
 
@@ -31,20 +35,50 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     in_stock_products = db.query(Product).filter(Product.id.in_(in_stock_stmt)).count()
     out_of_stock_products = max(0, total_products - in_stock_products)
 
-    # 4. Needs attention: pending/failed errors
-    unresolved_errors = db.query(ErrorLog).filter(ErrorLog.status.in_(["PENDING", "FAILED"])).count()
+    # 4. Needs attention: pending/failed errors from the last 24h
+    # Older unresolved rows reflect past incidents that may have self-recovered
+    # on a later sync and shouldn't perpetually flag the dashboard as unhealthy.
+    health_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    unresolved_errors = db.query(ErrorLog).filter(
+        ErrorLog.status.in_(["PENDING", "FAILED"]),
+        ErrorLog.created_at >= health_cutoff,
+    ).count()
     needs_attention = unresolved_errors
 
+    # 4b. Order KPIs
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    total_orders_today = db.query(func.count(Order.id)).filter(Order.created_at >= today_start).scalar() or 0
+    pending_orders = db.query(func.count(Order.id)).filter(Order.status == "PENDING_ROUTING").scalar() or 0
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    revenue_30d = db.query(func.sum(Order.order_total)).filter(
+        Order.ordered_at >= thirty_days_ago,
+        Order.status.notin_(["CANCELLED", "REFUNDED"])
+    ).scalar() or Decimal("0")
+
     # 5. Suppliers health
+    # Only a genuine connection failure marks the supplier itself unhealthy.
+    # MISSING_DATA / PRICING_ERROR / INVENTORY_MISMATCH are data-quality
+    # issues about specific SKUs, not evidence the supplier connection is
+    # broken — they still count toward needs_attention above, but shouldn't
+    # make a supplier that's actively syncing hundreds of products look
+    # "ERROR" and cause alarm fatigue.
     suppliers = db.query(Supplier).all()
     suppliers_health = []
     for s in suppliers:
         p_count = db.query(SupplierProduct).filter(SupplierProduct.supplier_id == s.id).count()
-        recent_err = db.query(ErrorLog).filter(
+        latest_err = db.query(ErrorLog).filter(
             ErrorLog.supplier_id == s.id,
-            ErrorLog.status.in_(["PENDING", "FAILED"])
-        ).first()
-        status_str = "ERROR" if recent_err else ("HEALTHY" if s.is_active else "IDLE")
+            ErrorLog.error_type == "SUPPLIER_CONNECTION_ERROR",
+            ErrorLog.status.in_(["PENDING", "FAILED"]),
+            ErrorLog.created_at >= health_cutoff,
+        ).order_by(desc(ErrorLog.created_at)).first()
+        # A transient failure earlier in the window shouldn't keep flagging
+        # the supplier as broken once a later sync has actually succeeded —
+        # only treat it as unhealthy if no successful sync has happened since.
+        is_broken = latest_err is not None and (
+            s.last_synced_at is None or latest_err.created_at > s.last_synced_at
+        )
+        status_str = "ERROR" if is_broken else ("HEALTHY" if s.is_active else "IDLE")
         suppliers_health.append(SupplierHealthStatus(
             id=s.id,
             name=s.name,
@@ -57,19 +91,42 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     # 6. Marketplaces health
     marketplaces = db.query(Marketplace).all()
     marketplaces_health = []
+    credential_warnings: List[str] = []
     for m in marketplaces:
         l_count = db.query(Listing).filter(Listing.marketplace_id == m.id).count()
-        recent_err = db.query(ErrorLog).filter(
+        latest_err = db.query(ErrorLog).filter(
             ErrorLog.marketplace_id == m.id,
-            ErrorLog.status.in_(["PENDING", "FAILED"])
-        ).first()
-        status_str = "ERROR" if recent_err else ("HEALTHY" if m.is_active else "IDLE")
+            ErrorLog.error_type.in_(["MARKETPLACE_CONNECTION_ERROR", "LISTING_ERROR"]),
+            ErrorLog.status.in_(["PENDING", "FAILED"]),
+            ErrorLog.created_at >= health_cutoff,
+        ).order_by(desc(ErrorLog.created_at)).first()
+        # Same self-healing logic as suppliers: a later successful listing
+        # sync clears an earlier transient connection error.
+        last_activity = db.query(func.max(Listing.last_updated_at)).filter(
+            Listing.marketplace_id == m.id
+        ).scalar()
+        is_broken = latest_err is not None and (
+            last_activity is None or latest_err.created_at > last_activity
+        )
+        status_str = "ERROR" if is_broken else ("HEALTHY" if m.is_active else "IDLE")
+
+        days_left = None
+        if m.credentials_expires_at:
+            days_left = (m.credentials_expires_at - datetime.now(timezone.utc).replace(tzinfo=None)).days
+            if days_left <= 0:
+                credential_warnings.append(f"{m.name} credentials have EXPIRED — reauthorize immediately to restore sync.")
+                status_str = "ERROR"
+            elif days_left <= 30:
+                credential_warnings.append(f"{m.name} credentials expire in {days_left} day(s) — reauthorize soon to avoid a sync outage.")
+
         marketplaces_health.append(MarketplaceHealthStatus(
             id=m.id,
             name=m.name,
             is_active=m.is_active,
             status=status_str,
-            listing_count=l_count
+            listing_count=l_count,
+            credentials_expires_at=m.credentials_expires_at,
+            days_until_credentials_expire=days_left,
         ))
 
     # 7. Recent errors
@@ -101,9 +158,13 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         in_stock_products=in_stock_products,
         out_of_stock_products=out_of_stock_products,
         needs_attention=needs_attention,
+        total_orders_today=total_orders_today,
+        pending_orders=pending_orders,
+        revenue_30d=revenue_30d,
         suppliers_health=suppliers_health,
         marketplaces_health=marketplaces_health,
-        recent_errors=recent_errors
+        recent_errors=recent_errors,
+        credential_warnings=credential_warnings
     )
 
 @router.post("/reconcile-all")

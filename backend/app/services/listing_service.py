@@ -80,6 +80,66 @@ class ListingService:
         from app.adapters.registry import get_marketplace_adapter
         return get_marketplace_adapter(marketplace.adapter_class, credentials=credentials)
 
+    def reconcile_marketplace_listings(self, marketplace: Marketplace, adapter) -> int:
+        """
+        Compares internal Listing records against the marketplace's actual
+        live state (Spec Section 20: catalog_reconcile), catching drift from
+        changes made directly on the marketplace outside this system.
+
+        Currently only implemented for Shopify, whose Admin REST API makes
+        listing every live product straightforward. eBay's and Amazon's
+        equivalent "list everything I'm selling" calls need pagination and
+        marketplace-specific handling this system doesn't have yet — rather
+        than fabricate a reconciliation that doesn't happen, this returns 0
+        and the caller reports "not required" for those marketplaces so it's
+        clear no real drift-check ran, not that none was needed.
+        """
+        is_shopify = "shopify" in marketplace.adapter_class.lower() or "shopify" in marketplace.name.lower()
+        if not is_shopify:
+            return 0
+
+        res = adapter._request("/products.json?limit=50", method="GET")
+        shopify_products = res.get("products", [])
+        synced_count = 0
+        for sp in shopify_products:
+            sp_id = sp.get("id")
+            sp_status = sp.get("status", "active").upper()
+            db_status = "ACTIVE" if sp_status == "ACTIVE" else "WITHDRAWN"
+            for v in sp.get("variants", []):
+                sku = v.get("sku")
+                var_id = v.get("id")
+                price = Decimal(str(v.get("price", "0.00")))
+                qty = v.get("inventory_quantity", 0)
+                ext_id = f"shopify_{sp_id}_{var_id}"
+
+                prod = self.db.query(Product).filter(Product.sku == sku).first()
+                if not prod:
+                    continue
+
+                listing = self.db.query(Listing).filter(
+                    Listing.product_id == prod.id,
+                    Listing.marketplace_id == marketplace.id
+                ).first()
+
+                if not listing:
+                    listing = Listing(
+                        product_id=prod.id,
+                        marketplace_id=marketplace.id,
+                        external_listing_id=ext_id,
+                        status=db_status,
+                        selling_price=price,
+                        listed_qty=qty
+                    )
+                    self.db.add(listing)
+                else:
+                    listing.external_listing_id = ext_id
+                    listing.status = db_status
+                    listing.selling_price = price
+                    listing.listed_qty = qty
+                synced_count += 1
+        self.db.commit()
+        return synced_count
+
     def publish_product_to_marketplace(
         self,
         product_id: int,
@@ -100,6 +160,14 @@ class ListingService:
         marketplace = self.db.query(Marketplace).filter(Marketplace.id == marketplace_id).first()
         if not marketplace:
             raise ValueError(f"Marketplace {marketplace_id} not found")
+
+        from app.services.restriction_service import RestrictionService
+        blocking = RestrictionService(self.db).find_blocking_restriction(product, marketplace_id)
+        if blocking:
+            raise ValueError(
+                f"Cannot publish '{product.title}' to {marketplace.name}: {blocking.reason} "
+                f"(restriction #{blocking.id}, type: {blocking.restriction_type})"
+            )
 
         # Optionally persist title and description updates to canonical product
         if custom_title and custom_title.strip():

@@ -52,8 +52,11 @@ export default function ListingsPage() {
     setReconciling(true);
     try {
       const shopifyMarket = marketplaces.find(m => m.name.toLowerCase().includes("shopify"));
-      const marketId = shopifyMarket ? shopifyMarket.id : 4;
-      const res = await fetchApi<{ success: boolean; synced_count: number; message: string }>(`/listings/reconcile-store/${marketId}`, { method: "POST" });
+      if (!shopifyMarket) {
+        setFeedback("No Shopify store connected yet. Connect one on the Marketplaces page first.");
+        return;
+      }
+      const res = await fetchApi<{ success: boolean; synced_count: number; message: string }>(`/listings/reconcile-store/${shopifyMarket.id}`, { method: "POST" });
       setFeedback(res.message || "Successfully synced store listings!");
       await loadListings();
     } catch (err: any) {
@@ -309,7 +312,7 @@ export default function ListingsPage() {
       </div>
 
       {/* Simplified Listings Table */}
-      <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+      <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-[#1a1a1a]">
             <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
@@ -347,9 +350,9 @@ export default function ListingsPage() {
                       {/* Product Name */}
                       <td className="px-6 py-3.5 font-medium text-[#0a0a0a]">
                         <div className="max-w-md">
-                          <div className="line-clamp-1 font-semibold">{listing.product_title || "Enterprise Product"}</div>
+                          <div className="line-clamp-1 font-semibold">{listing.product_title || "Unnamed Product"}</div>
                           <div className="text-[11px] text-[#767676] font-normal mt-0.5">
-                            Code: <span className="font-mono text-[#905831] font-medium">{listing.product_sku || "N/A"}</span>
+                            Code: <span className="font-mono text-[#6C5DD3] font-medium">{listing.product_sku || "N/A"}</span>
                           </div>
                         </div>
                       </td>
@@ -443,7 +446,7 @@ export default function ListingsPage() {
       {/* Edit Listing Modal */}
       {editingListing && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-xl max-w-lg w-full p-6 shadow-xl space-y-5">
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm max-w-lg w-full p-6 shadow-xl space-y-5">
             <div className="flex items-start justify-between pb-3 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-bold text-[#0a0a0a]">Edit Store Listing</h3>
@@ -469,7 +472,7 @@ export default function ListingsPage() {
                     step="0.01"
                     value={editPrice}
                     onChange={(e) => setEditPrice(e.target.value)}
-                    className="w-full pl-7 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#0a0a0a] font-semibold focus:outline-none focus:border-[#0a0a0a]"
+                    className="w-full pl-7 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#0a0a0a] font-semibold focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                   />
                 </div>
                 <p className="text-[11px] text-[#767676] mt-1">What buyers will pay on {editingListing.marketplace_name}.</p>
@@ -483,7 +486,7 @@ export default function ListingsPage() {
                   type="number"
                   value={editQty}
                   onChange={(e) => setEditQty(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#0a0a0a] font-semibold focus:outline-none focus:border-[#0a0a0a]"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#0a0a0a] font-semibold focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                 />
                 <p className="text-[11px] text-[#767676] mt-1">How many units the marketplace shows as available.</p>
               </div>
@@ -534,7 +537,7 @@ export default function ListingsPage() {
       {/* List a Product Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm max-w-lg w-full p-6 shadow-xl space-y-4">
             <div className="flex items-start justify-between pb-3 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-bold text-[#0a0a0a]">List a Product in Your Store</h3>
@@ -560,7 +563,7 @@ export default function ListingsPage() {
                     setSelectedProductId(pId);
                     updateAddPrice(pId, selectedMarketplaceId);
                   }}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a]"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                 >
                   {catalogProducts.map((p) => {
                     const listedCount = listings.filter(l => l.product_id === p.id).length;
@@ -584,7 +587,7 @@ export default function ListingsPage() {
                     setSelectedMarketplaceId(mId);
                     updateAddPrice(Number(selectedProductId), mId);
                   }}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a]"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                 >
                   {marketplaces.map((m) => {
                     const existing = listings.find(
@@ -614,7 +617,7 @@ export default function ListingsPage() {
                         <button
                           type="button"
                           onClick={() => randomizeAddPrice(cost || 50)}
-                          className="text-[11px] text-[#905831] hover:text-[#0a0a0a] font-medium flex items-center gap-1 bg-[#905831]/10 px-2 py-0.5 rounded border border-[#905831]/20 transition-colors"
+                          className="text-[11px] text-[#6C5DD3] hover:text-[#0a0a0a] font-medium flex items-center gap-1 bg-[#6C5DD3]/10 px-2 py-0.5 rounded border border-[#6C5DD3]/20 transition-colors"
                           title="Generate a random price with 10%-35% margin"
                         >
                           <Sparkles className="h-3 w-3" />
@@ -638,7 +641,7 @@ export default function ListingsPage() {
                         value={addCustomPrice}
                         onChange={(e) => setAddCustomPrice(e.target.value)}
                         placeholder="Enter custom selling price..."
-                        className="w-full pl-7 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#0a0a0a] font-semibold focus:outline-none focus:border-[#0a0a0a]"
+                        className="w-full pl-7 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#0a0a0a] font-semibold focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                       />
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-[#767676] mt-1">
@@ -666,7 +669,7 @@ export default function ListingsPage() {
                     </p>
                   </div>
                 ) : (
-                  <div className="p-3 bg-[#905831]/[0.06] rounded-lg border border-[#905831]/20 text-xs text-[#905831]">
+                  <div className="p-3 bg-[#6C5DD3]/[0.06] rounded-lg border border-[#6C5DD3]/20 text-xs text-[#6C5DD3]">
                     <div className="font-semibold mb-0.5 flex items-center gap-1.5">
                       <Sparkles className="h-3.5 w-3.5" />
                       Automated Price & Stock Sync:
@@ -714,7 +717,7 @@ export default function ListingsPage() {
       {/* Remove Listing Confirmation Modal */}
       {deleteConfirmListing && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm max-w-md w-full p-6 shadow-xl space-y-4">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2.5 text-rose-600">
                 <div className="w-9 h-9 rounded-full bg-rose-50 border border-rose-200 flex items-center justify-center">

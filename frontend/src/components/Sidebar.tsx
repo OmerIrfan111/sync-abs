@@ -3,33 +3,57 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { 
-  LayoutDashboard, 
-  Layers, 
-  Truck, 
-  Store, 
-  History, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Layers,
+  Truck,
+  Store,
+  History,
+  Settings,
   SlidersHorizontal,
-  Activity
+  Activity,
+  ShoppingCart,
+  BarChart3
 } from "lucide-react";
 
-const navigation = [
-  { name: "Store Overview", href: "/", icon: LayoutDashboard, hint: "Key numbers & store health" },
-  { name: "Products to Sell", href: "/catalog", icon: Layers, hint: "Browse & select items" },
-  { name: "Your Online Stores", href: "/listings", icon: Store, hint: "Live items & selling prices" },
-  { name: "Pricing & Stock Rules", href: "/rules", icon: SlidersHorizontal, hint: "Set your profit margins" },
-  { name: "Wholesale Suppliers", href: "/suppliers", icon: Truck, hint: "Distributors & stock feeds" },
-  { name: "Connect Stores", href: "/marketplaces", icon: Settings, hint: "Amazon, eBay, Shopify..." },
-  { name: "Activity & Alerts", href: "/logs", icon: History, hint: "Recent updates & notifications" },
+const navGroups = [
+  {
+    label: "Overview",
+    items: [
+      { name: "Store Overview", href: "/", icon: LayoutDashboard },
+      { name: "Analytics", href: "/analytics", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Sell",
+    items: [
+      { name: "Products to Sell", href: "/catalog", icon: Layers },
+      { name: "Your Online Stores", href: "/listings", icon: Store },
+      { name: "Pricing & Stock Rules", href: "/rules", icon: SlidersHorizontal },
+    ],
+  },
+  {
+    label: "Connections",
+    items: [
+      { name: "Wholesale Suppliers", href: "/suppliers", icon: Truck },
+      { name: "Connect Stores", href: "/marketplaces", icon: Settings },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { name: "Orders", href: "/orders", icon: ShoppingCart },
+      { name: "Activity & Alerts", href: "/logs", icon: History },
+    ],
+  },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col justify-between h-screen sticky top-0 z-30">
-      <div>
+    <aside className="w-64 bg-white border-r border-gray-100 flex flex-col justify-between h-screen sticky top-0 z-30">
+      <div className="overflow-y-auto">
         {/* Brand Header */}
         <div className="h-16 flex items-center px-6 border-b border-gray-100">
           <Link href="/" className="flex items-center">
@@ -42,41 +66,43 @@ export default function Sidebar() {
         </div>
 
         {/* Navigation Links */}
-        <nav className="p-3 space-y-0.5">
-          {navigation.map((item) => {
-            const isActive = pathname === item.href;
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? "bg-gray-900 text-white"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                }`}
-              >
-                <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-white" : "text-gray-400"}`} />
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-xs leading-none">
-                    {item.name}
-                  </div>
-                  <div className={`text-[10px] mt-1 leading-none ${isActive ? "text-gray-300" : "text-gray-400"}`}>
-                    {item.hint}
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
+        <nav className="p-3 space-y-4">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <div className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                {group.label}
+              </div>
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const isActive = pathname === item.href;
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                        isActive
+                          ? "bg-[#6C5DD3]/10 text-[#6C5DD3]"
+                          : "text-gray-600 hover:text-[#1B1B2F] hover:bg-gray-50"
+                      }`}
+                    >
+                      <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-[#6C5DD3]" : "text-gray-400"}`} />
+                      <span className="font-semibold text-xs">{item.name}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
       </div>
 
       {/* Footer Status */}
       <div className="p-4 border-t border-gray-100">
-        <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-200/70">
+        <div className="p-2.5 bg-[#6C5DD3]/[0.06] rounded-xl border border-[#6C5DD3]/10">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[11px] font-semibold text-gray-800 flex items-center gap-1.5">
-              <Activity className="h-3 w-3 text-[#905831]" />
+            <span className="text-[11px] font-semibold text-[#1B1B2F] flex items-center gap-1.5">
+              <Activity className="h-3 w-3 text-[#6C5DD3]" />
               Sync Engine
             </span>
             <span className="flex h-1.5 w-1.5 relative">

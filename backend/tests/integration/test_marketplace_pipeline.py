@@ -119,3 +119,72 @@ def test_listings_api_lifecycle(client, db_session):
     assert withdraw_resp.status_code == 200
     assert withdraw_resp.json()["status"] == "WITHDRAWN"
     assert withdraw_resp.json()["listed_qty"] == 0
+
+
+def test_product_restriction_blocks_publishing(db_session):
+    from app.models.product_restriction import ProductRestriction
+
+    supplier = Supplier(name="Ingram Micro", adapter_class="MockSupplierAdapter", is_active=True)
+    marketplace = Marketplace(name="eBay Restriction Test", adapter_class="MockEBayAdapter", is_active=True)
+    product = Product(sku="RESTRICTED-SKU", title="Restricted Item", category="Hazmat", is_enabled=True)
+    db_session.add_all([supplier, marketplace, product])
+    db_session.commit()
+
+    sp = SupplierProduct(
+        product_id=product.id, supplier_id=supplier.id, supplier_sku="RESTRICTED-001",
+        cost=Decimal("10.00"), qty_available=5, stock_status="IN_STOCK", availability_status="ACTIVE",
+    )
+    db_session.add(sp)
+
+    restriction = ProductRestriction(
+        product_id=product.id,
+        marketplace_id=marketplace.id,
+        restriction_type="BLOCKED",
+        reason="Requires hazmat shipping certification not yet obtained",
+    )
+    db_session.add(restriction)
+    db_session.commit()
+
+    listing_service = ListingService(db_session)
+    with pytest.raises(ValueError, match="hazmat shipping certification"):
+        listing_service.publish_product_to_marketplace(product.id, marketplace.id)
+
+    # No listing should have been created
+    assert db_session.query(Listing).filter(Listing.product_id == product.id).count() == 0
+
+
+def test_category_wide_restriction_blocks_any_matching_product(db_session):
+    from app.models.product_restriction import ProductRestriction
+
+    supplier = Supplier(name="Ingram Micro", adapter_class="MockSupplierAdapter", is_active=True)
+    marketplace = Marketplace(name="eBay Category Restriction Test", adapter_class="MockEBayAdapter", is_active=True)
+    product = Product(sku="LITHIUM-BATTERY-01", title="Lithium Battery Pack", category="Batteries", is_enabled=True)
+    db_session.add_all([supplier, marketplace, product])
+    db_session.commit()
+
+    sp = SupplierProduct(
+        product_id=product.id, supplier_id=supplier.id, supplier_sku="BATT-001",
+        cost=Decimal("15.00"), qty_available=10, stock_status="IN_STOCK", availability_status="ACTIVE",
+    )
+    db_session.add(sp)
+
+    # Category-wide restriction (no specific product_id), applies to all marketplaces (no marketplace_id)
+    restriction = ProductRestriction(
+        category="Batteries",
+        restriction_type="REQUIRES_APPROVAL",
+        reason="Lithium battery items need compliance review before listing anywhere",
+    )
+    db_session.add(restriction)
+    db_session.commit()
+
+    listing_service = ListingService(db_session)
+    with pytest.raises(ValueError, match="compliance review"):
+        listing_service.publish_product_to_marketplace(product.id, marketplace.id)
+
+    # Once approved, publishing should succeed
+    from datetime import datetime, timezone
+    restriction.approved_at = datetime.now(timezone.utc)
+    db_session.commit()
+
+    listing = listing_service.publish_product_to_marketplace(product.id, marketplace.id)
+    assert listing.status == "ACTIVE"

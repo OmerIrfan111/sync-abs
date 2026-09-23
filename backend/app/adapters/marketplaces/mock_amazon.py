@@ -96,3 +96,44 @@ class MockAmazonAdapter(MarketplaceAdapter):
         if external_listing_id not in MOCK_AMAZON_LISTINGS:
             raise KeyError(f"Listing ID {external_listing_id} not found on Amazon")
         return MOCK_AMAZON_LISTINGS[external_listing_id]
+
+    # ── V2: Mock Order Methods ──
+
+    def fetch_orders(self, since_datetime=None) -> list:
+        """Returns simulated Amazon orders for testing."""
+        from datetime import datetime, timezone
+        return [
+            {
+                "order_id": f"amz-{uuid.uuid4().hex[:10]}",
+                "buyer_username": "amazon_buyer_test",
+                "buyer_name": "Amazon Test Buyer",
+                "shipping_address": {
+                    "name": "Amazon Test Buyer",
+                    "street": "456 Commerce Ave",
+                    "city": "Seattle",
+                    "state": "WA",
+                    "zip": "98101",
+                    "country": "US",
+                },
+                "order_total": Decimal("89.99"),
+                "marketplace_fees": Decimal("13.50"),
+                "currency": "USD",
+                "ordered_at": datetime.now(timezone.utc),
+                "items": [
+                    {
+                        "item_id": f"amz-item-{uuid.uuid4().hex[:6]}",
+                        "sku": "ING-SAMS-T7-1TB",
+                        "title": "Samsung T7 Portable SSD 1TB",
+                        "quantity": 1,
+                        "unit_price": Decimal("89.99"),
+                    }
+                ],
+            }
+        ]
+
+    def update_tracking(self, marketplace_order_id: str, tracking_number: str, carrier: str) -> bool:
+        return True
+
+    def acknowledge_order(self, marketplace_order_id: str) -> bool:
+        return True
+

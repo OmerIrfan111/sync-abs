@@ -196,7 +196,7 @@ export default function RulesPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-bold text-[#0a0a0a] tracking-tight">Pricing & Stock Rules</h1>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#905831]/10 text-[#905831] border border-[#905831]/20">
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#6C5DD3]/10 text-[#6C5DD3] border border-[#6C5DD3]/20">
               Automated Calculations
             </span>
           </div>
@@ -220,10 +220,10 @@ export default function RulesPage() {
 
       {/* Main Profit Form */}
       <form onSubmit={handleSaveGlobalRules} className="space-y-6">
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-5">
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5">
           <div className="border-b border-gray-100 pb-3">
             <h2 className="text-base font-bold text-[#0a0a0a] flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-[#905831]" />
+              <DollarSign className="h-4 w-4 text-[#6C5DD3]" />
               <span>How much profit do you want to make?</span>
             </h2>
             <p className="text-xs text-[#767676] mt-0.5">
@@ -263,9 +263,9 @@ export default function RulesPage() {
                     max="500"
                     value={markupPercent}
                     onChange={(e) => setMarkupPercent(e.target.value)}
-                    className="w-20 px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-[#0a0a0a] text-center focus:outline-none focus:border-[#0a0a0a]"
+                    className="w-20 px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-[#0a0a0a] text-center focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                   />
-                  <span className="text-sm font-semibold text-[#905831]">% profit</span>
+                  <span className="text-sm font-semibold text-[#6C5DD3]">% profit</span>
                 </div>
               </div>
               <p className="text-[11px] text-[#767676] mt-3">
@@ -306,7 +306,7 @@ export default function RulesPage() {
                       min="0"
                       value={fixedDollar}
                       onChange={(e) => setFixedDollar(e.target.value)}
-                      className="w-24 pl-6 pr-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                      className="w-24 pl-6 pr-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                     />
                   </div>
                   <span className="text-sm font-semibold text-emerald-700">flat profit</span>
@@ -321,7 +321,7 @@ export default function RulesPage() {
           {/* Live Preview Box */}
           <div className="p-4 rounded-xl bg-gray-50 border border-gray-200">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-[#905831] uppercase tracking-wider flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-[#6C5DD3] uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5" />
                 <span>Live Calculation Preview</span>
               </span>
@@ -346,7 +346,7 @@ export default function RulesPage() {
               <div className="flex items-center gap-5">
                 <div className="text-right">
                   <span className="text-xs text-[#767676] block">Customer Pays</span>
-                  <span className="text-xl font-bold text-[#905831]">${sellingPricePreview.toFixed(2)}</span>
+                  <span className="text-xl font-bold text-[#6C5DD3]">${sellingPricePreview.toFixed(2)}</span>
                 </div>
                 <div className="text-right pl-5 border-l border-gray-200">
                   <span className="text-xs text-[#767676] block">Your Profit</span>
@@ -358,10 +358,10 @@ export default function RulesPage() {
         </div>
 
         {/* Stock Safety Buffer Section */}
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
           <div className="border-b border-gray-100 pb-3">
             <h2 className="text-base font-bold text-[#0a0a0a] flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-[#905831]" />
+              <ShieldCheck className="h-4 w-4 text-[#6C5DD3]" />
               <span>Stock Protection & Safety Buffer</span>
             </h2>
             <p className="text-xs text-[#767676] mt-0.5">
@@ -383,7 +383,7 @@ export default function RulesPage() {
                     max="20"
                     value={safetyBuffer}
                     onChange={(e) => setSafetyBuffer(e.target.value)}
-                    className="w-14 px-2 py-1 bg-white border border-gray-300 rounded-lg text-xs font-bold text-[#0a0a0a] text-center focus:outline-none focus:border-[#0a0a0a]"
+                    className="w-14 px-2 py-1 bg-white border border-gray-300 rounded-lg text-xs font-bold text-[#0a0a0a] text-center focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                   />
                   <span className="text-[#767676] font-medium">units</span>
                 </div>
@@ -438,7 +438,7 @@ export default function RulesPage() {
       </form>
 
       {/* Advanced Collapsible Section */}
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
+      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
@@ -446,7 +446,7 @@ export default function RulesPage() {
         >
           <div>
             <h3 className="text-sm font-bold text-[#0a0a0a] flex items-center gap-2">
-              <SlidersHorizontal className="h-4 w-4 text-[#905831]" />
+              <SlidersHorizontal className="h-4 w-4 text-[#6C5DD3]" />
               <span>Set different rules for specific products or stores (Advanced)</span>
             </h3>
             <p className="text-xs text-[#767676] mt-0.5">
@@ -491,7 +491,7 @@ export default function RulesPage() {
                       {pricingRules.filter(r => r.product_id).map((r) => (
                         <tr key={r.id}>
                           <td className="px-3.5 py-2.5 font-medium text-[#0a0a0a]">{r.product_title || `Product #${r.product_id}`}</td>
-                          <td className="px-3.5 py-2.5 text-[#905831] font-semibold">{r.percentage}% markup</td>
+                          <td className="px-3.5 py-2.5 text-[#6C5DD3] font-semibold">{r.percentage}% markup</td>
                           <td className="px-3.5 py-2.5 text-right">
                             <button
                               onClick={() => handleDeleteRule("pricing", r.id)}
@@ -511,7 +511,7 @@ export default function RulesPage() {
             {/* Live Scenario Simulator */}
             <div className="p-4 bg-gray-50/70 rounded-xl border border-gray-200 space-y-2.5">
               <h4 className="text-xs font-semibold text-[#0a0a0a] flex items-center gap-1.5">
-                <Play className="h-3.5 w-3.5 text-[#905831]" />
+                <Play className="h-3.5 w-3.5 text-[#6C5DD3]" />
                 <span>Live Calculator Simulator</span>
               </h4>
               <p className="text-[11px] text-[#767676]">
@@ -522,7 +522,7 @@ export default function RulesPage() {
                 <select
                   value={simProductId}
                   onChange={(e) => setSimProductId(Number(e.target.value))}
-                  className="flex-1 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a]"
+                  className="flex-1 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                 >
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -548,7 +548,7 @@ export default function RulesPage() {
                   </div>
                   <div>
                     <span className="text-[#767676] block text-[10px]">Calculated Selling Price</span>
-                    <span className="font-bold text-[#905831]">${Number(simPreview.pricing?.calculated_price ?? 0).toFixed(2)}</span>
+                    <span className="font-bold text-[#6C5DD3]">${Number(simPreview.pricing?.calculated_price ?? 0).toFixed(2)}</span>
                   </div>
                   <div>
                     <span className="text-[#767676] block text-[10px]">Stock Shown in Store</span>
@@ -568,7 +568,7 @@ export default function RulesPage() {
       {/* Add Product Override Modal */}
       {showOverrideModal && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm max-w-md w-full p-6 shadow-xl space-y-4">
             <div className="flex items-start justify-between pb-3 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-bold text-[#0a0a0a]">Add Custom Product Rule</h3>
@@ -588,7 +588,7 @@ export default function RulesPage() {
                 <select
                   value={overrideProductId}
                   onChange={(e) => setOverrideProductId(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a]"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                 >
                   <option value="">Select a product...</option>
                   {products.map((p) => (
@@ -604,9 +604,9 @@ export default function RulesPage() {
                     type="number"
                     value={overridePercent}
                     onChange={(e) => setOverridePercent(e.target.value)}
-                    className="w-24 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-semibold text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                    className="w-24 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-semibold text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                   />
-                  <span className="text-xs text-[#905831] font-semibold">% profit</span>
+                  <span className="text-xs text-[#6C5DD3] font-semibold">% profit</span>
                 </div>
               </div>
             </div>

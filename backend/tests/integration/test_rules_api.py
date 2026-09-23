@@ -4,6 +4,42 @@ from app.models.product import Product
 from app.models.marketplace import Marketplace
 from app.models.supplier import Supplier
 
+def test_fee_margin_rule_autofills_from_marketplace_fee_schedule(client, admin_auth_headers, db_session):
+    """
+    A FEE_MARGIN rule created with marketplace_fee=0 (i.e. not specified)
+    should pick up the marketplace's default fee schedule instead of
+    silently pricing as if there were no marketplace commission at all.
+    """
+    from app.models.marketplace_fee_schedule import MarketplaceFeeSchedule
+
+    marketplace = Marketplace(name="eBay Fee Schedule Test", adapter_class="MockEBayAdapter", is_active=True)
+    db_session.add(marketplace)
+    db_session.commit()
+
+    db_session.add(MarketplaceFeeSchedule(marketplace_id=marketplace.id, fee_percentage=Decimal("13.25"), notes="test default"))
+    db_session.commit()
+
+    resp = client.post("/api/v1/rules/pricing", json={
+        "marketplace_id": marketplace.id,
+        "rule_type": "FEE_MARGIN",
+        "desired_margin": 20,
+        "marketplace_fee": 0,
+    }, headers=admin_auth_headers)
+
+    assert resp.status_code == 201, resp.text
+    assert float(resp.json()["marketplace_fee"]) == 13.25
+
+    # An explicit non-zero fee should NOT be overridden by the schedule
+    resp2 = client.post("/api/v1/rules/pricing", json={
+        "marketplace_id": marketplace.id,
+        "rule_type": "FEE_MARGIN",
+        "desired_margin": 20,
+        "marketplace_fee": 8.5,
+    }, headers=admin_auth_headers)
+    assert resp2.status_code == 201, resp2.text
+    assert float(resp2.json()["marketplace_fee"]) == 8.5
+
+
 def test_rules_api_crud_and_preview(client, admin_auth_headers, db_session):
     # Setup baseline data
     product = Product(sku="TEST-RULE-PROD", title="Smart Hub Rule Tester")

@@ -81,7 +81,8 @@ class LiveShopifyAdapter(MarketplaceAdapter):
             elif err.code == 404:
                 raise ConnectionError(f"Shopify Resource Not Found (404) at {url}. Verify shop domain: {self.shop_domain}")
             elif err.code == 429:
-                raise RuntimeError("Shopify API Rate Limit Exceeded (429). Please retry shortly.")
+                retry_after = err.headers.get("Retry-After") if err.headers else None
+                raise ConnectionError(f"Shopify API Rate Limit Exceeded (429). Retry-After: {retry_after or 'unspecified'}s.")
             raise RuntimeError(f"Shopify API HTTP {err.code}: {err_body}")
         except urllib.error.URLError as err:
             logger.error(f"Shopify Network Error: {err.reason}")

@@ -19,3 +19,4 @@ class SupplierProduct(Base, TimestampMixin):
 
     product = relationship("Product", back_populates="supplier_products")
     supplier = relationship("Supplier", back_populates="supplier_products")
+    warehouse_stock = relationship("WarehouseStock", back_populates="supplier_product", cascade="all, delete-orphan")

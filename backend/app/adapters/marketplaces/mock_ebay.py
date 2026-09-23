@@ -131,3 +131,47 @@ class MockEBayAdapter(MarketplaceAdapter):
         if external_listing_id not in MOCK_EBAY_LISTINGS:
             raise KeyError(f"Listing ID {external_listing_id} not found on eBay")
         return MOCK_EBAY_LISTINGS[external_listing_id]
+
+    # ── V2: Mock Order Methods ──
+
+    def fetch_orders(self, since_datetime=None) -> list:
+        """Returns simulated eBay orders for testing the order pipeline."""
+        from datetime import datetime, timezone
+        # Return a sample order with items matching our catalog SKUs
+        return [
+            {
+                "order_id": f"ebay-order-{uuid.uuid4().hex[:8]}",
+                "buyer_username": "test_buyer_ebay",
+                "buyer_name": "Test Buyer",
+                "shipping_address": {
+                    "name": "Test Buyer",
+                    "street": "123 Test St",
+                    "city": "Dallas",
+                    "state": "TX",
+                    "zip": "75201",
+                    "country": "US",
+                },
+                "order_total": Decimal("149.99"),
+                "marketplace_fees": Decimal("18.75"),
+                "currency": "USD",
+                "ordered_at": datetime.now(timezone.utc),
+                "items": [
+                    {
+                        "item_id": f"ebay-item-{uuid.uuid4().hex[:6]}",
+                        "sku": "ING-LOGI-MXKEYS",
+                        "title": "Logitech MX Keys Advanced Wireless Illuminated Keyboard",
+                        "quantity": 1,
+                        "unit_price": Decimal("149.99"),
+                    }
+                ],
+            }
+        ]
+
+    def update_tracking(self, marketplace_order_id: str, tracking_number: str, carrier: str) -> bool:
+        """Simulates pushing tracking info to eBay."""
+        return True
+
+    def acknowledge_order(self, marketplace_order_id: str) -> bool:
+        """Simulates acknowledging an eBay order."""
+        return True
+

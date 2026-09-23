@@ -121,6 +121,9 @@ class LiveEBayAdapter(MarketplaceAdapter):
                     f"eBay Live API Authorization Error (401): {err.reason}. "
                     "Your Refresh Token or User Token could not be verified by eBay."
                 )
+            if err.code == 429:
+                retry_after = err.headers.get("Retry-After") if err.headers else None
+                raise ConnectionError(f"eBay API Rate Limit Exceeded (429). Retry-After: {retry_after or 'unspecified'}s.")
             raise ConnectionError(f"eBay API error (HTTP {err.code}): {err.reason}")
         except Exception as err:
             raise ConnectionError(f"eBay server unreachable: {err}")
@@ -302,9 +305,55 @@ class LiveEBayAdapter(MarketplaceAdapter):
             raise e
 
     def update_price(self, external_listing_id: str, sku: str, price: Decimal) -> bool:
-        """Updates selling price on eBay."""
-        logger.info(f"Live eBay price update for {sku} to ${price}")
-        return True
+        """
+        Updates selling price on eBay by finding the active offer for this SKU
+        and PATCHing its pricingSummary (price lives on the offer, not the
+        inventory item, in eBay's Sell Inventory API).
+        """
+        self.test_connection()
+        actual_sku = sku or external_listing_id.replace("ebay_live_", "").replace("ebay_listing_", "")
+
+        try:
+            offer_lookup_url = f"{self.base_url}/sell/inventory/v1/offer?sku={urllib.parse.quote(actual_sku)}"
+            req = urllib.request.Request(offer_lookup_url, headers=self._get_auth_header())
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+                offers = data.get("offers", [])
+        except urllib.error.HTTPError as err:
+            err_body = err.read().decode("utf-8", errors="ignore")
+            logger.error(f"eBay offer lookup failed for SKU {actual_sku} (HTTP {err.code}): {err_body}")
+            raise RuntimeError(f"eBay price update failed: could not find offer for SKU {actual_sku} ({err.code})")
+
+        if not offers:
+            logger.warning(f"No eBay offer found for SKU {actual_sku}; price not updated.")
+            return False
+
+        offer_id = offers[0].get("offerId")
+        formatted_price = str(Decimal(str(price)).quantize(Decimal("0.01")))
+        patch_url = f"{self.base_url}/sell/inventory/v1/offer/{offer_id}"
+        payload = {
+            "pricingSummary": {
+                "price": {
+                    "value": formatted_price,
+                    "currency": "USD"
+                }
+            }
+        }
+
+        req = urllib.request.Request(
+            patch_url,
+            data=json.dumps(payload).encode("utf-8"),
+            method="PUT",
+            headers=self._get_auth_header()
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                logger.info(f"eBay price updated for SKU {actual_sku} to ${formatted_price} (offer {offer_id})")
+                return resp.status in (200, 204)
+        except urllib.error.HTTPError as err:
+            err_body = err.read().decode("utf-8", errors="ignore")
+            logger.error(f"eBay update_price failed for SKU {actual_sku} (HTTP {err.code}): {err_body}")
+            raise RuntimeError(f"eBay price update failed ({err.code}): {err_body}")
 
     def withdraw_listing(self, external_listing_id: str, sku: Optional[str] = None) -> bool:
         """Withdraws / ends active listing and sets live stock to 0 on eBay."""
@@ -343,3 +392,140 @@ class LiveEBayAdapter(MarketplaceAdapter):
         req = urllib.request.Request(url, headers=self._get_auth_header())
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read().decode())
+
+    # ── V2: Live Order Management ──
+
+    def fetch_orders(self, since_datetime=None) -> list:
+        """
+        Fetches new/unshipped orders from eBay Sell Fulfillment API.
+        GET /sell/fulfillment/v1/order?filter=orderfulfillmentstatus:{NOT_STARTED|IN_PROGRESS}
+        """
+        self._refresh_access_token_if_needed()
+
+        filter_str = "orderfulfillmentstatus:{NOT_STARTED|IN_PROGRESS}"
+        url = f"{self.base_url}/sell/fulfillment/v1/order?filter={urllib.parse.quote(filter_str)}&limit=50"
+
+        try:
+            req = urllib.request.Request(url, headers=self._get_auth_header())
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode())
+                orders = []
+
+                for ebay_order in data.get("orders", []):
+                    order_id = ebay_order.get("orderId", "")
+                    buyer = ebay_order.get("buyer", {})
+                    payment = ebay_order.get("paymentSummary", {})
+                    pricing = ebay_order.get("pricingSummary", {})
+
+                    # Extract shipping address
+                    fulfillment_start = ebay_order.get("fulfillmentStartInstructions", [])
+                    ship_to = {}
+                    if fulfillment_start:
+                        ship_to_ref = fulfillment_start[0].get("shippingStep", {}).get("shipTo", {})
+                        contact = ship_to_ref.get("contactAddress", {})
+                        ship_to = {
+                            "name": ship_to_ref.get("fullName", ""),
+                            "street": contact.get("addressLine1", ""),
+                            "city": contact.get("city", ""),
+                            "state": contact.get("stateOrProvince", ""),
+                            "zip": contact.get("postalCode", ""),
+                            "country": contact.get("countryCode", "US"),
+                        }
+
+                    # Extract order total
+                    total_val = pricing.get("total", {}).get("value", "0")
+                    fee_val = "0"
+                    for payment_item in payment.get("payments", []):
+                        for fee in payment_item.get("totalFeeAmount", {}).get("value", "0"):
+                            pass
+                    # Use totalMarketplaceFee if available
+                    fee_val = pricing.get("totalMarketplaceFee", {}).get("value", "0")
+
+                    # Parse line items
+                    items = []
+                    for line in ebay_order.get("lineItems", []):
+                        items.append({
+                            "item_id": line.get("lineItemId", ""),
+                            "sku": line.get("sku", ""),
+                            "title": line.get("title", ""),
+                            "quantity": int(line.get("quantity", 1)),
+                            "unit_price": Decimal(str(line.get("lineItemCost", {}).get("value", "0"))),
+                        })
+
+                    # Parse order creation date
+                    ordered_at = None
+                    creation_date = ebay_order.get("creationDate", "")
+                    if creation_date:
+                        try:
+                            from datetime import datetime
+                            ordered_at = datetime.fromisoformat(creation_date.replace("Z", "+00:00"))
+                        except Exception:
+                            pass
+
+                    orders.append({
+                        "order_id": order_id,
+                        "buyer_username": buyer.get("username", ""),
+                        "buyer_name": ship_to.get("name", ""),
+                        "shipping_address": ship_to,
+                        "order_total": Decimal(str(total_val)),
+                        "marketplace_fees": Decimal(str(fee_val)),
+                        "currency": pricing.get("total", {}).get("currency", "USD"),
+                        "ordered_at": ordered_at,
+                        "items": items,
+                    })
+
+                logger.info(f"Fetched {len(orders)} orders from eBay ({self.environment})")
+                return orders
+
+        except urllib.error.HTTPError as err:
+            if err.code == 401:
+                if self._refresh_access_token_if_needed():
+                    return self.fetch_orders(since_datetime)
+            err_body = err.read().decode("utf-8", errors="ignore")
+            logger.error(f"eBay fetch_orders failed (HTTP {err.code}): {err_body}")
+            raise ConnectionError(f"eBay Orders API error ({err.code}): {err_body}")
+        except Exception as exc:
+            logger.error(f"eBay fetch_orders error: {exc}")
+            raise
+
+    def update_tracking(self, marketplace_order_id: str, tracking_number: str, carrier: str) -> bool:
+        """
+        Pushes shipment tracking to eBay via Sell Fulfillment API.
+        POST /sell/fulfillment/v1/order/{orderId}/shipping_fulfillment
+        """
+        self._refresh_access_token_if_needed()
+
+        url = f"{self.base_url}/sell/fulfillment/v1/order/{urllib.parse.quote(marketplace_order_id)}/shipping_fulfillment"
+
+        # Map common carrier names to eBay's expected values
+        carrier_map = {
+            "ups": "UPS",
+            "fedex": "FedEx",
+            "usps": "USPS",
+            "dhl": "DHL",
+        }
+        ebay_carrier = carrier_map.get(carrier.lower().strip(), carrier) if carrier else "OTHER"
+
+        payload = {
+            "trackingNumber": tracking_number,
+            "shippingCarrierCode": ebay_carrier,
+        }
+
+        try:
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(url, data=data, method="POST", headers=self._get_auth_header())
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                logger.info(f"eBay tracking updated for order {marketplace_order_id}: {tracking_number} ({ebay_carrier})")
+                return resp.status in (200, 201)
+        except urllib.error.HTTPError as err:
+            err_body = err.read().decode("utf-8", errors="ignore")
+            logger.error(f"eBay update_tracking failed (HTTP {err.code}): {err_body}")
+            return False
+        except Exception as exc:
+            logger.error(f"eBay update_tracking error: {exc}")
+            return False
+
+    def acknowledge_order(self, marketplace_order_id: str) -> bool:
+        """eBay auto-acknowledges orders. No action needed."""
+        return True
+

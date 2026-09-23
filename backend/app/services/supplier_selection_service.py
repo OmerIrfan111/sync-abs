@@ -82,3 +82,34 @@ class SupplierSelectionService:
 
         # Default fallback
         return min(candidates, key=lambda sp: sp.cost)
+
+    def select_best_supplier_for_order_item(
+        self,
+        product_id: int,
+        quantity: int = 1,
+        selection_rule_override: Optional[str] = None
+    ) -> Optional[SupplierProduct]:
+        """
+        Order routing variant of select_best_supplier: only considers suppliers
+        with enough physical stock to cover the requested quantity, falling back
+        to the highest-stock candidate if none can fully cover it.
+        """
+        product = self.db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            return None
+
+        supplier_products = [
+            sp for sp in product.supplier_products
+            if sp.availability_status == "ACTIVE" and sp.supplier and sp.supplier.is_active
+        ]
+        if not supplier_products:
+            return None
+
+        sufficient_stock = [sp for sp in supplier_products if sp.qty_available >= quantity]
+        if not sufficient_stock:
+            # No single supplier can fully cover the quantity; fall back to best available stock
+            return max(supplier_products, key=lambda sp: sp.qty_available)
+
+        return self.select_best_supplier(product, selection_rule_override) if len(sufficient_stock) == len(supplier_products) else min(
+            sufficient_stock, key=lambda sp: sp.cost
+        )

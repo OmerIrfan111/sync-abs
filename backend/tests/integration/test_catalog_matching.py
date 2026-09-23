@@ -102,6 +102,63 @@ def test_change_detection_and_sync_log(db_session):
     assert qty_log.old_value == "20"
     assert qty_log.new_value == "8"
 
+def test_upsert_supplier_product_populates_warehouse_stock(db_session):
+    """
+    Suppliers whose real API reports per-warehouse breakdown (D&H's
+    priceAndAvailability response) should get real Warehouse/WarehouseStock
+    rows, without disturbing the existing aggregate qty_available contract
+    that pricing/inventory rules already rely on.
+    """
+    from app.models.warehouse import Warehouse, WarehouseStock
+
+    sup = Supplier(name="D&H", adapter_class="DAndHAdapter", is_active=True)
+    db_session.add(sup)
+    db_session.commit()
+
+    service = CatalogService(db_session)
+    item = NormalizedProduct(
+        supplier_sku="AXG99626",
+        title="15FT CAT6 550mhz Cable",
+        cost=Decimal("11.32"),
+        quantity=30,
+        availability_status="ACTIVE",
+        shipping_info={
+            "weight_lbs": 1.0,
+            "branch_inventory": [
+                {"branch": "BR01", "availableQuantity": 20, "stockReplenishDate": None},
+                {"branch": "BR06", "availableQuantity": 10, "stockReplenishDate": None},
+            ],
+        },
+    )
+    product, supplier_prod, _ = service.upsert_supplier_product(sup, item)
+
+    warehouses = db_session.query(Warehouse).filter(Warehouse.supplier_id == sup.id).all()
+    assert {w.code for w in warehouses} == {"BR01", "BR06"}
+    assert next(w.name for w in warehouses if w.code == "BR01") == "Mid-Atlantic"
+
+    stock_rows = db_session.query(WarehouseStock).filter(
+        WarehouseStock.supplier_product_id == supplier_prod.id
+    ).all()
+    assert len(stock_rows) == 2
+    assert sum(s.qty_available for s in stock_rows) == 30
+
+    # Re-sync with updated branch quantities should update, not duplicate
+    item2 = item.model_copy(update={"shipping_info": {
+        "branch_inventory": [
+            {"branch": "BR01", "availableQuantity": 5, "stockReplenishDate": None},
+            {"branch": "BR06", "availableQuantity": 10, "stockReplenishDate": None},
+        ],
+    }})
+    service.upsert_supplier_product(sup, item2)
+
+    stock_rows_after = db_session.query(WarehouseStock).filter(
+        WarehouseStock.supplier_product_id == supplier_prod.id
+    ).all()
+    assert len(stock_rows_after) == 2
+    br01_stock = next(s for s in stock_rows_after if s.warehouse.code == "BR01")
+    assert br01_stock.qty_available == 5
+
+
 def test_sync_service_full_run(db_session):
     sup = Supplier(name="VoiceComm", adapter_class="MockSupplierAdapter", is_active=True)
     db_session.add(sup)
@@ -113,3 +170,77 @@ def test_sync_service_full_run(db_session):
     assert result["status"] == "SUCCESSFULLY_SYNCHRONIZED"
     assert result["products_imported"] >= 1
     assert sup.last_synced_at is not None
+
+
+def test_sync_service_isolates_one_malformed_item(monkeypatch):
+    """
+    A single bad item (DB error, unexpected data shape, etc.) must not abort
+    the rest of the batch. The sync should still succeed, import the good
+    items, and log a MISSING_DATA error for the bad one.
+
+    Uses its own standalone engine/session (not the shared db_session
+    fixture): this test exercises a real session.rollback() mid-sync, which
+    needs a genuinely-committed prior transaction to recover correctly from
+    (exactly like production). The shared fixture wraps the whole test in one
+    outer, never-really-committed transaction, so a rollback() there would
+    wipe out this test's own setup data too — a fixture artifact, not a
+    production behavior.
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session as SQLASession
+    from app.core.database import Base
+    from app.models.error_log import ErrorLog
+
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    db_session = SQLASession(bind=engine)
+
+    sup = Supplier(name="Ingram Micro", adapter_class="MockSupplierAdapter", is_active=True)
+    db_session.add(sup)
+    db_session.commit()
+
+    good_item_1 = NormalizedProduct(
+        supplier_sku="GOOD-001", title="Good Item One",
+        cost=Decimal("10.00"), quantity=5, availability_status="ACTIVE",
+    )
+    bad_item = NormalizedProduct(
+        supplier_sku="BAD-001", title="Bad Item",
+        cost=Decimal("10.00"), quantity=5, availability_status="ACTIVE",
+    )
+    good_item_2 = NormalizedProduct(
+        supplier_sku="GOOD-002", title="Good Item Two",
+        cost=Decimal("20.00"), quantity=3, availability_status="ACTIVE",
+    )
+
+    from app.adapters.suppliers.mock_supplier import MockSupplierAdapter as MSA
+    monkeypatch.setattr(MSA, "fetch_catalog", lambda self, **kw: [good_item_1, bad_item, good_item_2])
+
+    original_upsert = CatalogService.upsert_supplier_product
+
+    def flaky_upsert(self, supplier, item):
+        if item.supplier_sku == "BAD-001":
+            raise RuntimeError("Simulated DB constraint violation")
+        return original_upsert(self, supplier, item)
+
+    monkeypatch.setattr(CatalogService, "upsert_supplier_product", flaky_upsert)
+
+    sync_service = SyncService(db_session)
+    result = sync_service.sync_supplier(sup.id)
+
+    assert result["status"] == "SUCCESSFULLY_SYNCHRONIZED"
+    assert result["products_imported"] == 2
+
+    imported_skus = {p.sku for p in db_session.query(Product).all()}
+    assert "GOOD-001" in imported_skus
+    assert "GOOD-002" in imported_skus
+    assert "BAD-001" not in imported_skus
+
+    error = db_session.query(ErrorLog).filter(
+        ErrorLog.error_type == "MISSING_DATA",
+        ErrorLog.supplier_id == sup.id,
+    ).first()
+    assert error is not None
+    assert "BAD-001" in error.message
+
+    db_session.close()
+    Base.metadata.drop_all(bind=engine)

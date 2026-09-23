@@ -124,6 +124,9 @@ class LiveAmazonAdapter(MarketplaceAdapter):
                 raise PermissionError(f"Amazon SP-API 401 Unauthorized: Invalid access token or unauthorized developer credentials.")
             elif err.code == 403:
                 raise PermissionError(f"Amazon SP-API 403 Forbidden: Missing required SP-API seller roles or permissions. Details: {err_body}")
+            elif err.code == 429:
+                retry_after = err.headers.get("Retry-After") if err.headers else None
+                raise ConnectionError(f"Amazon SP-API Rate Limit Exceeded (429). Retry-After: {retry_after or 'unspecified'}s.")
             raise RuntimeError(f"Amazon SP-API HTTP {err.code}: {err_body}")
         except Exception as e:
             logger.error(f"Amazon SP-API connection failed: {e}")

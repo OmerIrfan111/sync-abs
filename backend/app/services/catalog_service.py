@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 from decimal import Decimal
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
@@ -7,8 +7,21 @@ from app.models.product import Product
 from app.models.supplier_product import SupplierProduct
 from app.models.supplier import Supplier
 from app.models.sync_log import SyncLog
+from app.models.warehouse import Warehouse, WarehouseStock
 from app.schemas.supplier import NormalizedProduct
 from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse, SupplierProductInfo
+
+# D&H branch codes, per their Customer Order Management API docs. Unknown
+# codes (new branches, other suppliers) fall back to using the code itself
+# as the display name rather than guessing at a real-world location.
+KNOWN_WAREHOUSE_NAMES: Dict[str, str] = {
+    "BR01": "Mid-Atlantic",
+    "BR03": "Toronto",
+    "BR04": "West Coast",
+    "BR05": "Midwest",
+    "BR06": "Atlanta",
+    "BR08": "Vancouver",
+}
 
 class CatalogService:
     def __init__(self, db: Session):
@@ -90,6 +103,7 @@ class CatalogService:
                 last_seen_at=now
             )
             self.db.add(supplier_prod)
+            self.db.flush()  # populate supplier_prod.id for warehouse_stock FK below
             logs.append(SyncLog(
                 product_id=product.id,
                 supplier_id=supplier.id,
@@ -133,6 +147,10 @@ class CatalogService:
             supplier_prod.shipping_info = item.shipping_info
             supplier_prod.availability_status = item.availability_status
 
+        branch_inventory = (item.shipping_info or {}).get("branch_inventory")
+        if branch_inventory:
+            self._sync_warehouse_stock(supplier, supplier_prod, branch_inventory)
+
         for log in logs:
             self.db.add(log)
 
@@ -140,6 +158,62 @@ class CatalogService:
         self.db.refresh(product)
         self.db.refresh(supplier_prod)
         return product, supplier_prod, logs
+
+    def _sync_warehouse_stock(
+        self,
+        supplier: Supplier,
+        supplier_prod: SupplierProduct,
+        branch_inventory: List[Dict[str, Any]],
+    ) -> None:
+        """
+        Upserts per-warehouse stock rows from a supplier's branch-level
+        inventory breakdown (currently: D&H's priceAndAvailability response).
+        The aggregate SupplierProduct.qty_available is untouched — this is
+        purely additive detail for suppliers that report it.
+        """
+        for branch in branch_inventory:
+            code = str(branch.get("branch") or "").strip()
+            if not code:
+                continue
+
+            warehouse = self.db.query(Warehouse).filter(
+                Warehouse.supplier_id == supplier.id,
+                Warehouse.code == code,
+            ).first()
+            if not warehouse:
+                warehouse = Warehouse(
+                    supplier_id=supplier.id,
+                    code=code,
+                    name=KNOWN_WAREHOUSE_NAMES.get(code, code),
+                )
+                self.db.add(warehouse)
+                self.db.flush()
+
+            stock = self.db.query(WarehouseStock).filter(
+                WarehouseStock.supplier_product_id == supplier_prod.id,
+                WarehouseStock.warehouse_id == warehouse.id,
+            ).first()
+
+            qty = branch.get("availableQuantity")
+            replenish_date = branch.get("stockReplenishDate")
+            parsed_replenish = None
+            if replenish_date:
+                try:
+                    parsed_replenish = datetime.fromisoformat(str(replenish_date).replace("Z", "+00:00"))
+                except (ValueError, TypeError):
+                    parsed_replenish = None
+
+            if not stock:
+                stock = WarehouseStock(
+                    supplier_product_id=supplier_prod.id,
+                    warehouse_id=warehouse.id,
+                    qty_available=max(0, int(qty or 0)),
+                    stock_replenish_date=parsed_replenish,
+                )
+                self.db.add(stock)
+            else:
+                stock.qty_available = max(0, int(qty or 0))
+                stock.stock_replenish_date = parsed_replenish
 
     def get_products(
         self,

@@ -79,13 +79,25 @@ def create_pricing_rule(
         if not mp:
             raise HTTPException(status_code=404, detail="Marketplace not found")
 
+    marketplace_fee = payload.marketplace_fee
+    # A 0% fee is meaningless for a FEE_MARGIN rule, so treat it as "not
+    # specified" and fall back to this marketplace's default fee schedule
+    # (Phase 4) instead of silently computing pricing with a 0% fee assumption.
+    if payload.rule_type.upper() == "FEE_MARGIN" and marketplace_fee == 0 and payload.marketplace_id:
+        from app.models.marketplace_fee_schedule import MarketplaceFeeSchedule
+        schedule = db.query(MarketplaceFeeSchedule).filter(
+            MarketplaceFeeSchedule.marketplace_id == payload.marketplace_id
+        ).first()
+        if schedule:
+            marketplace_fee = schedule.fee_percentage
+
     rule = PricingRule(
         product_id=payload.product_id,
         marketplace_id=payload.marketplace_id,
         rule_type=payload.rule_type.upper(),
         fixed_amount=payload.fixed_amount,
         percentage=payload.percentage,
-        marketplace_fee=payload.marketplace_fee,
+        marketplace_fee=marketplace_fee,
         desired_margin=payload.desired_margin,
         notes=payload.notes
     )
@@ -159,6 +171,105 @@ def delete_pricing_rule(rule_id: int, db: Session = Depends(get_db)):
     if not rule:
         raise HTTPException(status_code=404, detail="Pricing rule not found")
     db.delete(rule)
+    db.commit()
+    return None
+
+
+# ==========================================
+# PRODUCT RESTRICTIONS (Phase 4)
+# ==========================================
+
+@router.get("/product-restrictions")
+def get_product_restrictions(db: Session = Depends(get_db)):
+    from app.models.product_restriction import ProductRestriction
+
+    restrictions = db.query(ProductRestriction).order_by(desc(ProductRestriction.created_at)).all()
+    results = []
+    for r in restrictions:
+        results.append({
+            "id": r.id,
+            "product_id": r.product_id,
+            "product_sku": r.product.sku if r.product else None,
+            "product_title": r.product.title if r.product else None,
+            "category": r.category,
+            "brand": r.brand,
+            "marketplace_id": r.marketplace_id,
+            "marketplace_name": r.marketplace.name if r.marketplace else None,
+            "restriction_type": r.restriction_type,
+            "reason": r.reason,
+            "approved_at": r.approved_at,
+            "created_at": r.created_at,
+        })
+    return results
+
+
+@router.post("/product-restrictions", status_code=status.HTTP_201_CREATED)
+def create_product_restriction(payload: dict, db: Session = Depends(get_db)):
+    from app.models.product_restriction import ProductRestriction
+
+    product_id = payload.get("product_id")
+    category = payload.get("category")
+    brand = payload.get("brand")
+    reason = payload.get("reason")
+    restriction_type = (payload.get("restriction_type") or "BLOCKED").upper()
+
+    if not reason or not reason.strip():
+        raise HTTPException(status_code=400, detail="A reason is required for every restriction")
+    if not product_id and not category and not brand:
+        raise HTTPException(status_code=400, detail="Specify at least a product_id, category, or brand to restrict")
+    if restriction_type not in ("BLOCKED", "REQUIRES_APPROVAL"):
+        raise HTTPException(status_code=400, detail="restriction_type must be BLOCKED or REQUIRES_APPROVAL")
+
+    if product_id:
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+    marketplace_id = payload.get("marketplace_id")
+    if marketplace_id:
+        mp = db.query(Marketplace).filter(Marketplace.id == marketplace_id).first()
+        if not mp:
+            raise HTTPException(status_code=404, detail="Marketplace not found")
+
+    restriction = ProductRestriction(
+        product_id=product_id,
+        category=category,
+        brand=brand,
+        marketplace_id=marketplace_id,
+        restriction_type=restriction_type,
+        reason=reason.strip(),
+    )
+    db.add(restriction)
+    db.commit()
+    db.refresh(restriction)
+    return {"id": restriction.id, "message": "Restriction created"}
+
+
+@router.put("/product-restrictions/{restriction_id}/approve")
+def approve_product_restriction(restriction_id: int, db: Session = Depends(get_db)):
+    """Clears a REQUIRES_APPROVAL restriction, allowing publishing to proceed."""
+    from app.models.product_restriction import ProductRestriction
+    from datetime import datetime, timezone
+
+    restriction = db.query(ProductRestriction).filter(ProductRestriction.id == restriction_id).first()
+    if not restriction:
+        raise HTTPException(status_code=404, detail="Restriction not found")
+    if restriction.restriction_type != "REQUIRES_APPROVAL":
+        raise HTTPException(status_code=400, detail="Only REQUIRES_APPROVAL restrictions can be approved; BLOCKED restrictions must be deleted instead")
+
+    restriction.approved_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"success": True, "approved_at": restriction.approved_at}
+
+
+@router.delete("/product-restrictions/{restriction_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_product_restriction(restriction_id: int, db: Session = Depends(get_db)):
+    from app.models.product_restriction import ProductRestriction
+
+    restriction = db.query(ProductRestriction).filter(ProductRestriction.id == restriction_id).first()
+    if not restriction:
+        raise HTTPException(status_code=404, detail="Restriction not found")
+    db.delete(restriction)
     db.commit()
     return None
 
