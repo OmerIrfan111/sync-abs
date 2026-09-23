@@ -8,16 +8,23 @@ import uuid
 from decimal import Decimal
 from typing import Dict, Any, Optional, List
 
-from app.adapters.suppliers.mock_supplier import MockSupplierAdapter
+from app.adapters.suppliers.base import SupplierAdapter
 from app.schemas.supplier import NormalizedProduct
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-class IngramMicroAdapter(MockSupplierAdapter):
+class IngramMicroAdapter(SupplierAdapter):
     """
     Ingram Micro B2B Reseller Integration Adapter.
     Connects to Ingram Micro OAuth 2.0 and REST Reseller v6 APIs (Sandbox & Production).
+
+    Deliberately does NOT inherit from MockSupplierAdapter. It previously did,
+    using it as a "not live" fallback — which meant any credential hiccup
+    (missing config, a decrypt failure, a transient auth error) silently
+    returned fabricated mock catalog data reported as a successful sync, with
+    no error anywhere. Real fake products from that bug ended up published on
+    a live store. Now every non-live/failure path raises instead.
     """
 
     OAUTH_TOKEN_URL = "https://api.ingrammicro.com:443/oauth/oauth30/token"
@@ -25,7 +32,8 @@ class IngramMicroAdapter(MockSupplierAdapter):
     PRODUCTION_BASE_URL = "https://api.ingrammicro.com:443/resellers/v6"
 
     def __init__(self, credentials: Optional[Dict[str, Any]] = None, config: Optional[Dict[str, Any]] = None):
-        super().__init__(supplier_name="Ingram Micro", credentials=credentials, config=config)
+        super().__init__(credentials=credentials, config=config)
+        self.supplier_name = "Ingram Micro"
         self.credentials = credentials or {}
 
         # Extract credentials with fallback to environment settings
@@ -52,6 +60,12 @@ class IngramMicroAdapter(MockSupplierAdapter):
 
         self._access_token: Optional[str] = None
         self._token_expires_at: float = 0
+
+        # Items skipped during the last fetch_catalog() call because Ingram
+        # didn't return real price/availability data for them. Read by
+        # SyncService afterward to log MISSING_DATA errors visible on the
+        # dashboard, rather than silently fabricating a category-average price.
+        self._skipped_items: List[Dict[str, str]] = []
 
     def is_live(self) -> bool:
         """Returns True if live API credentials are configured."""
@@ -116,7 +130,10 @@ class IngramMicroAdapter(MockSupplierAdapter):
         Verifies connectivity by authenticating against Ingram Micro OAuth and querying catalog endpoint.
         """
         if not self.is_live():
-            return super().test_connection()
+            raise ConnectionError(
+                "Ingram Micro adapter has no live credentials configured "
+                "(missing client_id/client_secret)."
+            )
 
         # Step 1: Request an OAuth token
         token = self.get_access_token()
@@ -172,10 +189,14 @@ class IngramMicroAdapter(MockSupplierAdapter):
         real-time wholesale pricing, live physical warehouse stock, and distinct product imagery.
         """
         if not self.is_live():
-            return super().fetch_catalog()
+            raise ConnectionError(
+                "Ingram Micro adapter has no live credentials configured "
+                "(missing client_id/client_secret); refusing to return fabricated catalog data."
+            )
 
         from app.adapters.suppliers.image_resolver import resolve_product_imagery
 
+        self._skipped_items = []
         products: List[NormalizedProduct] = []
         page = 1
         page_size = 50
@@ -185,7 +206,7 @@ class IngramMicroAdapter(MockSupplierAdapter):
             headers = self._get_headers(token)
 
             while len(products) < max_products and page <= 10:
-                url = f"{self.base_url}/catalog?pageNumber={page}&pageSize={page_size}"
+                url = f"{self.base_url}/catalog?pageNumber={page}&pageSize={page_size}&includeProductAttributes=true"
                 req = urllib.request.Request(url, headers=headers, method="GET")
 
                 try:
@@ -223,24 +244,45 @@ class IngramMicroAdapter(MockSupplierAdapter):
                                 or item.get("retailPrice")
                             )
                             if not raw_cost or Decimal(str(raw_cost)) <= 0:
-                                cat_l = category.lower()
-                                if any(w in cat_l for w in ["laptop", "system", "computer"]):
-                                    raw_cost = "689.00"
-                                elif any(w in cat_l for w in ["monitor", "display"]):
-                                    raw_cost = "289.00"
-                                elif any(w in cat_l for w in ["network", "switch"]):
-                                    raw_cost = "425.00"
-                                elif any(w in cat_l for w in ["storage", "nas", "ssd"]):
-                                    raw_cost = "319.00"
-                                else:
-                                    raw_cost = "139.00"
+                                self._skipped_items.append({
+                                    "sku": sku,
+                                    "reason": "No real-time price returned by Ingram Micro for this item",
+                                })
+                                continue
 
                             cost = Decimal(str(raw_cost))
                             qty = pa_avail.get("totalAvailability")
-                            if qty is None or qty <= 0:
-                                qty = 25 if pa_avail.get("available", True) else 0
+                            if qty is None:
+                                self._skipped_items.append({
+                                    "sku": sku,
+                                    "reason": "No real-time availability returned by Ingram Micro for this item",
+                                })
+                                continue
+                            qty = max(0, int(qty))
 
                             stock_status = "IN_STOCK" if qty > 0 else "OUT_OF_STOCK"
+
+                            # Extract real product image from Ingram API response
+                            supplier_img = None
+                            product_attrs = item.get("links") or []
+                            for link in product_attrs:
+                                if link.get("type") in ("image", "Image") or "image" in (link.get("topic") or "").lower():
+                                    supplier_img = link.get("href")
+                                    break
+                            if not supplier_img:
+                                # Check alternative image fields in the response
+                                supplier_img = (
+                                    item.get("imageUrl")
+                                    or item.get("productImage")
+                                    or item.get("image")
+                                    or item.get("thumbnailUrl")
+                                )
+                            # Also check price & availability response for image
+                            if not supplier_img and pa_item:
+                                supplier_img = (
+                                    pa_item.get("imageUrl")
+                                    or pa_item.get("productImage")
+                                )
 
                             images = resolve_product_imagery(
                                 brand=brand,
@@ -248,7 +290,8 @@ class IngramMicroAdapter(MockSupplierAdapter):
                                 subcategory=sub_cat,
                                 title=title,
                                 sku=sku,
-                                upc=upc
+                                upc=upc,
+                                supplier_image_url=supplier_img
                             )
 
                             products.append(NormalizedProduct(
@@ -280,16 +323,20 @@ class IngramMicroAdapter(MockSupplierAdapter):
                     logger.warning(f"Error fetching catalog page {page}: {page_err}")
                     break
 
-            if products:
-                logger.info(f"Retrieved {len(products)} live products across {page-1} pages from Ingram Micro {self.environment} catalog.")
-                return products
+            logger.info(f"Retrieved {len(products)} live products across {page-1} pages from Ingram Micro {self.environment} catalog.")
+            return products
         except Exception as exc:
-            logger.error(f"Ingram Micro live catalog fetch error: {exc}. Falling back to default catalog.")
-
-        return super().fetch_catalog()
+            logger.error(f"Ingram Micro live catalog fetch error: {exc}")
+            raise ConnectionError(f"Ingram Micro Connection Error: {exc}") from exc
 
     def fetch_inventory(self, skus: Optional[List[str]] = None) -> Dict[str, int]:
-        return super().fetch_inventory(skus)
+        raise NotImplementedError(
+            "Ingram Micro inventory-only refresh is not implemented; use fetch_catalog(), "
+            "which returns live quantities inline. Not currently called by the sync pipeline."
+        )
 
     def fetch_price_changes(self) -> Dict[str, Decimal]:
-        return super().fetch_price_changes()
+        raise NotImplementedError(
+            "Ingram Micro price-only refresh is not implemented; use fetch_catalog(), "
+            "which returns live pricing inline. Not currently called by the sync pipeline."
+        )
