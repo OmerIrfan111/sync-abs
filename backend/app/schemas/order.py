@@ -33,6 +33,7 @@ class OrderItemResponse(BaseModel):
     supplier_id: Optional[int] = None
     supplier_name: Optional[str] = None
     status: str = "PENDING"
+    routing_note: Optional[str] = None
 
     class Config:
         from_attributes = True

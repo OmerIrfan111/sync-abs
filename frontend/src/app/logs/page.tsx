@@ -136,19 +136,14 @@ export default function LogsPage() {
       {/* Header - Unboxed on canvas */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-200">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold text-[#0a0a0a] tracking-tight">Store Activity & Alerts</h1>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#6C5DD3]/10 text-[#6C5DD3] border border-[#6C5DD3]/20">
-              Audit Logs
-            </span>
-          </div>
+          <h1 className="text-2xl font-brand font-normal text-[#0a0a0a]">Store Activity & Alerts</h1>
           <p className="text-sm text-[#767676] mt-1 max-w-2xl leading-relaxed">
             See everything happening behind the scenes: recent price changes, stock adjustments, and issues needing your attention.
           </p>
         </div>
         <button
           onClick={loadLogs}
-          className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium transition-all border border-gray-300 shadow-sm self-start sm:self-auto"
+          className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium transition-all border border-gray-300 self-start sm:self-auto"
         >
           <RefreshCw className={`h-3.5 w-3.5 text-[#767676] ${loading ? "animate-spin" : ""}`} />
           <span>Refresh Activity</span>
@@ -159,7 +154,7 @@ export default function LogsPage() {
       <div className="flex items-center gap-2">
         <button
           onClick={() => setActiveTab("sync")}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-all shadow-sm ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-all ${
             activeTab === "sync"
               ? "bg-[#0a0a0a] text-white"
               : "bg-white text-[#767676] hover:text-[#0a0a0a] border border-gray-300 hover:bg-gray-50"
@@ -170,7 +165,7 @@ export default function LogsPage() {
         </button>
         <button
           onClick={() => setActiveTab("errors")}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-all shadow-sm ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-all ${
             activeTab === "errors"
               ? "bg-rose-600 text-white"
               : "bg-white text-[#767676] hover:text-[#0a0a0a] border border-gray-300 hover:bg-gray-50"
@@ -189,8 +184,8 @@ export default function LogsPage() {
       {/* Content */}
       {activeTab === "sync" ? (
         <div className="space-y-4">
-          <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200 text-xs text-[#767676] flex items-start gap-2.5">
-            <HelpCircle className="h-4 w-4 text-[#6C5DD3] flex-shrink-0 mt-0.5" />
+          <div className="p-3.5 bg-gray-50 rounded-lg border border-gray-200 text-xs text-[#767676] flex items-start gap-2.5">
+            <HelpCircle className="h-4 w-4 text-[#D9720F] flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-[#0a0a0a]">Continuous Automatic Record</p>
               <p className="mt-0.5 leading-relaxed">
@@ -199,7 +194,7 @@ export default function LogsPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+          <div className="bg-white rounded-lg overflow-hidden border border-gray-100">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-[#1a1a1a]">
                 <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
@@ -216,7 +211,7 @@ export default function LogsPage() {
                   {loading ? (
                     <tr>
                       <td colSpan={6} className="text-center py-20 text-[#767676]">
-                        <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-[#6C5DD3]" />
+                        <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-[#A8560A]" />
                         Loading recent updates...
                       </td>
                     </tr>
@@ -243,14 +238,14 @@ export default function LogsPage() {
                             minute: "2-digit",
                           })}
                         </td>
-                        <td className="px-6 py-3.5 font-mono font-medium text-[#6C5DD3]">
+                        <td className="px-6 py-3.5 font-mono font-medium text-[#A8560A]">
                           {log.product_sku || "Main Product"}
                         </td>
                         <td className="px-6 py-3.5 text-[#0a0a0a] font-medium">
                           {log.supplier_name || "Primary Supplier"}
                         </td>
                         <td className="px-6 py-3.5">
-                          <span className="px-2 py-0.5 rounded-md bg-gray-100 text-[#0a0a0a] font-medium border border-gray-200 capitalize">
+                          <span className="px-2 py-0.5 rounded bg-gray-100 text-[#0a0a0a] font-medium border border-gray-200 capitalize">
                             {formatFieldName(log.field_changed)}
                           </span>
                         </td>
@@ -270,7 +265,7 @@ export default function LogsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="p-3.5 bg-rose-50/70 border border-rose-200 rounded-xl text-xs text-rose-900 flex items-start gap-2.5">
+          <div className="p-3.5 bg-rose-50/70 border border-rose-200 rounded-lg text-xs text-rose-900 flex items-start gap-2.5">
             <ShieldAlert className="h-4 w-4 text-rose-600 flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-rose-950">Plain English Issue Resolver</p>
@@ -281,12 +276,12 @@ export default function LogsPage() {
           </div>
 
           {loading ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-20 text-center text-[#767676]">
+            <div className="bg-white rounded-lg border border-gray-200 p-20 text-center text-[#767676]">
               <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-rose-600" />
               Loading issues...
             </div>
           ) : errorLogs.length === 0 ? (
-            <div className="bg-white rounded-xl p-12 text-center border border-gray-200 shadow-sm">
+            <div className="bg-white rounded-lg p-12 text-center border border-gray-200">
               <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2.5">
                 <CheckCircle2 className="h-6 w-6" />
               </div>
@@ -305,7 +300,7 @@ export default function LogsPage() {
                 return (
                   <div
                     key={err.id}
-                    className={`bg-white rounded-xl p-5 transition-all border shadow-sm ${
+                    className={`bg-white rounded-lg p-5 transition-all border ${
                       isResolved
                         ? "border-gray-200 opacity-75"
                         : "border-rose-200 bg-rose-50/10"
@@ -316,7 +311,7 @@ export default function LogsPage() {
                       <div className="space-y-3 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span
-                            className={`px-2 py-0.5 rounded-md text-[11px] font-medium uppercase tracking-wider ${
+                            className={`px-2 py-0.5 rounded text-[11px] font-medium uppercase tracking-wider ${
                               isResolved
                                 ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
                                 : "bg-rose-50 text-rose-800 border border-rose-200"
@@ -328,12 +323,12 @@ export default function LogsPage() {
                             Reported {new Date(err.created_at).toLocaleString()}
                           </span>
                           {(err.marketplace_name || err.supplier_name) && (
-                            <span className="px-2 py-0.5 rounded-md bg-gray-100 text-[#1a1a1a] text-xs font-medium border border-gray-200">
+                            <span className="px-2 py-0.5 rounded bg-gray-100 text-[#1a1a1a] text-xs font-medium border border-gray-200">
                               Channel: {err.marketplace_name || err.supplier_name}
                             </span>
                           )}
                           {err.product_sku && (
-                            <span className="px-2 py-0.5 rounded-md bg-[#6C5DD3]/10 text-[#6C5DD3] text-xs font-mono font-medium border border-[#6C5DD3]/20">
+                            <span className="px-2 py-0.5 rounded bg-[#D9720F]/10 text-[#A8560A] text-xs font-mono font-medium border border-[#D9720F]/20">
                               Product: {err.product_sku}
                             </span>
                           )}
@@ -346,7 +341,7 @@ export default function LogsPage() {
                             <span className="text-[#1a1a1a]">{guidance.what}</span>
                           </div>
                           <div>
-                            <span className="font-semibold text-[#6C5DD3]">Why it matters: </span>
+                            <span className="font-semibold text-[#A8560A]">Why it matters: </span>
                             <span className="text-[#1a1a1a]">{guidance.why}</span>
                           </div>
                           <div>
@@ -380,7 +375,7 @@ export default function LogsPage() {
                         {!isResolved && (
                           <button
                             onClick={() => handleResolveError(err.id)}
-                            className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-medium inline-flex items-center gap-1.5 shadow-sm transition-all"
+                            className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition-all"
                           >
                             <Check className="h-3.5 w-3.5" />
                             <span>Mark as Resolved</span>

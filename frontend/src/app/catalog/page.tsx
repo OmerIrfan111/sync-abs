@@ -227,24 +227,19 @@ export default function CatalogPage() {
       {/* Header - Unboxed on canvas */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-200">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold text-[#0a0a0a] tracking-tight">Products to Sell</h1>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#6C5DD3]/10 text-[#6C5DD3] border border-[#6C5DD3]/20">
-              Wholesale Catalog
-            </span>
-          </div>
+          <h1 className="text-2xl font-brand font-normal text-[#0a0a0a]">Products to Sell</h1>
           <p className="text-sm text-[#767676] mt-1 max-w-2xl leading-relaxed">
             Browse all products provided by your suppliers. Pick what you want to sell and list them on your stores with one click.
           </p>
         </div>
         <div className="text-left sm:text-right self-start sm:self-auto">
           <span className="text-xs text-[#767676] block font-medium">Total Catalog Items</span>
-          <span className="text-2xl font-bold text-[#0a0a0a] tracking-tight">{total.toLocaleString()}</span>
+          <span className="text-2xl font-bold tabular-nums text-[#0a0a0a]">{total.toLocaleString()}</span>
         </div>
       </div>
 
       {/* Search & Filter Toolbar */}
-      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-3.5">
+      <div className="bg-white p-5 rounded-lg border border-gray-100 space-y-3.5">
         <div className="flex flex-col md:flex-row gap-3">
           <form onSubmit={handleSearchSubmit} className="flex-1 relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767676]" />
@@ -258,7 +253,7 @@ export default function CatalogPage() {
           </form>
           <button
             onClick={() => { setPage(1); loadProducts(); }}
-            className="px-6 py-2.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-sm font-medium transition-all shadow-sm shrink-0"
+            className="px-6 py-2.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-sm font-medium transition-all shrink-0"
           >
             Find Products
           </button>
@@ -267,7 +262,7 @@ export default function CatalogPage() {
         {/* Filters Row */}
         <div className="flex flex-wrap items-center gap-2.5 pt-3 border-t border-gray-100 text-xs">
           <div className="flex items-center gap-1.5 font-semibold text-[#1a1a1a]">
-            <Filter className="h-3.5 w-3.5 text-[#6C5DD3]" />
+            <Filter className="h-3.5 w-3.5 text-[#D9720F]" />
             <span>Filter By:</span>
           </div>
 
@@ -333,7 +328,7 @@ export default function CatalogPage() {
       )}
 
       {/* Products Table Card */}
-      <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+      <div className="bg-white rounded-lg overflow-hidden border border-gray-100">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-[#1a1a1a]">
             <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
@@ -382,7 +377,7 @@ export default function CatalogPage() {
                                 e.currentTarget.onerror = null;
                                 e.currentTarget.src = "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&auto=format&fit=crop&q=80";
                               }}
-                              className="h-12 w-12 rounded-lg object-cover bg-white border border-gray-200 shrink-0 shadow-sm"
+                              className="h-12 w-12 rounded-lg object-cover bg-white border border-gray-200 shrink-0"
                             />
                           ) : (
                             <div className="h-12 w-12 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-[#767676] shrink-0">
@@ -392,7 +387,7 @@ export default function CatalogPage() {
                           <div className="max-w-xs sm:max-w-md">
                             <button
                               onClick={() => handleOpenProductDetails(product)}
-                              className="font-semibold text-[#0a0a0a] hover:text-[#6C5DD3] text-left line-clamp-1 transition-colors"
+                              className="font-semibold text-[#0a0a0a] hover:text-[#A8560A] text-left line-clamp-1 transition-colors"
                             >
                               {product.title}
                             </button>
@@ -401,7 +396,7 @@ export default function CatalogPage() {
                             </div>
                             <button
                               onClick={() => handleOpenProductDetails(product)}
-                              className="text-[11px] text-[#6C5DD3] hover:underline mt-0.5 font-medium block"
+                              className="text-[11px] text-[#A8560A] hover:underline mt-0.5 font-medium block"
                             >
                               View product codes & details &rarr;
                             </button>
@@ -419,7 +414,7 @@ export default function CatalogPage() {
 
                       {/* 3. Suggested Selling Price */}
                       <td className="px-4 py-3.5">
-                        <div className="font-bold text-[#6C5DD3] text-sm">
+                        <div className="font-bold text-[#A8560A] text-sm">
                           {cost > 0 ? `$${suggestedPrice}` : "—"}
                         </div>
                         <div className="text-[11px] text-[#767676]">With 15% profit markup</div>
@@ -427,7 +422,7 @@ export default function CatalogPage() {
 
                       {/* 4. Stock Available */}
                       <td className="px-4 py-3.5">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium ${
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium ${
                           product.total_stock > 0
                             ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
                             : "bg-rose-50 text-rose-800 border border-rose-200"
@@ -445,7 +440,7 @@ export default function CatalogPage() {
                           const currentListings = existingListingsMap[product.id] || [];
                           if (currentListings.length === 0) {
                             return (
-                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-gray-100 text-gray-500 border border-gray-200">
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">
                                 Not listed yet
                               </span>
                             );
@@ -455,7 +450,7 @@ export default function CatalogPage() {
                               {currentListings.map((l) => (
                                 <span
                                   key={l.id}
-                                  className={`text-[11px] font-medium px-2 py-0.5 rounded-md border ${
+                                  className={`text-[11px] font-medium px-2 py-0.5 rounded border ${
                                     l.status === "ACTIVE"
                                       ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                                       : "bg-gray-100 text-gray-600 border-gray-200"
@@ -501,7 +496,7 @@ export default function CatalogPage() {
                               <button
                                 onClick={handleOpenModal}
                                 disabled={publishingId === product.id || isExcluded}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5 shrink-0 ${
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 ${
                                   allListed 
                                     ? "bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100" 
                                     : "bg-[#0a0a0a] hover:bg-[#222222] text-white"
@@ -530,7 +525,7 @@ export default function CatalogPage() {
 
                           <button
                             onClick={() => toggleNotSelling(product.id)}
-                            className={`px-2.5 py-1.5 rounded-lg border text-xs transition-colors shadow-sm ${
+                            className={`px-2.5 py-1.5 rounded-lg border text-xs transition-colors ${
                               isExcluded 
                                 ? "bg-amber-50 border-amber-300 text-amber-800" 
                                 : "bg-white border-gray-300 text-gray-600 hover:text-gray-900"
@@ -561,14 +556,14 @@ export default function CatalogPage() {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="px-3 py-1.5 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 text-[#1a1a1a] font-medium border border-gray-300 flex items-center gap-1 shadow-sm"
+              className="px-3 py-1.5 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 text-[#1a1a1a] font-medium border border-gray-300 flex items-center gap-1"
             >
               <ChevronLeft className="h-3.5 w-3.5" /> Previous
             </button>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
-              className="px-3 py-1.5 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 text-[#1a1a1a] font-medium border border-gray-300 flex items-center gap-1 shadow-sm"
+              className="px-3 py-1.5 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 text-[#1a1a1a] font-medium border border-gray-300 flex items-center gap-1"
             >
               Next <ChevronRight className="h-3.5 w-3.5" />
             </button>
@@ -579,10 +574,10 @@ export default function CatalogPage() {
       {/* Product Details Drawer / Modal */}
       {selectedProduct && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="relative bg-white border border-gray-100 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+          <div className="relative bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
             <button
               onClick={() => setSelectedProduct(null)}
-              className="absolute top-4 right-4 z-10 p-1.5 rounded-full bg-white/90 text-[#767676] hover:text-[#0a0a0a] hover:bg-white shadow-sm transition-colors"
+              className="absolute top-4 right-4 z-10 p-1.5 rounded-full bg-white/90 text-[#767676] hover:text-[#0a0a0a] hover:bg-white transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
@@ -599,10 +594,10 @@ export default function CatalogPage() {
                       e.currentTarget.onerror = null;
                       e.currentTarget.src = "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&auto=format&fit=crop&q=80";
                     }}
-                    className="w-full aspect-square object-cover rounded-2xl bg-gray-50 border border-gray-100"
+                    className="w-full aspect-square object-cover rounded-lg bg-gray-50 border border-gray-100"
                   />
                 ) : (
-                  <div className="w-full aspect-square rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-[#767676]">
+                  <div className="w-full aspect-square rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center text-[#767676]">
                     <Layers className="h-10 w-10" />
                   </div>
                 )}
@@ -622,7 +617,7 @@ export default function CatalogPage() {
               </div>
 
               <div className="flex flex-col">
-                <span className="text-[11px] font-semibold text-[#6C5DD3] uppercase tracking-wide">
+                <span className="text-[11px] font-semibold text-[#A8560A] uppercase tracking-wide">
                   {selectedProduct.brand || "Unbranded"} · {selectedProduct.category || "General"}
                 </span>
                 <h3 className="text-lg font-bold text-[#0a0a0a] mt-1 leading-snug">{selectedProduct.title}</h3>
@@ -637,7 +632,7 @@ export default function CatalogPage() {
                   Your cost: ${selectedProduct.lowest_cost ? Number(selectedProduct.lowest_cost).toFixed(2) : "0.00"}
                 </div>
 
-                <span className={`inline-flex items-center gap-1.5 mt-3 self-start px-2.5 py-1 rounded-full text-xs font-medium ${
+                <span className={`inline-flex items-center gap-1.5 mt-3 self-start px-2.5 py-1 rounded-md text-xs font-medium ${
                   selectedProduct.total_stock > 0
                     ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
                     : "bg-rose-50 text-rose-800 border border-rose-200"
@@ -663,7 +658,7 @@ export default function CatalogPage() {
             {/* Distributors carrying this item */}
             <div>
               <h4 className="text-xs font-semibold text-[#0a0a0a] mb-2 flex items-center gap-2">
-                <Truck className="h-4 w-4 text-[#6C5DD3]" />
+                <Truck className="h-4 w-4 text-[#D9720F]" />
                 <span>Wholesale Distributors Supplying This Item</span>
               </h4>
               <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
@@ -680,7 +675,7 @@ export default function CatalogPage() {
                     {selectedProduct.supplier_products.map((sp) => (
                       <tr key={sp.id} className="hover:bg-gray-50/60">
                         <td className="px-3.5 py-2.5 font-medium text-[#0a0a0a]">{sp.supplier_name || "Supplier"}</td>
-                        <td className="px-3.5 py-2.5 font-semibold text-[#6C5DD3]">${Number(sp.cost).toFixed(2)}</td>
+                        <td className="px-3.5 py-2.5 font-semibold text-[#A8560A]">${Number(sp.cost).toFixed(2)}</td>
                         <td className="px-3.5 py-2.5 text-emerald-800 font-medium">{sp.qty_available} units</td>
                         <td className="px-3.5 py-2.5 text-[#767676]">
                           {sp.shipping_info?.lead_time_days != null ? `Ships in ${sp.shipping_info.lead_time_days} day(s)` : "—"}
@@ -703,7 +698,7 @@ export default function CatalogPage() {
                       {live.map((l) => (
                         <span
                           key={l.id}
-                          className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200"
+                          className="text-[11px] font-medium px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200"
                         >
                           {l.marketplace_name} ({l.status === "ACTIVE" ? "Live" : "Hidden"})
                         </span>
@@ -757,7 +752,7 @@ export default function CatalogPage() {
                           <button
                             type="button"
                             onClick={() => randomizeDrawerPrice(Number(selectedProduct.lowest_cost || 50))}
-                            className="text-[10px] text-[#6C5DD3] font-medium bg-[#6C5DD3]/10 px-1.5 py-0.5 rounded border border-[#6C5DD3]/20 flex items-center gap-0.5"
+                            className="text-[10px] text-[#A8560A] font-medium bg-[#D9720F]/10 px-1.5 py-0.5 rounded border border-[#D9720F]/20 flex items-center gap-0.5"
                             title="Pick random price with 10%-35% margin"
                           >
                             <Sparkles className="h-2.5 w-2.5" />
@@ -795,13 +790,13 @@ export default function CatalogPage() {
                       className="w-full flex items-center justify-between text-xs font-semibold text-[#0a0a0a]"
                     >
                       <span className="flex items-center gap-1.5">
-                        <Sparkles className="h-3.5 w-3.5 text-[#6C5DD3]" />
+                        <Sparkles className="h-3.5 w-3.5 text-[#D9720F]" />
                         <span>Customize Title & Description</span>
                         {(drawerCustomTitle !== selectedProduct.title || drawerCustomDescription !== (selectedProduct.description || "")) && (
                           <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium">Modified</span>
                         )}
                       </span>
-                      <span className="text-[11px] text-[#6C5DD3] font-medium">
+                      <span className="text-[11px] text-[#A8560A] font-medium">
                         {showDrawerContentEdit ? "Hide fields" : "Edit before listing"}
                       </span>
                     </button>
@@ -853,7 +848,7 @@ export default function CatalogPage() {
                         drawerCustomDescription
                       )}
                       disabled={publishingId === selectedProduct.id}
-                      className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+                      className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all disabled:opacity-50"
                     >
                       {isDrawerStoreListed ? <RefreshCw className="h-3.5 w-3.5" /> : <Store className="h-4 w-4" />}
                       <span>
@@ -874,7 +869,7 @@ export default function CatalogPage() {
       {/* Start Selling / List on Store Modal */}
       {listingModalProduct && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm max-w-lg w-full p-6 shadow-xl space-y-4">
+          <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-lg w-full p-6 shadow-xl space-y-4">
             <div className="flex items-start justify-between pb-3 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-bold text-[#0a0a0a]">Select Store to Sell On</h3>
@@ -902,7 +897,7 @@ export default function CatalogPage() {
                 </div>
                 <div>
                   <span className="text-[10px] text-[#767676] block">Selling Price</span>
-                  <span className="font-bold text-[#6C5DD3]">
+                  <span className="font-bold text-[#A8560A]">
                     ${(Number(listingModalProduct.lowest_cost || 0) * 1.15).toFixed(2)}
                   </span>
                 </div>
@@ -926,7 +921,7 @@ export default function CatalogPage() {
                       {liveOn.map((l) => (
                         <span
                           key={l.id}
-                          className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200"
+                          className="text-[11px] font-medium px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200"
                         >
                           {l.marketplace_name} ({l.status === "ACTIVE" ? "Live" : "Hidden"})
                         </span>
@@ -996,7 +991,7 @@ export default function CatalogPage() {
                   <button
                     type="button"
                     onClick={() => randomizeModalPrice(Number(listingModalProduct.lowest_cost || 50))}
-                    className="text-[11px] text-[#6C5DD3] hover:text-[#0a0a0a] font-medium flex items-center gap-1 bg-[#6C5DD3]/10 px-2 py-0.5 rounded border border-[#6C5DD3]/20 transition-colors"
+                    className="text-[11px] text-[#A8560A] hover:text-[#0a0a0a] font-medium flex items-center gap-1 bg-[#D9720F]/10 px-2 py-0.5 rounded border border-[#D9720F]/20 transition-colors"
                     title="Generate a random price with 10%-35% margin"
                   >
                     <Sparkles className="h-3 w-3" />
@@ -1038,13 +1033,13 @@ export default function CatalogPage() {
                 className="w-full flex items-center justify-between text-xs font-semibold text-[#0a0a0a]"
               >
                 <span className="flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-[#6C5DD3]" />
+                  <Sparkles className="h-3.5 w-3.5 text-[#D9720F]" />
                   <span>Customize Title & Description</span>
                   {(modalCustomTitle !== listingModalProduct.title || modalCustomDescription !== (listingModalProduct.description || "")) && (
                     <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium">Modified</span>
                   )}
                 </span>
-                <span className="text-[11px] text-[#6C5DD3] font-medium">
+                <span className="text-[11px] text-[#A8560A] font-medium">
                   {showModalContentEdit ? "Hide fields" : "Edit before listing"}
                 </span>
               </button>
@@ -1101,7 +1096,7 @@ export default function CatalogPage() {
                       modalCustomDescription
                     )}
                     disabled={publishingId === listingModalProduct.id}
-                    className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                    className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all disabled:opacity-50 flex items-center gap-1.5"
                   >
                     {isModalStoreListed ? <RefreshCw className="h-3.5 w-3.5" /> : <Store className="h-3.5 w-3.5" />}
                     <span>

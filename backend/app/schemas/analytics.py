@@ -64,3 +64,4 @@ class SupplierScore(BaseModel):
     avg_fulfillment_days: Optional[float] = None
     cancellation_rate_pct: float
     routed_item_count: int
+    catalog_missing_data_rate_pct: Optional[float] = None

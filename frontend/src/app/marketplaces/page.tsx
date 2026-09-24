@@ -63,6 +63,12 @@ export default function MarketplacesPage() {
   const [genericClientSecret, setGenericClientSecret] = useState("");
   const [isAdvancedJson, setIsAdvancedJson] = useState(false);
 
+  // Add Another Store modal
+  const [showAddAccount, setShowAddAccount] = useState(false);
+  const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountType, setNewAccountType] = useState("LiveEBayAdapter");
+  const [creatingAccount, setCreatingAccount] = useState(false);
+
   const loadMarketplaces = async () => {
     setLoading(true);
     try {
@@ -142,10 +148,40 @@ export default function MarketplacesPage() {
     setGenericClientSecret("");
 
     setCredentialsJson(
-      mkt.has_credentials 
-        ? '{\n  "api_key": "••••••••••••••••",\n  "status": "configured_and_encrypted"\n}' 
+      mkt.has_credentials
+        ? '{\n  "api_key": "••••••••••••••••",\n  "status": "configured_and_encrypted"\n}'
         : '{\n  "api_key": "",\n  "secret": ""\n}'
     );
+  };
+
+  const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+    LiveEBayAdapter: "eBay",
+    LiveAmazonAdapter: "Amazon",
+    LiveShopifyAdapter: "Shopify",
+  };
+
+  const handleCreateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAccountName.trim()) {
+      showFeedback("Give this store a short label, e.g. \"UK Store\" or \"Main Account\".", "error");
+      return;
+    }
+    setCreatingAccount(true);
+    try {
+      const fullName = `${ACCOUNT_TYPE_LABELS[newAccountType]} — ${newAccountName.trim()}`;
+      await fetchApi("/marketplaces", {
+        method: "POST",
+        body: JSON.stringify({ name: fullName, adapter_class: newAccountType }),
+      });
+      showFeedback(`${fullName} added. Click "Connect Store" on it to enter credentials.`, "success");
+      setShowAddAccount(false);
+      setNewAccountName("");
+      await loadMarketplaces();
+    } catch (err: any) {
+      showFeedback(err.message || "Failed to add store account", "error");
+    } finally {
+      setCreatingAccount(false);
+    }
   };
 
   const handleSaveCredentials = async (e: React.FormEvent) => {
@@ -227,24 +263,27 @@ export default function MarketplacesPage() {
       {/* Header - Unboxed on canvas */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-200">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold text-[#0a0a0a] tracking-tight">Connect Your Online Stores</h1>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#6C5DD3]/10 text-[#6C5DD3] border border-[#6C5DD3]/20">
-              Sales Channels
-            </span>
-          </div>
+          <h1 className="text-2xl font-brand font-normal text-[#0a0a0a]">Connect Your Online Stores</h1>
           <p className="text-sm text-[#767676] mt-1 max-w-2xl leading-relaxed">
             Connect the marketplaces where you want to sell products. Once connected, stock and pricing updates are delivered automatically.
           </p>
         </div>
 
-        <button
-          onClick={loadMarketplaces}
-          className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium transition-all border border-gray-300 shadow-sm self-start sm:self-auto"
-        >
-          <RefreshCw className="h-3.5 w-3.5 text-[#767676]" />
-          <span>Refresh Stores</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() => setShowAddAccount(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#D9720F] hover:bg-[#A8560A] text-white rounded-lg text-xs font-medium transition-all"
+          >
+            <span>Connect Another Store</span>
+          </button>
+          <button
+            onClick={loadMarketplaces}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium transition-all border border-gray-300"
+          >
+            <RefreshCw className="h-3.5 w-3.5 text-[#767676]" />
+            <span>Refresh Stores</span>
+          </button>
+        </div>
       </div>
 
       {/* Feedback Banner */}
@@ -278,7 +317,7 @@ export default function MarketplacesPage() {
             return (
               <div
                 key={mkt.id}
-                className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between space-y-4"
+                className="bg-white p-6 rounded-lg border border-gray-100 flex flex-col justify-between space-y-4"
               >
                 <div>
                   {/* Top Row: Store Name & Status */}
@@ -293,22 +332,22 @@ export default function MarketplacesPage() {
                       </div>
                     </div>
                     {testInfo?.status === "error" ? (
-                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 bg-rose-50 text-rose-800 border border-rose-200">
+                      <span className="px-2.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 bg-rose-50 text-rose-800 border border-rose-200">
                         <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />
                         <span>Auth Error</span>
                       </span>
                     ) : testInfo?.status === "success" ? (
-                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      <span className="px-2.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                         <span>Live & Verified</span>
                       </span>
                     ) : mkt.has_credentials ? (
-                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200">
+                      <span className="px-2.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200">
                         <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                         <span>Keys Saved</span>
                       </span>
                     ) : (
-                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 bg-gray-100 text-gray-700 border border-gray-200">
+                      <span className="px-2.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 bg-gray-100 text-gray-700 border border-gray-200">
                         <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
                         <span>Not Linked</span>
                       </span>
@@ -372,17 +411,17 @@ export default function MarketplacesPage() {
                     <button
                       onClick={() => handleTestConnection(mkt.id, mkt.name, mkt.has_credentials)}
                       disabled={isTesting}
-                      className="flex-1 px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all border border-gray-300 shadow-sm disabled:opacity-50"
+                      className="flex-1 px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all border border-gray-300 disabled:opacity-50"
                     >
-                      <Wifi className={`h-3.5 w-3.5 text-[#767676] ${isTesting ? "animate-pulse text-[#6C5DD3]" : ""}`} />
+                      <Wifi className={`h-3.5 w-3.5 text-[#767676] ${isTesting ? "animate-pulse text-[#A8560A]" : ""}`} />
                       <span>{isTesting ? "Testing..." : "Test Connection"}</span>
                     </button>
 
                     <button
                       onClick={() => handleOpenConfig(mkt)}
-                      className="px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shadow-sm"
+                      className="px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all flex items-center gap-1.5"
                     >
-                      <Lock className="h-3.5 w-3.5 text-[#6C5DD3]" />
+                      <Lock className="h-3.5 w-3.5 text-[#D9720F]" />
                       <span>{mkt.has_credentials ? "Edit Keys" : "Connect Store"}</span>
                     </button>
                   </div>
@@ -415,7 +454,7 @@ export default function MarketplacesPage() {
       {/* Store Credentials Modal */}
       {configChannel && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm max-w-lg w-full p-6 shadow-xl space-y-4">
+          <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-lg w-full p-6 shadow-xl space-y-4">
             <div className="flex items-start justify-between pb-3 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-bold text-[#0a0a0a]">Connect {configChannel.name}</h3>
@@ -430,7 +469,7 @@ export default function MarketplacesPage() {
             </div>
 
             <form onSubmit={handleSaveCredentials} className="space-y-4">
-              <div className="p-3 bg-[#6C5DD3]/[0.06] rounded-lg border border-[#6C5DD3]/20 text-xs text-[#6C5DD3] space-y-1">
+              <div className="p-3 bg-[#D9720F]/[0.06] rounded-lg border border-[#D9720F]/20 text-xs text-[#A8560A] space-y-1">
                 <div className="font-semibold flex items-center gap-1.5">
                   <HelpCircle className="h-3.5 w-3.5" />
                   <span>How to connect {configChannel.name}:</span>
@@ -638,7 +677,7 @@ export default function MarketplacesPage() {
               ) : (
                 <div>
                   <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
-                    Raw JSON Credentials (AES-256 Encrypted)
+                    Raw JSON Credentials (AES-128 Encrypted)
                   </label>
                   <textarea
                     rows={5}
@@ -659,7 +698,7 @@ export default function MarketplacesPage() {
                 </button>
                 <div className="flex items-center gap-1 text-[11px] text-emerald-700 font-medium">
                   <ShieldCheck className="h-3.5 w-3.5" />
-                  <span>AES-256 Encrypted</span>
+                  <span>AES-128 Encrypted</span>
                 </div>
               </div>
 
@@ -674,9 +713,76 @@ export default function MarketplacesPage() {
                 <button
                   type="submit"
                   disabled={savingConfig}
-                  className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium disabled:opacity-50 shadow-sm"
+                  className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium disabled:opacity-50"
                 >
                   {savingConfig ? "Encrypting & Saving..." : "Save & Connect Store"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Another Store Modal — makes multi-account support real */}
+      {showAddAccount && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-lg max-w-md w-full p-6 space-y-4">
+            <div className="flex items-start justify-between pb-3 border-b border-gray-200">
+              <div>
+                <h3 className="text-lg font-bold text-[#0a0a0a]">Connect Another Store</h3>
+                <p className="text-xs text-[#767676] mt-0.5">Add a second account of the same or a different platform.</p>
+              </div>
+              <button
+                onClick={() => setShowAddAccount(false)}
+                className="p-1.5 rounded-lg text-[#767676] hover:text-[#0a0a0a] hover:bg-gray-100 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAccount} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">Platform</label>
+                <select
+                  value={newAccountType}
+                  onChange={(e) => setNewAccountType(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
+                >
+                  <option value="LiveEBayAdapter">eBay</option>
+                  <option value="LiveAmazonAdapter">Amazon</option>
+                  <option value="LiveShopifyAdapter">Shopify</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">Store Label</label>
+                <input
+                  type="text"
+                  required
+                  value={newAccountName}
+                  onChange={(e) => setNewAccountName(e.target.value)}
+                  placeholder="e.g. UK Store, Main Account, Warehouse Outlet"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
+                />
+                <p className="text-[11px] text-[#767676] mt-1">
+                  Will be saved as "{ACCOUNT_TYPE_LABELS[newAccountType]} — {newAccountName.trim() || "..."}" so it's easy to tell apart from your other {ACCOUNT_TYPE_LABELS[newAccountType]} accounts.
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-gray-200 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowAddAccount(false)}
+                  className="px-4 py-2 text-xs font-medium text-[#767676] hover:text-[#0a0a0a]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingAccount}
+                  className="px-5 py-2 bg-[#D9720F] hover:bg-[#A8560A] text-white rounded-md text-xs font-medium disabled:opacity-50"
+                >
+                  {creatingAccount ? "Adding..." : "Add Store Account"}
                 </button>
               </div>
             </form>

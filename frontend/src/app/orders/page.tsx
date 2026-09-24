@@ -43,7 +43,7 @@ const STATUS_BADGE: Record<string, string> = {
 function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_BADGE[status] || "bg-gray-100 text-gray-600 border-gray-200";
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium border ${cls}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium border ${cls}`}>
       <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70"></span>
       <span>{status.replace(/_/g, " ")}</span>
     </span>
@@ -211,7 +211,7 @@ export default function OrdersPage() {
   };
 
   const kpis = [
-    { title: "Today's Orders", value: stats?.orders_today ?? 0, icon: ShoppingCart, iconColor: "text-[#6C5DD3]" },
+    { title: "Today's Orders", value: stats?.orders_today ?? 0, icon: ShoppingCart, iconColor: "text-[#A8560A]" },
     { title: "Pending Routing", value: stats?.pending_routing ?? 0, icon: Clock, iconColor: "text-amber-700" },
     { title: "Awaiting Shipment", value: stats?.awaiting_shipment ?? 0, icon: Truck, iconColor: "text-blue-700" },
     {
@@ -227,7 +227,7 @@ export default function OrdersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-200">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Orders</h1>
+          <h1 className="text-2xl font-brand font-normal text-gray-900">Orders</h1>
           <p className="text-sm text-gray-500 mt-1">
             Track customer orders end-to-end: routing to suppliers, purchase orders, and shipment tracking.
           </p>
@@ -238,7 +238,7 @@ export default function OrdersPage() {
           disabled={syncing}
           className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin text-[#6C5DD3]" : "text-[#6C5DD3]"}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin text-[#A8560A]" : "text-[#A8560A]"}`} />
           <span>{syncing ? "Syncing Orders..." : "Sync Orders Now"}</span>
         </button>
       </div>
@@ -266,10 +266,10 @@ export default function OrdersPage() {
         {kpis.map((kpi, index) => {
           const Icon = kpi.icon;
           return (
-            <div key={index} className="bg-white border border-gray-100 rounded-2xl shadow-sm p-4 flex items-center justify-between">
+            <div key={index} className="bg-[#FAFAF8] border border-gray-200 rounded-lg p-4 flex items-center justify-between">
               <div>
                 <span className="text-xs font-semibold text-gray-500">{kpi.title}</span>
-                <div className="text-2xl font-bold text-gray-900 tracking-tight mt-1">{kpi.value}</div>
+                <div className="text-2xl font-bold tabular-nums text-gray-900 mt-1">{kpi.value}</div>
               </div>
               <div className={`p-2 rounded-md bg-gray-50 ${kpi.iconColor}`}>
                 <Icon className="h-5 w-5" />
@@ -287,7 +287,7 @@ export default function OrdersPage() {
             <button
               key={tab.id}
               onClick={() => setSelectedStatus(tab.id)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap shadow-sm ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
                 isActive
                   ? "bg-gray-900 text-white"
                   : "bg-white text-gray-500 hover:text-gray-900 border border-gray-300 hover:bg-gray-50"
@@ -300,7 +300,7 @@ export default function OrdersPage() {
       </div>
 
       {/* Orders Table */}
-      <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+      <div className="bg-white rounded-lg overflow-hidden border border-gray-100">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-gray-900">
             <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
@@ -346,7 +346,7 @@ export default function OrdersPage() {
                           <div className="text-[11px] text-gray-500 font-mono">{order.marketplace_order_id}</div>
                         </td>
                         <td className="px-4 py-3.5">
-                          <span className="text-xs font-medium px-2.5 py-0.5 rounded-md bg-gray-100 border border-gray-200 text-gray-900">
+                          <span className="text-xs font-medium px-2.5 py-0.5 rounded bg-gray-100 border border-gray-200 text-gray-900">
                             {order.marketplace_name || "—"}
                           </span>
                         </td>
@@ -367,7 +367,7 @@ export default function OrdersPage() {
                               <button
                                 onClick={() => handleRoute(order.id)}
                                 disabled={actionLoading[`route-${order.id}`]}
-                                className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 transition-colors inline-flex items-center gap-1 shadow-sm disabled:opacity-50"
+                                className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 transition-colors inline-flex items-center gap-1 disabled:opacity-50"
                                 title="Route order items to best suppliers"
                               >
                                 <Route className="h-3.5 w-3.5 text-blue-600" />
@@ -378,7 +378,7 @@ export default function OrdersPage() {
                               <button
                                 onClick={() => handleCreatePO(order.id)}
                                 disabled={actionLoading[`po-${order.id}`]}
-                                className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 transition-colors inline-flex items-center gap-1 shadow-sm disabled:opacity-50"
+                                className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 transition-colors inline-flex items-center gap-1 disabled:opacity-50"
                                 title="Generate purchase order(s) for routed suppliers"
                               >
                                 <FileText className="h-3.5 w-3.5 text-indigo-600" />
@@ -388,7 +388,7 @@ export default function OrdersPage() {
                             {canTrack && (
                               <button
                                 onClick={() => openTrackingModal(order)}
-                                className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 transition-colors inline-flex items-center gap-1 shadow-sm"
+                                className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 transition-colors inline-flex items-center gap-1"
                                 title="Add tracking and push to marketplace"
                               >
                                 <Send className="h-3.5 w-3.5 text-teal-600" />
@@ -399,7 +399,7 @@ export default function OrdersPage() {
                               <button
                                 onClick={() => handleCancel(order.id)}
                                 disabled={actionLoading[`cancel-${order.id}`]}
-                                className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 text-gray-400 text-xs transition-colors inline-flex items-center gap-1 shadow-sm font-medium disabled:opacity-50"
+                                className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 text-gray-400 text-xs transition-colors inline-flex items-center gap-1 font-medium disabled:opacity-50"
                               >
                                 <Ban className="h-3.5 w-3.5" />
                                 <span>{actionLoading[`cancel-${order.id}`] ? "Cancelling..." : "Cancel"}</span>
@@ -447,7 +447,7 @@ export default function OrdersPage() {
                                           return (
                                             <tr key={item.id}>
                                               <td className="px-4 py-2 font-medium text-gray-900 max-w-xs truncate">{item.title || "Unknown Item"}</td>
-                                              <td className="px-4 py-2 font-mono text-[#6C5DD3]">{item.sku || "—"}</td>
+                                              <td className="px-4 py-2 font-mono text-[#A8560A]">{item.sku || "—"}</td>
                                               <td className="px-4 py-2 text-right">{item.quantity}</td>
                                               <td className="px-4 py-2 text-right">${Number(item.unit_price).toFixed(2)}</td>
                                               <td className="px-4 py-2 text-right">{cost !== null ? `$${cost.toFixed(2)}` : "—"}</td>
@@ -456,7 +456,19 @@ export default function OrdersPage() {
                                               </td>
                                               <td className="px-4 py-2">{item.supplier_name || "—"}</td>
                                               <td className="px-4 py-2">
-                                                <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[10px] font-medium">{item.status}</span>
+                                                {item.status === "UNROUTABLE" ? (
+                                                  <span
+                                                    className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-200 text-[10px] font-medium cursor-help"
+                                                    title={item.routing_note || "Could not be routed to a supplier."}
+                                                  >
+                                                    Unroutable
+                                                  </span>
+                                                ) : (
+                                                  <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[10px] font-medium">{item.status}</span>
+                                                )}
+                                                {item.status === "UNROUTABLE" && item.routing_note && (
+                                                  <div className="text-[10px] text-rose-700 mt-1 max-w-[180px]">{item.routing_note}</div>
+                                                )}
                                               </td>
                                             </tr>
                                           );
@@ -537,7 +549,7 @@ export default function OrdersPage() {
       {/* Add Tracking Modal */}
       {trackingModalOrder && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm max-w-md w-full p-6 shadow-xl space-y-4">
+          <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-md w-full p-6 shadow-xl space-y-4">
             <div className="flex items-start justify-between pb-3 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Add Tracking</h3>
@@ -586,7 +598,7 @@ export default function OrdersPage() {
               <button
                 onClick={handleSaveTracking}
                 disabled={savingTracking || !trackingNumber.trim()}
-                className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50"
+                className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-medium transition-all disabled:opacity-50"
               >
                 {savingTracking ? "Saving..." : "Save & Push to Marketplace"}
               </button>
@@ -598,7 +610,7 @@ export default function OrdersPage() {
       {/* Submit PO to Supplier Modal */}
       {submitPoModal && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm max-w-md w-full p-6 shadow-xl space-y-4">
+          <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-md w-full p-6 shadow-xl space-y-4">
             <div className="flex items-start justify-between pb-3 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Mark PO as Submitted</h3>
@@ -639,7 +651,7 @@ export default function OrdersPage() {
               <button
                 onClick={handleSubmitPo}
                 disabled={savingSubmitPo || !supplierOrderId.trim()}
-                className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50"
+                className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-medium transition-all disabled:opacity-50"
               >
                 {savingSubmitPo ? "Saving..." : "Confirm Submission"}
               </button>

@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, Mail, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { setToken, setStoredUser } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -49,60 +49,77 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[#fbfbfa] px-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <img src="/logo.png" alt="سync" className="h-10 w-auto mx-auto mb-4" />
-          <h1 className="text-lg font-bold text-gray-900">Sign in to ABS Sync</h1>
-          <p className="text-xs text-gray-500 mt-1">Operations console for your dropshipping platform</p>
+    <div className="relative min-h-screen w-full flex items-center justify-center p-4 sm:p-8 bg-[#EBEDE7] overflow-hidden">
+      <div
+        className="absolute inset-0 scale-110"
+        style={{ backgroundImage: "url('/bglogin.jpg')", backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat", filter: "blur(3px)" }}
+      />
+      <div className="relative w-full max-w-4xl bg-[#FAFAF8] border border-gray-200 rounded-lg overflow-hidden grid grid-cols-1 md:grid-cols-2">
+
+        {/* Left panel — the desert route: distribution moves across distance */}
+        <div className="relative hidden md:block min-h-[520px]">
+          <img
+            src="/login.jpg"
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover object-center bg-[#1C201B]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#1C201B]/80 via-[#1C201B]/10 to-transparent" />
+          <div className="absolute bottom-6 left-6 right-6">
+            <p className="text-white font-brand text-lg leading-snug">
+              Every shipment starts somewhere.
+            </p>
+            <p className="text-white/70 text-xs mt-1">
+              From the distributor&apos;s warehouse to a customer&apos;s door.
+            </p>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-6 space-y-4 shadow-sm">
-          {error && (
-            <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
+        {/* Right panel — the form */}
+        <div className="p-8 sm:p-10 flex flex-col justify-center">
+          <h1 className="text-2xl font-brand font-normal text-[#1C201B]">Dispatch Console</h1>
+          <p className="text-xs text-[#767676] mt-1.5 mb-7">Sign in to manage suppliers, listings, and orders.</p>
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-800 mb-1">Email</label>
-            <div className="relative">
-              <Mail className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="p-3 rounded bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#767676] mb-1.5">Email</label>
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
-                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-gray-900"
+                className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-[#1C201B] focus:outline-none focus:border-[#1C201B] focus:ring-2 focus:ring-[#1C201B]/[0.06]"
               />
             </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-800 mb-1">Password</label>
-            <div className="relative">
-              <Lock className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#767676] mb-1.5">Password</label>
               <input
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-gray-900"
+                className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-[#1C201B] focus:outline-none focus:border-[#1C201B] focus:ring-2 focus:ring-[#1C201B]/[0.06]"
               />
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
-          >
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 bg-[#D9720F] hover:bg-[#A8560A] text-white rounded-md text-sm font-semibold transition-colors disabled:opacity-50"
+            >
+              {loading ? "Signing in..." : "Sign In"}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

@@ -8,10 +8,56 @@ from app.core.security import encrypt_credential, decrypt_credential
 from app.api.deps import require_role
 from app.models.marketplace import Marketplace
 from app.models.listing import Listing
-from app.schemas.marketplace import MarketplaceResponse, MarketplaceUpdate
+from app.schemas.marketplace import MarketplaceResponse, MarketplaceUpdate, MarketplaceCreate
 from app.adapters.registry import get_marketplace_adapter
 
 router = APIRouter()
+
+# Real, live adapters only — a new marketplace ACCOUNT (e.g. a second eBay
+# store) must be one of these. Deliberately excludes Mock* adapters: those
+# exist for tests/dev fixtures, not for a merchant to knowingly create a real
+# sales channel against.
+CREATABLE_MARKETPLACE_ADAPTERS = {"LiveEBayAdapter", "LiveAmazonAdapter", "LiveShopifyAdapter"}
+
+@router.post("", response_model=MarketplaceResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("admin"))])
+def create_marketplace(payload: MarketplaceCreate, db: Session = Depends(get_db)):
+    """
+    Registers a new marketplace ACCOUNT (e.g. a second eBay store). This is
+    what makes multi-account support real: without this endpoint, only the
+    original pre-seeded eBay/Amazon/Shopify rows could ever exist, and the
+    OAuth-exchange fix for multiple accounts had nothing to actually target.
+    """
+    if payload.adapter_class not in CREATABLE_MARKETPLACE_ADAPTERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"adapter_class must be one of {sorted(CREATABLE_MARKETPLACE_ADAPTERS)}"
+        )
+    existing = db.query(Marketplace).filter(Marketplace.name == payload.name).first()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"A marketplace named '{payload.name}' already exists")
+
+    marketplace = Marketplace(
+        name=payload.name,
+        adapter_class=payload.adapter_class,
+        is_active=True,
+        credentials_encrypted=None,
+    )
+    db.add(marketplace)
+    db.commit()
+    db.refresh(marketplace)
+
+    return MarketplaceResponse(
+        id=marketplace.id,
+        name=marketplace.name,
+        adapter_class=marketplace.adapter_class,
+        is_active=marketplace.is_active,
+        has_credentials=False,
+        active_listings_count=0,
+        total_listings_count=0,
+        credentials_expires_at=None,
+        created_at=marketplace.created_at,
+        updated_at=marketplace.updated_at,
+    )
 
 @router.get("", response_model=List[MarketplaceResponse])
 def list_marketplaces(db: Session = Depends(get_db)):

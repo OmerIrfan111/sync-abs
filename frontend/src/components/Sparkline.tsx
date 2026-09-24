@@ -9,7 +9,7 @@ interface SparklineProps {
 }
 
 /** Minimal inline trend line for a KPI card. No axes, no labels — the number does the talking. */
-export default function Sparkline({ values, color = "#6C5DD3", height = 28 }: SparklineProps) {
+export default function Sparkline({ values, color = "#D9720F", height = 28 }: SparklineProps) {
   if (values.length < 2) {
     return <div style={{ height }} />;
   }

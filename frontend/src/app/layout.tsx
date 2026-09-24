@@ -18,12 +18,12 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Special+Elite&display=swap"
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Bebas+Neue&family=Scheherazade+New:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
         <link rel="icon" href="/logo.png" />
       </head>
-      <body className="bg-[#F6F6FB] text-[#1a1a1a] font-sans selection:bg-[#6C5DD3]/15 selection:text-[#6C5DD3]">
+      <body className="bg-[#EBEDE7] text-[#1a1a1a] font-sans selection:bg-[#D9720F]/15 selection:text-[#A8560A]">
         <AuthGuard>{children}</AuthGuard>
       </body>
     </html>

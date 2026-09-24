@@ -1,28 +1,26 @@
 ---
 name: ABS Sync
-description: Confident, colorful operations console for multi-marketplace dropshipping — modern SaaS visual language over the same plain-English, glanceable data.
+description: "The Dispatch Desk" — a wholesale-distribution ops console grounded in freight paperwork and warehouse signage, not generic SaaS.
 colors:
-  primary-violet: "#6C5DD3"
-  primary-violet-deep: "#5B4BD1"
-  primary-violet-tint: "#F3F1FD"
-  accent-teal: "#14B8A6"
-  accent-amber: "#F59E0B"
-  accent-pink: "#EC4899"
-  ink: "#1B1B2F"
-  ink-soft: "#1a1a1a"
+  ink: "#1C201B"
+  paper: "#EBEDE7"
+  surface: "#FAFAF8"
+  hazard: "#D9720F"
+  hazard-deep: "#A8560A"
+  hazard-tint: "#FCF0E4"
+  steel: "#3C5A5E"
+  steel-tint: "#EEF3F3"
   graphite: "#767676"
-  hairline: "#f1f0f5"
-  paper: "#F6F6FB"
-  surface: "#ffffff"
+  hairline: "#e5e7eb"
   signal-healthy: "#059669"
   signal-warning: "#d97706"
   signal-critical: "#e11d48"
   signal-info: "#4f46e5"
 typography:
-  title:
-    fontFamily: "IBM Plex Sans, system-ui, sans-serif"
-    fontSize: "1.5rem"
-    fontWeight: 700
+  display:
+    fontFamily: "Bebas Neue, sans-serif"
+    fontSize: "1.375rem"
+    fontWeight: 400
     lineHeight: 1.2
   heading:
     fontFamily: "IBM Plex Sans, system-ui, sans-serif"
@@ -40,16 +38,19 @@ typography:
     fontWeight: 600
     lineHeight: 1.2
     letterSpacing: "0.02em"
-  wordmark:
-    fontFamily: "Special Elite, cursive"
-    fontSize: "1.25rem"
+  data:
+    fontFamily: "IBM Plex Mono, monospace"
+    fontSize: "0.75rem"
+    fontWeight: 500
+  arabic:
+    fontFamily: "Scheherazade New, serif"
+    fontSize: "1.375rem"
     fontWeight: 400
-    lineHeight: 1
+    lineHeight: 1.2
 rounded:
-  sm: "8px"
-  md: "12px"
-  lg: "16px"
-  xl: "24px"
+  tag: "4px"
+  button: "6px"
+  container: "8px"
 spacing:
   xs: "6px"
   sm: "10px"
@@ -57,120 +58,101 @@ spacing:
   lg: "20px"
 components:
   button-primary:
-    backgroundColor: "{colors.primary-violet}"
+    backgroundColor: "{colors.hazard}"
     textColor: "#ffffff"
-    rounded: "{rounded.md}"
+    rounded: "{rounded.button}"
     padding: "8px 16px"
   button-primary-hover:
-    backgroundColor: "{colors.primary-violet-deep}"
+    backgroundColor: "{colors.hazard-deep}"
   card:
     backgroundColor: "{colors.surface}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.container}"
 ---
 
-# Design System: ABS Sync
+# Design System: ABS Sync — "The Dispatch Desk"
 
 ## 1. Overview
 
-**Creative North Star: "Modern Control Room"**
+ABS Sync moves physical inventory: it pulls live wholesale catalogs from real distributor warehouses (Ingram Micro, D&H — freight, UPC/EAN barcodes, purchase orders, tracking numbers) and pushes them to consumer marketplaces. It's run by a small ops team who check it constantly through a working day.
 
-Phase 6 moved ABS Sync from a muted, hairline-only "quiet ops tool" look to a confident, colorful modern SaaS console (explicitly requested to match reference dashboards with soft-shadow rounded cards, a violet primary, and varied semantic accent colors per metric). The underlying product principles are unchanged — plain-English labels, honest data, status that's never color-only, glanceable-first hierarchy — but the visual expression is richer and more energetic than the original "Control Room" spec.
+**Creative North Star: a dispatch desk.** The visual world is warehouse and freight paperwork — manifests, packing slips, shipping tags, customs stamps — not generic tech-SaaS. This replaced an earlier violet/indigo palette that, on audit, turned out to be its own kind of generic default (arguably the single most common current AI-dashboard color), chosen to match a reference screenshot without being grounded in what this product actually is.
 
-This still rejects the crypto-trading-terminal mood (dark backgrounds, neon green/red tickers, gauge dials) — that aesthetic signals speculation, not operational trust. It also still avoids gradient text and decorative glassmorphism. What changed is the willingness to use color: multiple accent hues per KPI row, soft card shadows instead of hairline-only borders, and larger corner radii.
-
-**Key Characteristics:**
-- Light lavender-tinted canvas (`#F6F6FB`) — never dark mode by default.
-- Status is never color-only: every health/error state pairs a color with an icon and a plain-English word.
-- One **primary** accent (violet, `#6C5DD3`) for actions, active nav, and links; a rotating set of semantic/chart accents (teal, amber, pink, emerald, rose) for KPI icon chips and data visualizations — this is a "Committed" color strategy, not "Restrained."
-- Cards float above the page with a soft shadow (`shadow-sm`, hover `shadow-md`) and generous rounded corners (16-24px), not just a hairline border.
-- Plain-English labels over technical jargon everywhere a non-technical operator will read it.
+**Key characteristics:**
+- Cool, concrete/steel-toned paper background — not warm cream, not tech-lavender.
+- One considered accent: hazard/safety-orange (`#D9720F`), the color of pallet tags and hi-vis paint — not a decorative brand gradient.
+- Border-first elevation: cards get a hairline border, no shadow at rest. Shadow is earned only by things actually floating above the page (modals, dropdowns).
+- A rare display face (Bebas Neue, bold condensed) on page titles only — reads like stenciled warehouse signage. Never used for body text or data.
+- Status badges read as shipping tags (small, square-cornered, bordered) — not rounded chips.
+- Real hierarchy in the radius scale: tags (4px) < buttons (6px) < containers (8px). No more "one radius reused everywhere regardless of what the element is."
 
 ## 2. Colors
 
 ### Primary
-- **Violet** (#6C5DD3): primary actions, links, active nav item, primary KPI icon chip. The one color that means "this is the app's identity," used generously on interactive elements (buttons, active states) but never as a full-bleed background fill.
+- **Hazard** (`#D9720F`): the one brand accent. Primary buttons, active nav state, links, primary icon chips. Named for what it is — the color of a warehouse pallet tag — not a generic "brand-500."
+- **Hazard Deep** (`#A8560A`): hover/active state, and the only safe shade of the accent to use as body text on paper (the base hazard fails AA as small text).
 
-### Chart / KPI accent rotation
-Used for icon chips and data visualizations to give each metric its own visual identity (a "Committed/Full palette" strategy, replacing the old single-accent rule):
-- Teal (#14B8A6), Amber (#F59E0B), Pink (#EC4899), plus the semantic colors below when the metric is itself a health signal.
+### Secondary
+- **Steel** (`#3C5A5E`): secondary accent for things that need to feel calm/neutral rather than urgent — used sparingly, never competing with hazard for attention.
 
 ### Neutral
-- **Ink** (#1B1B2F): primary text, headings.
-- **Ink Soft** (#1a1a1a): body copy needing more weight than graphite.
-- **Graphite** (#767676): secondary/supporting text, placeholder copy, inactive icons.
-- **Hairline** (#f1f0f5): subtle dividers inside cards (table rows, list separators) — cards themselves are separated from the page by shadow, not border.
-- **Paper** (#F6F6FB): page background (cool lavender-gray, not warm cream).
-- **Surface** (#ffffff): card and input backgrounds.
+- **Ink** (`#1C201B`): primary text, headings — a near-black with a faint gunmetal-green cast rather than a flat `#0a0a0a`.
+- **Graphite** (`#767676`): secondary text, captions, inactive icons.
+- **Paper** (`#EBEDE7`): page background — cool grey-green like warehouse concrete or galvanized steel.
+- **Surface** (`#FAFAF8`): card/input background, one step lighter than paper.
+- **Hairline** (`#e5e7eb`): borders and dividers.
 
-### Semantic status
-- **Signal Healthy** (#059669, emerald): connected suppliers/marketplaces, successful syncs, positive profit.
-- **Signal Warning** (#d97706, amber): needs attention soon but not broken (credentials expiring, pending routing).
-- **Signal Critical** (#e11d48, rose): broken now (auth failures, expired credentials, cancelled orders, negative margin).
-- **Signal Info** (#4f46e5, indigo): neutral in-progress states (routed, awaiting shipment) that are neither good nor bad yet.
-
-### Named Rules
-**The Status-Never-Alone Rule (unchanged).** A health/error state is never conveyed by color alone. Every status pairs a semantic color with a short label ("Healthy", "Expired", "Needs attention") and, where space allows, an icon.
-
-**The Honest-Data Rule (unchanged, load-bearing).** Never fabricate a value to fill a visual — donuts, bars, and trend lines only ever plot real numbers from the API. If there's no real data for a visualization, omit it rather than inventing placeholder proportions.
+### Semantic status (unchanged, exempt from novelty)
+- Healthy `#059669`, Warning `#d97706`, Critical `#e11d48`, Info `#4f46e5`. These are functional, not decorative — accessibility and consistency win over distinctiveness here.
 
 ## 3. Typography
 
-Unchanged from the original spec — IBM Plex Sans throughout, same Title/Heading/Body/Label scale. Color richness carries the redesign, not new type sizes.
+**Display: Bebas Neue.** A bold condensed sans, used ONLY for page-level `<h1>` titles — at most one instance per screen. It's a character face, not a reading face; using it anywhere else (body copy, table data, buttons) would hurt legibility and dilute its rarity. The Arabic "س" in the "سync" wordmark uses Scheherazade New instead, wherever it appears as live text rather than the logo image.
 
-**Wordmark Font:** "Special Elite" — reserved exclusively for the "سync" logotype in the sidebar/header (see `globals.css` font import and `layout.tsx`). Never used for UI copy, labels, or body text; IBM Plex Sans covers all of that.
+**Body/UI: IBM Plex Sans.** Everything else — labels, body copy, dense tables, buttons. Chosen deliberately kept (not a "default go-to" like Inter/Roboto/Arial) rather than replaced wholesale, since a data-dense ops tool's readability matters more than novelty in the 90% of the UI that's tables and forms.
+
+**Data: tabular/monospace treatment** for SKUs, UPCs, prices, tracking numbers, order IDs — these are literally manifest numbers, so a mono/tabular figure treatment is earned here, not decorative.
+
+### Named Rules
+**The One-Display Rule.** Bebas Neue appears at most once per screen (the page title). If a screen wants more "character," add hierarchy through weight/color in Plex Sans, never a second display-face instance.
 
 ## 4. Elevation
 
-Shadow-first for page-level cards (a deliberate change from the original border-only spec): `shadow-sm` at rest, `shadow-md` + slight lift on hover for clickable cards. A thin `border-gray-100` is kept underneath the shadow for crisp edges at all zoom levels, but the shadow — not the border — is what separates a card from the page now.
+**Border-first, not shadow-first.** A card is a hairline border on a lighter surface — nothing else — at rest. Add a shadow only when something is temporarily floating above the page (a modal, a dropdown, a popover), never as permanent decoration on a static card or table.
 
-### Shadow Vocabulary
-- **Card resting** (`shadow-sm`, Tailwind default): every page-level card (KPI cards, panel cards, table containers).
-- **Card hover** (`shadow-md` + `-translate-y-0.5`): interactive/clickable cards.
-- **Dropdown** (`0 4px 16px -2px rgba(0,0,0,0.08), 0 2px 6px -2px rgba(0,0,0,0.04)`): menus, modals, popovers.
+### Shadow vocabulary
+- **Resting**: none. A hairline border is the only signal a card needs.
+- **Dropdown** (`0 4px 16px -2px rgba(0,0,0,0.08), 0 2px 6px -2px rgba(0,0,0,0.04)`): modals, dropdowns, popovers.
 
 ## 5. Components
 
 ### Buttons
-- **Shape:** rounded-xl (12px).
-- **Primary:** Violet (#6C5DD3) fill, white text, 8px/16px padding, text-xs font-semibold, subtle violet-tinted shadow.
-- **Hover / Focus:** primary darkens to `#5b4bd1`; all interactive elements get a visible focus ring for keyboard users (never `focus:outline-none` without a replacement — inputs get `focus:ring-2 focus:ring-[#0a0a0a]/[0.06]` alongside the border-color change).
-- **Secondary / Ghost:** white surface, gray-200 border, ink text.
+- **Shape:** 6px radius (`rounded-md`).
+- **Primary:** Hazard fill, white text.
+- **Hover:** darkens to Hazard Deep.
+- **Secondary/Ghost:** white surface, hairline border, ink text.
 
-### Status Badges
-- **Style:** pill (rounded-full), pastel-tint background of the semantic color at ~10% opacity, full-strength semantic color text, 1px border of the same color at ~20% opacity.
-- **Never icon-only or color-only:** always paired with a short word (Healthy / Error / Pending).
+### Status tags
+- **Style:** small, square-cornered (4px radius), tinted background at ~10% of the semantic color, full-strength text, 1px border at ~20% opacity. Reads as a shipping label, not a rounded pill.
+- Never color-only — always paired with a short word.
 
-### Cards / Containers
-- **Corner Style:** rounded-2xl (16px) for page-level cards, rounded-lg/xl for nested elements.
-- **Background:** Surface (#ffffff) on Paper (#F6F6FB) page background.
-- **Shadow Strategy:** `shadow-sm` at rest (see Elevation) — this is the one deliberate departure from "border-before-shadow."
-- **Border:** thin `border-gray-100`, present but secondary to the shadow.
-- **Internal Padding:** 16-20px (spacing.md/lg).
-
-### Inputs / Fields
-- **Style:** white background, gray-300 border, rounded-lg, text-sm.
-- **Focus:** border shifts to Ink, plus `focus:ring-2 focus:ring-[#0a0a0a]/[0.06]` — applied consistently across every text input, select, and textarea in the app.
+### Containers
+- **Corner style:** 8px radius.
+- **Elevation:** hairline border, no shadow at rest (see Elevation).
+- **Data tables:** prefer a flat, ledger-style table (hairline row dividers, no card wrapper) over boxing every table in its own shadowed card, where the table is the primary content of the page.
 
 ### Navigation
-- **Style:** left sidebar, white background, hairline right border, items grouped under small uppercase section labels (Overview / Sell / Connections / Operations). Active item: violet-tinted pill background (`bg-[#6C5DD3]/10`) with violet icon and text — not a solid dark fill.
-
-### KPI Cards (signature component)
-A Label-weight caption, a large bold number, a one-line Graphite description, and a small icon chip in a pale tint of a rotating accent color (violet, teal, amber, rose, emerald — see Chart/KPI accent rotation) so each metric in a row reads as visually distinct at a glance, not a repeated identical template.
-
-### Data visualizations
-Small, real-data-only components (`Donut`, `Sparkline`, `Gauge` in `src/components/`) using the accent rotation and semantic colors. No third-party chart library; kept intentionally simple (SVG arcs/lines) and always driven by actual API numbers.
+- Left sidebar, grouped by task (Overview / Sell / Connections / Operations). Active item: hazard-tinted background, hazard text/icon.
 
 ## 6. Do's and Don'ts
 
 ### Do:
-- **Do** use the violet primary for actions, links, and active states; use the accent rotation (teal/amber/pink) plus semantic colors for KPI icon chips and charts.
-- **Do** give page-level cards a soft shadow (`shadow-sm`) and 16px+ rounded corners.
-- **Do** pair every status color with a text label and, where there's room, an icon (Status-Never-Alone Rule).
-- **Do** use plain-English labels ("Products to Sell", "Your Online Stores") over technical jargon anywhere non-technical operators will read them, per PRODUCT.md.
-- **Do** keep every visualization honest — real proportions and numbers only, never fabricated to "fill out" a chart.
+- Use hazard-orange only on the interactive/primary-accent role — buttons, links, active states, primary icon chips.
+- Give every card a hairline border and nothing else at rest.
+- Use Bebas Neue exactly once per screen for the page title.
+- Keep semantic status colors as documented — don't restyle them for novelty.
 
 ### Don't:
-- **Don't** switch to dark mode, neon status colors, or gauge-dial widgets — the crypto-trading-terminal mood is still rejected.
-- **Don't** use gradient text or decorative glassmorphism.
-- **Don't** show internal version labels, infra stack details, or other jargon that isn't actionable for the person reading it.
-- **Don't** rely on a colored dot alone to communicate health/error state with no accompanying word.
+- Don't add a drop shadow to a static card "because it looks unfinished" — add nothing, the border is the signal.
+- Don't use Bebas Neue for body copy, buttons, or table data — it's a display face used once per screen.
+- Don't reach for violet, indigo, or cream+terracotta — both are generic defaults this system explicitly moved away from.
+- Don't round a status tag into a pill — it's a label, not a badge.

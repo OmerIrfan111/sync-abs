@@ -212,6 +212,7 @@ export interface OrderItem {
   supplier_id?: number | null;
   supplier_name?: string | null;
   status: string;
+  routing_note?: string | null;
 }
 
 export interface PurchaseOrder {
@@ -338,6 +339,7 @@ export interface SupplierScore {
   avg_fulfillment_days: number | null;
   cancellation_rate_pct: number;
   routed_item_count: number;
+  catalog_missing_data_rate_pct: number | null;
 }
 
 export interface RulePreview {

@@ -81,7 +81,7 @@ export default function AnalyticsPage() {
       iconColor: "text-amber-700",
       description: `$${(summary?.cost_total ?? 0).toFixed(2)} cost, $${(summary?.fees_total ?? 0).toFixed(2)} fees`,
       sparkline: null,
-      sparklineColor: "#6C5DD3",
+      sparklineColor: "#D9720F",
       changePct: null,
     },
   ];
@@ -101,7 +101,7 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-200">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Analytics</h1>
+          <h1 className="text-2xl font-brand font-normal text-gray-900">Analytics</h1>
           <p className="text-sm text-gray-500 mt-1">
             Net profit, margin by supplier, top-performing SKUs, and supplier fulfillment performance.
           </p>
@@ -112,7 +112,7 @@ export default function AnalyticsPage() {
             <button
               key={opt.value}
               onClick={() => setPeriod(opt.value)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 period === opt.value
                   ? "bg-gray-900 text-white"
                   : "bg-white text-gray-500 hover:text-gray-900 border border-gray-300 hover:bg-gray-50"
@@ -137,7 +137,7 @@ export default function AnalyticsPage() {
         {kpis.map((kpi, index) => {
           const Icon = kpi.icon;
           return (
-            <div key={index} className="bg-white border border-gray-100 rounded-2xl shadow-sm p-4">
+            <div key={index} className="bg-[#FAFAF8] border border-gray-200 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-gray-500">{kpi.title}</span>
                 <div className={`p-1.5 rounded-md bg-gray-50 ${kpi.iconColor}`}>
@@ -146,7 +146,7 @@ export default function AnalyticsPage() {
               </div>
               <div className="mt-3">
                 <div className="flex items-center gap-2">
-                  <div className="text-2xl font-bold text-gray-900 tracking-tight">
+                  <div className="text-2xl font-bold tabular-nums text-gray-900">
                     {loading ? "..." : kpi.value}
                   </div>
                   {kpi.changePct !== null && kpi.changePct !== undefined && (
@@ -173,7 +173,7 @@ export default function AnalyticsPage() {
         })}
 
         {/* Gross Margin Gauge */}
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-4 flex flex-col items-center justify-center">
+        <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center">
           <span className="text-xs font-semibold text-gray-500 self-start mb-1">Gross Margin Health</span>
           <Gauge
             value={summary?.gross_margin_pct ?? 0}
@@ -184,9 +184,9 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Revenue Trend */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
+      <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg p-5">
         <div className="flex items-center gap-2 pb-3 border-b border-gray-100 mb-4">
-          <BarChart3 className="h-4 w-4 text-[#6C5DD3]" />
+          <BarChart3 className="h-4 w-4 text-[#D9720F]" />
           <div>
             <h2 className="text-sm font-bold text-gray-900">Revenue & Profit Trend</h2>
             <p className="text-xs text-gray-500">Daily revenue (bar) vs. net profit, over the selected window.</p>
@@ -206,7 +206,7 @@ export default function AnalyticsPage() {
                     ${point.revenue.toFixed(2)} / {profitPositive ? "+" : ""}${point.profit.toFixed(2)}
                   </div>
                   <div
-                    className={`w-4 rounded-t ${profitPositive ? "bg-[#6C5DD3]" : "bg-rose-400"}`}
+                    className={`w-4 rounded-t ${profitPositive ? "bg-[#D9720F]" : "bg-rose-400"}`}
                     style={{ height: `${heightPct}%` }}
                   />
                   <span className="text-[9px] text-gray-400 mt-1 rotate-0 whitespace-nowrap">
@@ -221,9 +221,9 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Margin by Supplier */}
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
+        <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg p-5">
           <div className="flex items-center gap-2 pb-3 border-b border-gray-100 mb-3">
-            <Truck className="h-4 w-4 text-[#6C5DD3]" />
+            <Truck className="h-4 w-4 text-[#D9720F]" />
             <div>
               <h2 className="text-sm font-bold text-gray-900">Gross Margin by Supplier</h2>
               <p className="text-xs text-gray-500">Revenue vs. cost for routed items, by supplier.</p>
@@ -249,9 +249,9 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Top SKUs Heatmap */}
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
+        <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg p-5">
           <div className="flex items-center gap-2 pb-3 border-b border-gray-100 mb-3">
-            <Package className="h-4 w-4 text-[#6C5DD3]" />
+            <Package className="h-4 w-4 text-[#D9720F]" />
             <div>
               <h2 className="text-sm font-bold text-gray-900">Top-Performing SKUs</h2>
               <p className="text-xs text-gray-500">Tile size = revenue, color = profit margin.</p>
@@ -285,9 +285,9 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Category Performance */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
+      <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg p-5">
         <div className="flex items-center gap-2 pb-3 border-b border-gray-100 mb-3">
-          <Tag className="h-4 w-4 text-[#6C5DD3]" />
+          <Tag className="h-4 w-4 text-[#D9720F]" />
           <div>
             <h2 className="text-sm font-bold text-gray-900">Category Performance</h2>
             <p className="text-xs text-gray-500">Revenue and margin by product category, in the selected window.</p>
@@ -326,9 +326,9 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Supplier Performance Scoring */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
+      <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg p-5">
         <div className="flex items-center gap-2 pb-3 border-b border-gray-100 mb-3">
-          <Clock className="h-4 w-4 text-[#6C5DD3]" />
+          <Clock className="h-4 w-4 text-[#D9720F]" />
           <div>
             <h2 className="text-sm font-bold text-gray-900">Supplier Fulfillment Performance</h2>
             <p className="text-xs text-gray-500">Based on purchase order fulfillment time and order cancellations.</p>
@@ -342,6 +342,7 @@ export default function AnalyticsPage() {
                 <th className="py-2.5 pr-4">Purchase Orders</th>
                 <th className="py-2.5 pr-4">Avg. Fulfillment Time</th>
                 <th className="py-2.5 pr-4">Cancellation Rate</th>
+                <th className="py-2.5 pr-4">Catalog Data Gaps</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -358,13 +359,24 @@ export default function AnalyticsPage() {
                     </span>
                     <span className="text-gray-400"> ({s.routed_item_count} routed)</span>
                   </td>
+                  <td className="py-2.5 pr-4 text-xs">
+                    {s.catalog_missing_data_rate_pct !== null ? (
+                      <span className={s.catalog_missing_data_rate_pct > 5 ? "text-rose-600 font-semibold" : "text-gray-600"}>
+                        {s.catalog_missing_data_rate_pct.toFixed(1)}%
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">No catalog yet</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <p className="text-[11px] text-gray-400 mt-3">
-          Note: inventory accuracy is not scored here — no supplier adapter in this system currently reports promised-vs-actual stock discrepancies.
+          "Catalog Data Gaps" is how often this supplier's feed failed to return usable price/quantity data during sync — a real signal about
+          feed reliability, but not the same thing as true inventory accuracy (promised-vs-actual stock at fulfillment time), which no supplier
+          adapter in this system currently reports.
         </p>
       </div>
     </div>

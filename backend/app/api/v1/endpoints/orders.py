@@ -67,6 +67,7 @@ def _order_to_detail(order: Order) -> OrderDetailResponse:
             supplier_id=item.supplier_id,
             supplier_name=item.supplier.name if item.supplier else None,
             status=item.status,
+            routing_note=item.routing_note,
         ))
 
     pos = []

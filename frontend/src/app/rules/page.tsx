@@ -194,12 +194,7 @@ export default function RulesPage() {
       {/* Header - Unboxed on canvas */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-200">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold text-[#0a0a0a] tracking-tight">Pricing & Stock Rules</h1>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#6C5DD3]/10 text-[#6C5DD3] border border-[#6C5DD3]/20">
-              Automated Calculations
-            </span>
-          </div>
+          <h1 className="text-2xl font-brand font-normal text-[#0a0a0a]">Pricing & Stock Rules</h1>
           <p className="text-sm text-[#767676] mt-1 max-w-2xl leading-relaxed">
             Set how much profit you want to make on each product. The system will automatically calculate the selling price and update your stores.
           </p>
@@ -220,10 +215,10 @@ export default function RulesPage() {
 
       {/* Main Profit Form */}
       <form onSubmit={handleSaveGlobalRules} className="space-y-6">
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5">
+        <div className="bg-white p-6 rounded-lg border border-gray-100 space-y-5">
           <div className="border-b border-gray-100 pb-3">
             <h2 className="text-base font-bold text-[#0a0a0a] flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-[#6C5DD3]" />
+              <DollarSign className="h-4 w-4 text-[#D9720F]" />
               <span>How much profit do you want to make?</span>
             </h2>
             <p className="text-xs text-[#767676] mt-0.5">
@@ -235,9 +230,9 @@ export default function RulesPage() {
             {/* Option A: Percentage Markup */}
             <div 
               onClick={() => setPricingMode("PERCENTAGE_MARKUP")}
-              className={`p-5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+              className={`p-5 rounded-lg border cursor-pointer transition-all flex flex-col justify-between ${
                 pricingMode === "PERCENTAGE_MARKUP"
-                  ? "bg-white border-[#0a0a0a] ring-1 ring-[#0a0a0a] shadow-sm"
+                  ? "bg-white border-[#0a0a0a] ring-1 ring-[#0a0a0a]"
                   : "bg-gray-50/50 border-gray-200 hover:border-gray-300"
               }`}
             >
@@ -265,7 +260,7 @@ export default function RulesPage() {
                     onChange={(e) => setMarkupPercent(e.target.value)}
                     className="w-20 px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-[#0a0a0a] text-center focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                   />
-                  <span className="text-sm font-semibold text-[#6C5DD3]">% profit</span>
+                  <span className="text-sm font-semibold text-[#A8560A]">% profit</span>
                 </div>
               </div>
               <p className="text-[11px] text-[#767676] mt-3">
@@ -276,9 +271,9 @@ export default function RulesPage() {
             {/* Option B: Fixed Dollar Amount */}
             <div 
               onClick={() => setPricingMode("FIXED_PROFIT")}
-              className={`p-5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+              className={`p-5 rounded-lg border cursor-pointer transition-all flex flex-col justify-between ${
                 pricingMode === "FIXED_PROFIT"
-                  ? "bg-white border-[#0a0a0a] ring-1 ring-[#0a0a0a] shadow-sm"
+                  ? "bg-white border-[#0a0a0a] ring-1 ring-[#0a0a0a]"
                   : "bg-gray-50/50 border-gray-200 hover:border-gray-300"
               }`}
             >
@@ -319,9 +314,9 @@ export default function RulesPage() {
           </div>
 
           {/* Live Preview Box */}
-          <div className="p-4 rounded-xl bg-gray-50 border border-gray-200">
+          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-[#6C5DD3] uppercase tracking-wider flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-[#A8560A] uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5" />
                 <span>Live Calculation Preview</span>
               </span>
@@ -346,7 +341,7 @@ export default function RulesPage() {
               <div className="flex items-center gap-5">
                 <div className="text-right">
                   <span className="text-xs text-[#767676] block">Customer Pays</span>
-                  <span className="text-xl font-bold text-[#6C5DD3]">${sellingPricePreview.toFixed(2)}</span>
+                  <span className="text-xl font-bold text-[#A8560A]">${sellingPricePreview.toFixed(2)}</span>
                 </div>
                 <div className="text-right pl-5 border-l border-gray-200">
                   <span className="text-xs text-[#767676] block">Your Profit</span>
@@ -358,10 +353,10 @@ export default function RulesPage() {
         </div>
 
         {/* Stock Safety Buffer Section */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+        <div className="bg-white p-6 rounded-lg border border-gray-100 space-y-4">
           <div className="border-b border-gray-100 pb-3">
             <h2 className="text-base font-bold text-[#0a0a0a] flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-[#6C5DD3]" />
+              <ShieldCheck className="h-4 w-4 text-[#D9720F]" />
               <span>Stock Protection & Safety Buffer</span>
             </h2>
             <p className="text-xs text-[#767676] mt-0.5">
@@ -371,7 +366,7 @@ export default function RulesPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Safety Buffer Units */}
-            <div className="p-4 bg-gray-50/70 rounded-xl border border-gray-200 space-y-2">
+            <div className="p-4 bg-gray-50/70 rounded-lg border border-gray-200 space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-[#0a0a0a]">
                   Keep this many units as backup
@@ -394,7 +389,7 @@ export default function RulesPage() {
             </div>
 
             {/* What to do when out of stock */}
-            <div className="p-4 bg-gray-50/70 rounded-xl border border-gray-200 space-y-2">
+            <div className="p-4 bg-gray-50/70 rounded-lg border border-gray-200 space-y-2">
               <label className="text-xs font-semibold text-[#0a0a0a] block">
                 What to do when a product runs out
               </label>
@@ -429,7 +424,7 @@ export default function RulesPage() {
             <button
               type="submit"
               disabled={savingGlobal}
-              className="px-5 py-2.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50"
+              className="px-5 py-2.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all disabled:opacity-50"
             >
               {savingGlobal ? "Saving Settings..." : "Save Profit & Stock Rules"}
             </button>
@@ -438,7 +433,7 @@ export default function RulesPage() {
       </form>
 
       {/* Advanced Collapsible Section */}
-      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+      <div className="bg-white p-6 rounded-lg border border-gray-100 space-y-4">
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
@@ -446,7 +441,7 @@ export default function RulesPage() {
         >
           <div>
             <h3 className="text-sm font-bold text-[#0a0a0a] flex items-center gap-2">
-              <SlidersHorizontal className="h-4 w-4 text-[#6C5DD3]" />
+              <SlidersHorizontal className="h-4 w-4 text-[#D9720F]" />
               <span>Set different rules for specific products or stores (Advanced)</span>
             </h3>
             <p className="text-xs text-[#767676] mt-0.5">
@@ -466,7 +461,7 @@ export default function RulesPage() {
                 <h4 className="text-xs font-semibold text-[#767676] uppercase tracking-wider">Active Custom Overrides</h4>
                 <button
                   onClick={() => setShowOverrideModal(true)}
-                  className="px-3 py-1.5 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium flex items-center gap-1.5 border border-gray-300 shadow-sm"
+                  className="px-3 py-1.5 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium flex items-center gap-1.5 border border-gray-300"
                 >
                   <Plus className="h-3 w-3" />
                   <span>Add Product Override</span>
@@ -491,7 +486,7 @@ export default function RulesPage() {
                       {pricingRules.filter(r => r.product_id).map((r) => (
                         <tr key={r.id}>
                           <td className="px-3.5 py-2.5 font-medium text-[#0a0a0a]">{r.product_title || `Product #${r.product_id}`}</td>
-                          <td className="px-3.5 py-2.5 text-[#6C5DD3] font-semibold">{r.percentage}% markup</td>
+                          <td className="px-3.5 py-2.5 text-[#A8560A] font-semibold">{r.percentage}% markup</td>
                           <td className="px-3.5 py-2.5 text-right">
                             <button
                               onClick={() => handleDeleteRule("pricing", r.id)}
@@ -509,9 +504,9 @@ export default function RulesPage() {
             </div>
 
             {/* Live Scenario Simulator */}
-            <div className="p-4 bg-gray-50/70 rounded-xl border border-gray-200 space-y-2.5">
+            <div className="p-4 bg-gray-50/70 rounded-lg border border-gray-200 space-y-2.5">
               <h4 className="text-xs font-semibold text-[#0a0a0a] flex items-center gap-1.5">
-                <Play className="h-3.5 w-3.5 text-[#6C5DD3]" />
+                <Play className="h-3.5 w-3.5 text-[#D9720F]" />
                 <span>Live Calculator Simulator</span>
               </h4>
               <p className="text-[11px] text-[#767676]">
@@ -534,7 +529,7 @@ export default function RulesPage() {
                 <button
                   onClick={handleRunSimulator}
                   disabled={simulating || !simProductId}
-                  className="px-4 py-1.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50 shadow-sm"
+                  className="px-4 py-1.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
                 >
                   {simulating ? "Calculating..." : "Test Calculation"}
                 </button>
@@ -548,7 +543,7 @@ export default function RulesPage() {
                   </div>
                   <div>
                     <span className="text-[#767676] block text-[10px]">Calculated Selling Price</span>
-                    <span className="font-bold text-[#6C5DD3]">${Number(simPreview.pricing?.calculated_price ?? 0).toFixed(2)}</span>
+                    <span className="font-bold text-[#A8560A]">${Number(simPreview.pricing?.calculated_price ?? 0).toFixed(2)}</span>
                   </div>
                   <div>
                     <span className="text-[#767676] block text-[10px]">Stock Shown in Store</span>
@@ -568,7 +563,7 @@ export default function RulesPage() {
       {/* Add Product Override Modal */}
       {showOverrideModal && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm max-w-md w-full p-6 shadow-xl space-y-4">
+          <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-md w-full p-6 shadow-xl space-y-4">
             <div className="flex items-start justify-between pb-3 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-bold text-[#0a0a0a]">Add Custom Product Rule</h3>
@@ -606,7 +601,7 @@ export default function RulesPage() {
                     onChange={(e) => setOverridePercent(e.target.value)}
                     className="w-24 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-semibold text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                   />
-                  <span className="text-xs text-[#6C5DD3] font-semibold">% profit</span>
+                  <span className="text-xs text-[#A8560A] font-semibold">% profit</span>
                 </div>
               </div>
             </div>
@@ -637,7 +632,7 @@ export default function RulesPage() {
                     alert("Error: " + err.message);
                   }
                 }}
-                className="px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium shadow-sm"
+                className="px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium"
               >
                 Save Override
               </button>

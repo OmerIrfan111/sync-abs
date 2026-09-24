@@ -14,13 +14,15 @@ ABS Sync automates multi-marketplace dropshipping: pulling wholesale catalogs, c
 
 ## Brand Personality
 
-Confident, energetic, modern. As of the Phase 6 redesign the product deliberately reads as a polished, colorful SaaS console (violet primary, teal/amber/rose semantic accents, soft-shadow rounded cards) rather than a muted, purely-hairline "ops tool." It should still feel trustworthy and never noisy — but the earlier "quiet until something needs attention" restraint has been intentionally relaxed in favor of richer color and visual hierarchy across cards, charts, and icon chips.
+**"The Dispatch Desk."** ABS Sync moves physical inventory through real warehouses and freight — the visual identity is grounded in that (manifests, packing slips, warehouse signage), not in generic tech-SaaS conventions. An AI-slop audit found that the prior violet/indigo palette, while colorful and polished, was itself a generic default — arguably the most common current AI-dashboard color choice — chosen to match a reference screenshot rather than anything specific to this product. The current identity (hazard-orange accent, steel/concrete neutrals, a typewriter display face used once per screen) replaced it deliberately. Still trustworthy, never noisy, but now recognizably *this* product rather than swappable onto any other SaaS dashboard.
 
 ## Anti-references
 
 - Not a crypto/trading-terminal aesthetic (dark mode, neon greens/reds, gauge dials, ticker-style density) — that mood fits speculative trading, not calm operational monitoring for a team.
 - Avoid jargon-heavy technical labels where a plain-English one already works (the existing "Products to Sell" / "Your Online Stores" naming convention should be preserved and extended, not replaced with generic "Catalog" / "Listings").
-- Still avoid gradient text (`background-clip: text`) and decorative glassmorphism — color richness comes from solid fills, tinted icon chips, and varied semantic accents, not gradients.
+- Avoid gradient text (`background-clip: text`) and decorative glassmorphism.
+- Avoid generic violet/indigo "AI-SaaS" primary accents and warm-cream-plus-terracotta palettes — both are current default clusters, not choices specific to this product.
+- Avoid the identical-card-everywhere pattern: every container getting the same radius and the same soft drop-shadow regardless of what it is or how important it is.
 
 ## Design Principles
 

@@ -233,12 +233,7 @@ export default function ListingsPage() {
       {/* Header - Unboxed on canvas */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-200">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold text-[#0a0a0a] tracking-tight">Your Online Stores</h1>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
-              Live Selling
-            </span>
-          </div>
+          <h1 className="text-2xl font-brand font-normal text-[#0a0a0a]">Your Online Stores</h1>
           <p className="text-sm text-[#767676] mt-1 max-w-2xl leading-relaxed">
             See and manage all products currently listed for sale across your connected marketplaces.
           </p>
@@ -247,7 +242,7 @@ export default function ListingsPage() {
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all"
           >
             <Plus className="h-4 w-4" />
             <span>List a Product</span>
@@ -255,7 +250,7 @@ export default function ListingsPage() {
           <button
             onClick={handleReconcile}
             disabled={reconciling}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-[#1a1a1a] rounded-lg text-xs font-medium transition-all border border-gray-300 shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-[#1a1a1a] rounded-lg text-xs font-medium transition-all border border-gray-300"
             title="Pull existing products and statuses directly from connected store"
           >
             <RefreshCw className={`h-3.5 w-3.5 text-[#767676] ${reconciling ? "animate-spin" : ""}`} />
@@ -263,7 +258,7 @@ export default function ListingsPage() {
           </button>
           <button
             onClick={loadListings}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-[#1a1a1a] rounded-lg text-xs font-medium transition-all border border-gray-300 shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-[#1a1a1a] rounded-lg text-xs font-medium transition-all border border-gray-300"
           >
             <RefreshCw className="h-3.5 w-3.5 text-[#767676]" />
             <span>Refresh</span>
@@ -294,7 +289,7 @@ export default function ListingsPage() {
             <button
               key={tab.id}
               onClick={() => setSelectedTab(tab.id)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-2 whitespace-nowrap shadow-sm ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
                 isActive
                   ? "bg-[#0a0a0a] text-white"
                   : "bg-white text-[#767676] hover:text-[#0a0a0a] border border-gray-300 hover:bg-gray-50"
@@ -312,7 +307,7 @@ export default function ListingsPage() {
       </div>
 
       {/* Simplified Listings Table */}
-      <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+      <div className="bg-white rounded-lg overflow-hidden border border-gray-100">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-[#1a1a1a]">
             <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
@@ -352,14 +347,14 @@ export default function ListingsPage() {
                         <div className="max-w-md">
                           <div className="line-clamp-1 font-semibold">{listing.product_title || "Unnamed Product"}</div>
                           <div className="text-[11px] text-[#767676] font-normal mt-0.5">
-                            Code: <span className="font-mono text-[#6C5DD3] font-medium">{listing.product_sku || "N/A"}</span>
+                            Code: <span className="font-mono text-[#A8560A] font-medium">{listing.product_sku || "N/A"}</span>
                           </div>
                         </div>
                       </td>
 
                       {/* Store Channel */}
                       <td className="px-4 py-3.5">
-                        <span className="text-xs font-medium px-2.5 py-0.5 rounded-md bg-gray-100 border border-gray-200 text-[#1a1a1a]">
+                        <span className="text-xs font-medium px-2.5 py-0.5 rounded bg-gray-100 border border-gray-200 text-[#1a1a1a]">
                           {listing.marketplace_name || "Online Store"}
                         </span>
                       </td>
@@ -383,17 +378,17 @@ export default function ListingsPage() {
                       {/* Status Badge */}
                       <td className="px-4 py-3.5">
                         {isLive ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                             <span>Live on store</span>
                           </span>
                         ) : isPaused ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
                             <span className="h-1.5 w-1.5 rounded-full bg-gray-400"></span>
                             <span>Hidden from buyers</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
                             <span>Updating...</span>
                           </span>
@@ -405,7 +400,7 @@ export default function ListingsPage() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleToggleHide(listing)}
-                            className={`px-2.5 py-1.5 rounded-lg border text-xs transition-colors shadow-sm font-medium inline-flex items-center gap-1 ${
+                            className={`px-2.5 py-1.5 rounded-lg border text-xs transition-colors font-medium inline-flex items-center gap-1 ${
                               isLive 
                                 ? "bg-white border-gray-300 text-gray-600 hover:text-rose-600 hover:border-rose-300" 
                                 : "bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
@@ -418,7 +413,7 @@ export default function ListingsPage() {
 
                           <button
                             onClick={() => openEditModal(listing)}
-                            className="px-3 py-1.5 rounded-lg bg-white hover:bg-gray-50 text-[#0a0a0a] font-medium text-xs transition-colors inline-flex items-center gap-1.5 border border-gray-300 shadow-sm"
+                            className="px-3 py-1.5 rounded-lg bg-white hover:bg-gray-50 text-[#0a0a0a] font-medium text-xs transition-colors inline-flex items-center gap-1.5 border border-gray-300"
                           >
                             <Edit3 className="h-3.5 w-3.5 text-[#767676]" />
                             <span>Edit</span>
@@ -426,7 +421,7 @@ export default function ListingsPage() {
 
                           <button
                             onClick={() => setDeleteConfirmListing(listing)}
-                            className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 text-gray-400 text-xs transition-colors inline-flex items-center gap-1 shadow-sm font-medium"
+                            className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 text-gray-400 text-xs transition-colors inline-flex items-center gap-1 font-medium"
                             title="Completely remove product from this store"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -446,7 +441,7 @@ export default function ListingsPage() {
       {/* Edit Listing Modal */}
       {editingListing && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm max-w-lg w-full p-6 shadow-xl space-y-5">
+          <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-lg w-full p-6 shadow-xl space-y-5">
             <div className="flex items-start justify-between pb-3 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-bold text-[#0a0a0a]">Edit Store Listing</h3>
@@ -504,7 +499,7 @@ export default function ListingsPage() {
 
                 <button
                   onClick={() => handleToggleHide(editingListing)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shadow-sm ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     editingListing.status === "ACTIVE"
                       ? "bg-rose-50 text-rose-800 hover:bg-rose-100 border border-rose-200"
                       : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
@@ -525,7 +520,7 @@ export default function ListingsPage() {
               <button
                 onClick={handleSaveEdit}
                 disabled={savingEdit}
-                className="px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50"
+                className="px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all disabled:opacity-50"
               >
                 {savingEdit ? "Saving..." : "Save Changes"}
               </button>
@@ -537,7 +532,7 @@ export default function ListingsPage() {
       {/* List a Product Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm max-w-lg w-full p-6 shadow-xl space-y-4">
+          <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-lg w-full p-6 shadow-xl space-y-4">
             <div className="flex items-start justify-between pb-3 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-bold text-[#0a0a0a]">List a Product in Your Store</h3>
@@ -617,7 +612,7 @@ export default function ListingsPage() {
                         <button
                           type="button"
                           onClick={() => randomizeAddPrice(cost || 50)}
-                          className="text-[11px] text-[#6C5DD3] hover:text-[#0a0a0a] font-medium flex items-center gap-1 bg-[#6C5DD3]/10 px-2 py-0.5 rounded border border-[#6C5DD3]/20 transition-colors"
+                          className="text-[11px] text-[#A8560A] hover:text-[#0a0a0a] font-medium flex items-center gap-1 bg-[#D9720F]/10 px-2 py-0.5 rounded border border-[#D9720F]/20 transition-colors"
                           title="Generate a random price with 10%-35% margin"
                         >
                           <Sparkles className="h-3 w-3" />
@@ -669,7 +664,7 @@ export default function ListingsPage() {
                     </p>
                   </div>
                 ) : (
-                  <div className="p-3 bg-[#6C5DD3]/[0.06] rounded-lg border border-[#6C5DD3]/20 text-xs text-[#6C5DD3]">
+                  <div className="p-3 bg-[#D9720F]/[0.06] rounded-lg border border-[#D9720F]/20 text-xs text-[#A8560A]">
                     <div className="font-semibold mb-0.5 flex items-center gap-1.5">
                       <Sparkles className="h-3.5 w-3.5" />
                       Automated Price & Stock Sync:
@@ -697,7 +692,7 @@ export default function ListingsPage() {
                     <button
                       type="submit"
                       disabled={addingListing}
-                      className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                      className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all disabled:opacity-50 flex items-center gap-1.5"
                     >
                       {isAlreadyListed ? <RefreshCw className="h-3.5 w-3.5" /> : <Store className="h-3.5 w-3.5" />}
                       <span>
@@ -717,7 +712,7 @@ export default function ListingsPage() {
       {/* Remove Listing Confirmation Modal */}
       {deleteConfirmListing && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm max-w-md w-full p-6 shadow-xl space-y-4">
+          <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-md w-full p-6 shadow-xl space-y-4">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2.5 text-rose-600">
                 <div className="w-9 h-9 rounded-full bg-rose-50 border border-rose-200 flex items-center justify-center">
@@ -759,7 +754,7 @@ export default function ListingsPage() {
                 type="button"
                 disabled={deletingListingId === deleteConfirmListing.id}
                 onClick={() => handleDeleteListing(deleteConfirmListing)}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-medium transition-colors shadow-sm disabled:opacity-50"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
               >
                 {deletingListingId === deleteConfirmListing.id ? "Removing..." : "Yes, Remove from Store"}
               </button>

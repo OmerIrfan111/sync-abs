@@ -84,12 +84,7 @@ export default function SuppliersPage() {
       {/* Header - Unboxed on canvas */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-200">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold text-[#0a0a0a] tracking-tight">Wholesale Suppliers</h1>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[#6C5DD3]/10 text-[#6C5DD3] border border-[#6C5DD3]/20">
-              Distributor Feeds
-            </span>
-          </div>
+          <h1 className="text-2xl font-brand font-normal text-[#0a0a0a]">Wholesale Suppliers</h1>
           <p className="text-sm text-[#767676] mt-1 max-w-2xl leading-relaxed">
             Connect to distributors who provide products and ship customer orders for you. We check their inventory and wholesale prices continuously.
           </p>
@@ -97,7 +92,7 @@ export default function SuppliersPage() {
 
         <button
           onClick={loadSuppliers}
-          className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium transition-all border border-gray-300 shadow-sm self-start sm:self-auto"
+          className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium transition-all border border-gray-300 self-start sm:self-auto"
         >
           <RefreshCw className="h-3.5 w-3.5 text-[#767676]" />
           <span>Refresh List</span>
@@ -120,13 +115,13 @@ export default function SuppliersPage() {
             return (
               <div
                 key={sup.id}
-                className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between space-y-4"
+                className="bg-white p-6 rounded-lg border border-gray-100 flex flex-col justify-between space-y-4"
               >
                 <div>
                   {/* Top Row: Name & Status */}
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-lg bg-[#6C5DD3]/10 text-[#6C5DD3]">
+                      <div className="p-2.5 rounded-lg bg-[#D9720F]/10 text-[#A8560A]">
                         <Truck className="h-4 w-4" />
                       </div>
                       <div>
@@ -135,12 +130,12 @@ export default function SuppliersPage() {
                       </div>
                     </div>
                     {itemFeedback?.type === "error" ? (
-                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 bg-rose-50 text-rose-800 border border-rose-200">
+                      <span className="px-2.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 bg-rose-50 text-rose-800 border border-rose-200">
                         <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />
                         <span>Feed Error</span>
                       </span>
                     ) : (
-                      <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 ${
+                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider flex items-center gap-1.5 ${
                         sup.is_active
                           ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
                           : "bg-gray-100 text-gray-600 border border-gray-200"
@@ -190,19 +185,19 @@ export default function SuppliersPage() {
                     <button
                       onClick={() => handleSyncNow(sup.id)}
                       disabled={isTesting || isSyncing}
-                      className="flex-1 px-3 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+                      className="flex-1 px-3 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
                     >
-                      <RefreshCw className={`h-3.5 w-3.5 text-[#6C5DD3] ${isSyncing ? "animate-spin" : ""}`} />
+                      <RefreshCw className={`h-3.5 w-3.5 text-[#D9720F] ${isSyncing ? "animate-spin" : ""}`} />
                       <span>{isSyncing ? "Checking..." : "Check Stock & Prices"}</span>
                     </button>
 
                     <button
                       onClick={() => handleTestConnection(sup.id)}
                       disabled={isTesting || isSyncing}
-                      className="px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all border border-gray-300 shadow-sm disabled:opacity-50"
+                      className="px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all border border-gray-300 disabled:opacity-50"
                       title="Test API Connection"
                     >
-                      <Wifi className={`h-3.5 w-3.5 text-[#767676] ${isTesting ? "animate-pulse text-[#6C5DD3]" : ""}`} />
+                      <Wifi className={`h-3.5 w-3.5 text-[#767676] ${isTesting ? "animate-pulse text-[#A8560A]" : ""}`} />
                       <span>{isTesting ? "Testing..." : "Test"}</span>
                     </button>
                   </div>

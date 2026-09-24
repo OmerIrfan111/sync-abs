@@ -22,7 +22,11 @@ class OrderItem(Base, TimestampMixin):
     supplier_cost = Column(Numeric(10, 2), nullable=True)
     supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="SET NULL"), nullable=True, index=True)
     status = Column(String(50), default="PENDING", nullable=False)
-    # Statuses: PENDING, ROUTED, ORDERED, SHIPPED
+    # Statuses: PENDING, ROUTED, ORDERED, SHIPPED, UNROUTABLE
+    routing_note = Column(String(500), nullable=True)
+    # Set only when status=UNROUTABLE, explaining exactly why routing couldn't
+    # assign a supplier (e.g. no catalog match, or no supplier has stock) so
+    # staff see a real reason instead of an item silently stuck at PENDING.
 
     # Relationships
     order = relationship("Order", back_populates="items")

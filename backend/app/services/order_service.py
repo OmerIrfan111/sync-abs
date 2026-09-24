@@ -138,13 +138,26 @@ class OrderService:
 
         selector = SupplierSelectionService(self.db)
         routed_items = 0
+        unroutable_items = 0
 
         for item in order.items:
-            if item.status != "PENDING" or not item.product_id:
+            if item.status != "PENDING":
+                continue
+
+            if not item.product_id:
+                item.status = "UNROUTABLE"
+                item.routing_note = (
+                    f"No catalog match for SKU '{item.sku or 'unknown'}' — this listing "
+                    "wasn't published through this system, so there's no supplier on file for it."
+                )
+                unroutable_items += 1
                 continue
 
             product = self.db.query(Product).filter(Product.id == item.product_id).first()
             if not product:
+                item.status = "UNROUTABLE"
+                item.routing_note = "Linked product record no longer exists in the catalog."
+                unroutable_items += 1
                 continue
 
             best_sp = selector.select_best_supplier(product)
@@ -153,11 +166,21 @@ class OrderService:
                 item.supplier_cost = best_sp.cost
                 item.status = "ROUTED"
                 routed_items += 1
+            else:
+                item.status = "UNROUTABLE"
+                item.routing_note = "No connected supplier currently has stock for this item."
+                unroutable_items += 1
 
         if routed_items > 0:
             order.status = "ROUTED"
             self._add_event(order.id, "SUPPLIER_ROUTED", {
                 "routed_items": routed_items,
+                "total_items": len(order.items),
+            })
+
+        if unroutable_items > 0:
+            self._add_event(order.id, "ROUTING_INCOMPLETE", {
+                "unroutable_items": unroutable_items,
                 "total_items": len(order.items),
             })
 

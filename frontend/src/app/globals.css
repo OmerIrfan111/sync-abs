@@ -1,15 +1,15 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Special+Elite&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Bebas+Neue&family=Scheherazade+New:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: #F6F6FB;
+  --background: #EBEDE7;
   --foreground: #1a1a1a;
-  --dark: #1B1B2F;
+  --dark: #1C201B;
   --muted: #767676;
-  --prompt: #6C5DD3;
+  --prompt: #D9720F;
 }
 
 body {

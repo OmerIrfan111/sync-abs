@@ -7,6 +7,10 @@ class MarketplaceBase(BaseModel):
     adapter_class: str
     is_active: bool = True
 
+class MarketplaceCreate(BaseModel):
+    name: str
+    adapter_class: str
+
 class MarketplaceUpdate(BaseModel):
     name: Optional[str] = None
     adapter_class: Optional[str] = None

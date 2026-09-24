@@ -10,6 +10,8 @@ from app.models.order_item import OrderItem
 from app.models.purchase_order import PurchaseOrder
 from app.models.supplier import Supplier
 from app.models.product import Product
+from app.models.supplier_product import SupplierProduct
+from app.models.error_log import ErrorLog
 
 NON_REVENUE_STATUSES = ["CANCELLED", "REFUNDED"]
 
@@ -203,11 +205,17 @@ class AnalyticsService:
         - cancellation_rate_pct: % of routed order items for that supplier whose
           parent order ended up CANCELLED.
         - po_count: purchase orders placed with that supplier in the window.
+        - catalog_missing_data_rate_pct: % of that supplier's current catalog
+          rows that were skipped during the last sync for lacking real
+          price/quantity data (a genuine proxy for feed reliability, built
+          from ErrorLog rows this system actually writes).
 
-        Deliberately excludes "inventory accuracy" (named in the V2.1 roadmap):
-        no adapter in this system reports promised-vs-actual stock discrepancies,
-        so there is no real signal to compute it from. Fabricating a number
-        would be worse than omitting the metric.
+        catalog_missing_data_rate_pct is NOT the "inventory accuracy" metric
+        named in the V2.1 roadmap (promised-vs-actual stock at fulfillment
+        time) — no adapter reports that, so there is no real signal for it.
+        This is a different, honestly-labeled proxy: how often the supplier's
+        own feed fails to return usable data at all. Reported separately so
+        it's never mistaken for the roadmap's original metric.
         """
         since = datetime.now(timezone.utc) - timedelta(days=days)
         suppliers = self.db.query(Supplier).all()
@@ -239,6 +247,24 @@ class AnalyticsService:
             cancelled_routed = sum(1 for item in routed_items if item.order.status == "CANCELLED")
             cancellation_rate_pct = (cancelled_routed / total_routed * 100) if total_routed > 0 else 0.0
 
+            missing_data_count = (
+                self.db.query(ErrorLog)
+                .filter(
+                    ErrorLog.supplier_id == supplier.id,
+                    ErrorLog.error_type == "MISSING_DATA",
+                    ErrorLog.created_at >= since,
+                )
+                .count()
+            )
+            catalog_size = (
+                self.db.query(SupplierProduct)
+                .filter(SupplierProduct.supplier_id == supplier.id)
+                .count()
+            )
+            catalog_missing_data_rate_pct = (
+                (missing_data_count / catalog_size * 100) if catalog_size > 0 else None
+            )
+
             scores.append({
                 "supplier_id": supplier.id,
                 "supplier_name": supplier.name,
@@ -246,6 +272,9 @@ class AnalyticsService:
                 "avg_fulfillment_days": round(avg_fulfillment_days, 2) if avg_fulfillment_days is not None else None,
                 "cancellation_rate_pct": round(cancellation_rate_pct, 2),
                 "routed_item_count": total_routed,
+                "catalog_missing_data_rate_pct": (
+                    round(catalog_missing_data_rate_pct, 2) if catalog_missing_data_rate_pct is not None else None
+                ),
             })
 
         scores.sort(key=lambda x: x["po_count"], reverse=True)
