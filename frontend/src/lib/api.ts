@@ -79,6 +79,7 @@ export interface Product {
   specs_json: Record<string, any>;
   is_enabled: boolean;
   total_stock: number;
+  is_unlimited_stock?: boolean;
   lowest_cost?: number;
   supplier_products: {
     id: number;
@@ -87,9 +88,13 @@ export interface Product {
     supplier_sku: string;
     cost: number;
     qty_available: number;
+    is_unlimited_stock: boolean;
     stock_status: string;
     availability_status: string;
     shipping_info: Record<string, any>;
+    base_shipping_charge?: number | null;
+    shipping_source?: string | null;
+    shipping_status?: string | null;
     last_seen_at?: string;
   }[];
   created_at: string;
@@ -101,6 +106,7 @@ export interface Supplier {
   name: string;
   adapter_class: string;
   is_active: boolean;
+  default_shipping_charge?: number | null;
   last_synced_at?: string;
   product_count: number;
 }
@@ -126,6 +132,16 @@ export interface DashboardStats {
   total_orders_today: number;
   pending_orders: number;
   revenue_30d: number;
+  pricing_changes_24h: number;
+  recent_price_changes: {
+    product_id: number;
+    product_sku?: string | null;
+    product_title?: string | null;
+    supplier_name?: string | null;
+    old_value?: string | null;
+    new_value?: string | null;
+    changed_at: string;
+  }[];
   suppliers_health: {
     id: number;
     name: string;
@@ -362,6 +378,8 @@ export interface RulePreview {
   };
   pricing: {
     supplier_cost: number;
+    base_shipping_charge?: number;
+    effective_cost?: number;
     rule_type: string;
     calculated_price: number;
     fixed_amount: number;

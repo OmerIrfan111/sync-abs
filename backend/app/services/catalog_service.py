@@ -2,14 +2,26 @@ from typing import List, Optional, Tuple, Dict, Any
 from decimal import Decimal
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, desc
+from sqlalchemy import or_, desc, func
 from app.models.product import Product
 from app.models.supplier_product import SupplierProduct
 from app.models.supplier import Supplier
 from app.models.sync_log import SyncLog
 from app.models.warehouse import Warehouse, WarehouseStock
+from app.models.listing import Listing
 from app.schemas.supplier import NormalizedProduct
 from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse, SupplierProductInfo
+
+# Ingram Micro reports non-physical SKUs (software licenses, support/renewal
+# contracts) with a quantity that's a multiple of this sentinel instead of a
+# real stock count — confirmed empirically: every such value in real catalog
+# data is an exact multiple of 9,999,999 (9999999, 19999998, 29999997, ...),
+# and 97%+ of matching rows have no UPC (consistent with non-physical items).
+UNLIMITED_STOCK_SENTINEL = 9999999
+
+
+def _is_unlimited_stock(qty: int) -> bool:
+    return qty > 0 and qty % UNLIMITED_STOCK_SENTINEL == 0
 
 # D&H branch codes, per their Customer Order Management API docs. Unknown
 # codes (new branches, other suppliers) fall back to using the code itself
@@ -91,6 +103,7 @@ class CatalogService:
         now = datetime.now(timezone.utc)
 
         if not supplier_prod:
+            base_shipping = supplier.default_shipping_charge
             supplier_prod = SupplierProduct(
                 product_id=product.id,
                 supplier_id=supplier.id,
@@ -100,6 +113,10 @@ class CatalogService:
                 stock_status=item.stock_status,
                 availability_status=item.availability_status,
                 shipping_info=item.shipping_info,
+                base_shipping_charge=base_shipping,
+                shipping_source="default" if base_shipping is not None else None,
+                shipping_status="valid" if base_shipping is not None else "valid",
+                shipping_updated_at=now if base_shipping is not None else None,
                 last_seen_at=now
             )
             self.db.add(supplier_prod)
@@ -142,6 +159,12 @@ class CatalogService:
                     new_value=item.stock_status
                 ))
                 supplier_prod.stock_status = item.stock_status
+
+            if supplier_prod.base_shipping_charge is None and supplier.default_shipping_charge is not None:
+                supplier_prod.base_shipping_charge = supplier.default_shipping_charge
+                supplier_prod.shipping_source = "default"
+                supplier_prod.shipping_status = "valid"
+                supplier_prod.shipping_updated_at = now
 
             supplier_prod.last_seen_at = now
             supplier_prod.shipping_info = item.shipping_info
@@ -223,7 +246,10 @@ class CatalogService:
         supplier_id: Optional[int] = None,
         brand: Optional[str] = None,
         category: Optional[str] = None,
-        in_stock: Optional[bool] = None
+        in_stock: Optional[bool] = None,
+        min_price: Optional[Decimal] = None,
+        max_price: Optional[Decimal] = None,
+        marketplace_id: Optional[int] = None,
     ) -> Tuple[List[ProductResponse], int]:
         query = self.db.query(Product)
 
@@ -255,6 +281,34 @@ class CatalogService:
             in_stock_subquery = self.db.query(SupplierProduct.product_id).filter(SupplierProduct.qty_available > 0).distinct().subquery()
             query = query.filter(~Product.id.in_(in_stock_subquery))
 
+        # Price range filters against each product's lowest supplier cost,
+        # since Product itself carries no direct sell price.
+        if min_price is not None:
+            price_floor_subquery = (
+                self.db.query(SupplierProduct.product_id)
+                .group_by(SupplierProduct.product_id)
+                .having(func.min(SupplierProduct.cost) >= min_price)
+                .subquery()
+            )
+            query = query.filter(Product.id.in_(price_floor_subquery))
+        if max_price is not None:
+            price_ceiling_subquery = (
+                self.db.query(SupplierProduct.product_id)
+                .group_by(SupplierProduct.product_id)
+                .having(func.min(SupplierProduct.cost) <= max_price)
+                .subquery()
+            )
+            query = query.filter(Product.id.in_(price_ceiling_subquery))
+
+        if marketplace_id:
+            listed_subquery = (
+                self.db.query(Listing.product_id)
+                .filter(Listing.marketplace_id == marketplace_id)
+                .distinct()
+                .subquery()
+            )
+            query = query.filter(Product.id.in_(listed_subquery))
+
         total = query.count()
         products = query.order_by(desc(Product.updated_at)).offset(skip).limit(limit).all()
 
@@ -264,6 +318,7 @@ class CatalogService:
             total_stock = 0
             costs = []
             for sp in p.supplier_products:
+                unlimited = _is_unlimited_stock(sp.qty_available)
                 sp_infos.append(SupplierProductInfo(
                     id=sp.id,
                     supplier_id=sp.supplier_id,
@@ -271,13 +326,27 @@ class CatalogService:
                     supplier_sku=sp.supplier_sku,
                     cost=sp.cost,
                     qty_available=sp.qty_available,
+                    is_unlimited_stock=unlimited,
                     stock_status=sp.stock_status,
                     availability_status=sp.availability_status,
                     shipping_info=sp.shipping_info or {},
+                    base_shipping_charge=sp.base_shipping_charge,
+                    shipping_source=sp.shipping_source,
+                    shipping_status=sp.shipping_status,
+                    shipping_updated_at=sp.shipping_updated_at,
                     last_seen_at=sp.last_seen_at
                 ))
-                total_stock += sp.qty_available
+                # Sentinel quantities are excluded from the real physical
+                # total — summing them in would make total_stock nonsensical
+                # (tens of millions of "units" for a support contract).
+                if not unlimited:
+                    total_stock += sp.qty_available
                 costs.append(sp.cost)
+
+            has_unlimited = any(info.is_unlimited_stock for info in sp_infos)
+            # Prioritize in-stock suppliers for lowest_cost, so the seller sees what they will actually pay
+            in_stock_costs = [sp.cost for sp in p.supplier_products if sp.qty_available > 0 or sp.stock_status == "IN_STOCK"]
+            effective_lowest_cost = min(in_stock_costs) if in_stock_costs else (min(costs) if costs else None)
 
             results.append(ProductResponse(
                 id=p.id,
@@ -296,7 +365,8 @@ class CatalogService:
                 updated_at=p.updated_at,
                 supplier_products=sp_infos,
                 total_stock=total_stock,
-                lowest_cost=min(costs) if costs else None
+                is_unlimited_stock=has_unlimited,
+                lowest_cost=effective_lowest_cost
             ))
 
         return results, total
@@ -310,6 +380,7 @@ class CatalogService:
         total_stock = 0
         costs = []
         for sp in p.supplier_products:
+            unlimited = _is_unlimited_stock(sp.qty_available)
             sp_infos.append(SupplierProductInfo(
                 id=sp.id,
                 supplier_id=sp.supplier_id,
@@ -317,13 +388,23 @@ class CatalogService:
                 supplier_sku=sp.supplier_sku,
                 cost=sp.cost,
                 qty_available=sp.qty_available,
+                is_unlimited_stock=unlimited,
                 stock_status=sp.stock_status,
                 availability_status=sp.availability_status,
                 shipping_info=sp.shipping_info or {},
+                base_shipping_charge=sp.base_shipping_charge,
+                shipping_source=sp.shipping_source,
+                shipping_status=sp.shipping_status,
+                shipping_updated_at=sp.shipping_updated_at,
                 last_seen_at=sp.last_seen_at
             ))
-            total_stock += sp.qty_available
+            if not unlimited:
+                total_stock += sp.qty_available
             costs.append(sp.cost)
+
+        has_unlimited = any(info.is_unlimited_stock for info in sp_infos)
+        in_stock_costs = [sp.cost for sp in p.supplier_products if sp.qty_available > 0 or sp.stock_status == "IN_STOCK"]
+        effective_lowest_cost = min(in_stock_costs) if in_stock_costs else (min(costs) if costs else None)
 
         return ProductResponse(
             id=p.id,
@@ -342,5 +423,6 @@ class CatalogService:
             updated_at=p.updated_at,
             supplier_products=sp_infos,
             total_stock=total_stock,
-            lowest_cost=min(costs) if costs else None
+            is_unlimited_stock=has_unlimited,
+            lowest_cost=effective_lowest_cost
         )

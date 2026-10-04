@@ -17,6 +17,7 @@ def test_multi_channel_publishing_and_sync(db_session, client, admin_auth_header
 
     # 1. Setup Suppliers
     supplier = Supplier(name="Test Ingram", adapter_class="IngramMicroAdapter", is_active=True)
+    supplier._adapter_config = {"ground_shipping_charge": Decimal("0.00")}
     db_session.add(supplier)
     db_session.commit()
 
@@ -46,6 +47,7 @@ def test_multi_channel_publishing_and_sync(db_session, client, admin_auth_header
         supplier_id=supplier.id,
         supplier_sku="CHG-001",
         cost=Decimal("20.00"),
+        base_shipping_charge=Decimal("0.00"),
         qty_available=50,
         availability_status="ACTIVE"
     )

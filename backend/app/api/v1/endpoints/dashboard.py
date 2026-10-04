@@ -12,7 +12,8 @@ from app.models.marketplace import Marketplace
 from app.models.listing import Listing
 from app.models.error_log import ErrorLog
 from app.models.order import Order
-from app.schemas.dashboard import DashboardStats, SupplierHealthStatus, MarketplaceHealthStatus
+from app.models.sync_log import SyncLog
+from app.schemas.dashboard import DashboardStats, SupplierHealthStatus, MarketplaceHealthStatus, PriceChangeEntry
 from app.schemas.sync import ErrorLogResponse
 
 router = APIRouter()
@@ -54,6 +55,28 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         Order.ordered_at >= thirty_days_ago,
         Order.status.notin_(["CANCELLED", "REFUNDED"])
     ).scalar() or Decimal("0")
+
+    # 4c. Pricing changes (Spec Section 8): real cost changes detected during
+    # supplier sync, not fabricated repricing activity.
+    price_change_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    price_change_logs = db.query(SyncLog).filter(
+        SyncLog.field_changed == "cost",
+        SyncLog.synced_at >= price_change_cutoff,
+    ).order_by(desc(SyncLog.synced_at)).all()
+    pricing_changes_24h = len(price_change_logs)
+    recent_price_changes = []
+    for log in price_change_logs[:5]:
+        prod = db.query(Product).filter(Product.id == log.product_id).first() if log.product_id else None
+        sup = db.query(Supplier).filter(Supplier.id == log.supplier_id).first() if log.supplier_id else None
+        recent_price_changes.append(PriceChangeEntry(
+            product_id=log.product_id,
+            product_sku=prod.sku if prod else None,
+            product_title=prod.title if prod else None,
+            supplier_name=sup.name if sup else None,
+            old_value=log.old_value,
+            new_value=log.new_value,
+            changed_at=log.synced_at,
+        ))
 
     # 5. Suppliers health
     # Only a genuine connection failure marks the supplier itself unhealthy.
@@ -161,6 +184,8 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         total_orders_today=total_orders_today,
         pending_orders=pending_orders,
         revenue_30d=revenue_30d,
+        pricing_changes_24h=pricing_changes_24h,
+        recent_price_changes=recent_price_changes,
         suppliers_health=suppliers_health,
         marketplaces_health=marketplaces_health,
         recent_errors=recent_errors,
@@ -170,34 +195,27 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
 @router.post("/reconcile-all")
 def reconcile_all_suppliers(db: Session = Depends(get_db)):
     """
-    Trigger system-wide catalog reconciliation across all active suppliers.
-    (Spec Section 20 & 24)
+    Queue a background sync for every active supplier instead of running them
+    inline. A real D&H/Ingram Micro sync takes 5-10 minutes each; running
+    them synchronously in this request handler (the original implementation)
+    meant clicking "Update Everything Now" could block the HTTP request for
+    10-20 minutes, well past most browsers' and reverse proxies' default
+    timeouts. Dispatches to the same Celery task the 5-minute schedule uses,
+    and returns immediately — real progress is visible via last_synced_at
+    on the Suppliers page and the Activity log, not a fabricated instant
+    "SUCCESS" this endpoint can no longer honestly claim before the sync
+    has actually run.
     """
-    from app.services.sync_service import SyncService
-    sync_service = SyncService(db)
+    from app.tasks.sync_tasks import sync_supplier_task
     suppliers = db.query(Supplier).filter(Supplier.is_active == True).all()
-    results = []
+    queued = []
     for s in suppliers:
-        try:
-            res = sync_service.sync_supplier(s.id)
-            results.append({
-                "supplier_id": s.id,
-                "supplier_name": s.name,
-                "status": "SUCCESS",
-                "imported": res.get("products_imported", 0),
-                "changed": res.get("changes_detected", 0)
-            })
-        except Exception as exc:
-            results.append({
-                "supplier_id": s.id,
-                "supplier_name": s.name,
-                "status": "ERROR",
-                "error": str(exc)
-            })
+        task = sync_supplier_task.delay(s.id)
+        queued.append({"supplier_id": s.id, "supplier_name": s.name, "task_id": task.id})
 
     return {
-        "reconciled_suppliers": len(suppliers),
-        "details": results,
-        "message": "System-wide reconciliation completed successfully."
+        "queued_suppliers": len(queued),
+        "details": queued,
+        "message": f"Queued a background sync for {len(queued)} supplier(s). This runs in the background — check the Suppliers page or Activity log in a few minutes for results.",
     }
 

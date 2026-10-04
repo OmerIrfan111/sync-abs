@@ -524,11 +524,14 @@ def preview_rules_calculation(
     listing_status = inventory_service.determine_listing_status(marketplace_qty, oos_action)
 
     # 3. Pricing calculation
+    shipping_charge = best_sp.base_shipping_charge if best_sp else None
+    effective_cost = supplier_cost + (shipping_charge or Decimal("0.00"))
     resolved_pricing_rule = pricing_service.resolve_rule(product.id, marketplace_id)
     calculated_price = pricing_service.calculate_price(
         cost=supplier_cost,
         product_id=product.id,
-        marketplace_id=marketplace_id
+        marketplace_id=marketplace_id,
+        shipping_charge=shipping_charge
     )
 
     return {
@@ -545,6 +548,8 @@ def preview_rules_calculation(
         },
         "pricing": {
             "supplier_cost": float(supplier_cost),
+            "base_shipping_charge": float(shipping_charge) if shipping_charge is not None else 0.0,
+            "effective_cost": float(effective_cost),
             "rule_type": resolved_pricing_rule.rule_type if resolved_pricing_rule else "DEFAULT_15_PERCENT",
             "calculated_price": float(calculated_price),
             "fixed_amount": float(resolved_pricing_rule.fixed_amount) if resolved_pricing_rule else 0.0,

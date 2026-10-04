@@ -7,6 +7,7 @@ import {
   Truck,
   Store,
   Zap,
+  Clock,
   CheckCircle,
   CheckCircle2,
   AlertCircle,
@@ -26,10 +27,7 @@ export default function DashboardPage() {
     message: string;
     details: Array<{
       supplier_name: string;
-      status: string;
-      imported?: number;
-      changed?: number;
-      error?: string;
+      task_id: string;
     }>;
   } | null>(null);
 
@@ -124,9 +122,15 @@ export default function DashboardPage() {
       description: "Order revenue",
       href: "/orders",
     },
+    {
+      title: "Pricing Changes",
+      value: (stats?.pricing_changes_24h ?? 0).toLocaleString(),
+      description: "Supplier cost changes, 24h",
+      href: "/logs",
+    },
   ];
 
-  const supplierMix = stats?.suppliers_health.filter((s) => s.product_count > 0) ?? [];
+  const supplierMix = stats?.suppliers_health ?? [];
   const maxSupplierCount = Math.max(1, ...supplierMix.map((s) => s.product_count));
   const supplierMixColors = ["#D9720F", "#14B8A6", "#F59E0B", "#EC4899"];
 
@@ -172,32 +176,26 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Immediate Reconcile Result Box */}
+      {/* Reconcile Queued Notice — syncs run in the background, not instantly */}
       {reconcileResult && (
-        <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900">
+        <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-900">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2 font-semibold text-xs text-emerald-900">
-              <CheckCircle className="h-4 w-4 text-emerald-600" />
-              <span>All {reconcileResult.details.length} wholesale suppliers checked and updated!</span>
+            <div className="flex items-center gap-2 font-semibold text-xs text-amber-900">
+              <Clock className="h-4 w-4 text-amber-600" />
+              <span>{reconcileResult.message}</span>
             </div>
             <button
               onClick={() => setReconcileResult(null)}
-              className="text-xs text-emerald-700 hover:text-emerald-900 px-2 py-0.5 bg-white rounded-lg border border-emerald-200"
+              className="text-xs text-amber-700 hover:text-amber-900 px-2 py-0.5 bg-white rounded-lg border border-amber-200"
             >
               Dismiss
             </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mt-2">
             {reconcileResult.details.map((d, i) => (
-              <div key={i} className="text-xs p-2.5 rounded-lg bg-white border border-emerald-100">
+              <div key={i} className="text-xs p-2.5 rounded-lg bg-white border border-amber-100">
                 <span className="font-semibold text-[#1C201B] block">{d.supplier_name}</span>
-                {d.status === "SUCCESS" ? (
-                  <span className="text-[#767676] text-[11px]">
-                    Imported: <span className="text-emerald-700 font-bold">{d.imported}</span> | Changes: <span className="text-[#A8560A] font-bold">{d.changed}</span>
-                  </span>
-                ) : (
-                  <span className="text-rose-600 text-[11px]">{d.error}</span>
-                )}
+                <span className="text-[#767676] text-[11px]">Sync queued — check back shortly</span>
               </div>
             ))}
           </div>
@@ -269,6 +267,38 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Recent Pricing Changes — real cost changes detected during supplier sync */}
+      {stats && stats.recent_price_changes.length > 0 && (
+        <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg p-5">
+          <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-3">
+            <div>
+              <h2 className="text-sm font-bold text-[#1C201B]">Recent Pricing Changes</h2>
+              <p className="text-xs text-[#767676]">Supplier cost changes detected in the last 24 hours.</p>
+            </div>
+            <Link href="/logs" className="text-xs font-semibold text-[#A8560A] hover:text-[#A8560A]">
+              View all
+            </Link>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {stats.recent_price_changes.map((change, i) => (
+              <div key={i} className="flex items-center justify-between py-2.5 text-xs">
+                <div>
+                  <span className="font-semibold text-[#1C201B]">
+                    {change.product_title || change.product_sku || `Product #${change.product_id}`}
+                  </span>
+                  <span className="text-[#767676] ml-2">{change.supplier_name || "Unknown supplier"}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[#767676]">${change.old_value}</span>
+                  <span className="text-[#767676] mx-1">&rarr;</span>
+                  <span className="font-bold text-[#A8560A]">${change.new_value}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Wholesale Suppliers & Online Stores Side-by-Side Status */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

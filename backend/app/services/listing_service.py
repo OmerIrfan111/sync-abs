@@ -16,7 +16,7 @@ from app.models.marketplace import Marketplace
 from app.models.supplier_product import SupplierProduct
 from app.models.error_log import ErrorLog
 from app.models.sync_log import SyncLog
-from app.adapters.marketplaces.mock_ebay import MockEBayAdapter
+
 from app.schemas.listing import ListingResponse
 from app.core.security import decrypt_credential
 
@@ -147,11 +147,15 @@ class ListingService:
         custom_price: Optional[Decimal] = None,
         custom_qty: Optional[int] = None,
         custom_title: Optional[str] = None,
-        custom_description: Optional[str] = None
+        custom_description: Optional[str] = None,
+        custom_image_url: Optional[str] = None,
+        allow_upc_override: bool = False,
+        actor_email: Optional[str] = None,
     ) -> Listing:
         """
         Publishes a canonical product to a selected marketplace channel.
         Allows custom title, description, price, and stock overrides.
+        Integrates Feature 1 (shipping charges) and Feature 3 (duplicate UPC protection).
         """
         product = self.db.query(Product).filter(Product.id == product_id).first()
         if not product:
@@ -169,12 +173,21 @@ class ListingService:
                 f"(restriction #{blocking.id}, type: {blocking.restriction_type})"
             )
 
-        # Optionally persist title and description updates to canonical product
+        # Optionally persist title, description, and custom image to canonical product.
         if custom_title and custom_title.strip():
             product.title = custom_title.strip()
         if custom_description and custom_description.strip():
             product.description = custom_description.strip()
-        if (custom_title and custom_title.strip()) or (custom_description and custom_description.strip()):
+        if custom_image_url and custom_image_url.strip():
+            existing = list(product.images or [])
+            new_url = custom_image_url.strip()
+            updated = [new_url] + [u for u in existing if u != new_url]
+            product.images = updated
+        if (
+            (custom_title and custom_title.strip())
+            or (custom_description and custom_description.strip())
+            or (custom_image_url and custom_image_url.strip())
+        ):
             self.db.commit()
             self.db.refresh(product)
 
@@ -187,14 +200,41 @@ class ListingService:
         from app.services.pricing_service import PricingService
         from app.services.inventory_service import InventoryService
         from app.services.supplier_selection_service import SupplierSelectionService
+        from app.services.shipping_service import ShippingService
+        from app.services.upc_protection_service import UpcProtectionService
 
         pricing_service = PricingService(self.db)
         inventory_service = InventoryService(self.db)
         selection_service = SupplierSelectionService(self.db)
+        shipping_service = ShippingService(self.db)
+        upc_service = UpcProtectionService(self.db)
+
+        adapter = self.get_adapter_for_marketplace(marketplace)
+
+        # Feature 3: Pre-upload duplicate UPC verification
+        upc_check = upc_service.check_product_for_upload(
+            product=product,
+            marketplace_name=marketplace.name,
+            marketplace_adapter=adapter,
+            allow_override=allow_upc_override,
+            actor_email=actor_email
+        )
+        if upc_check.is_blocked():
+            raise ValueError(upc_check.message)
 
         best_sp = selection_service.select_best_supplier(product)
         supplier_cost = best_sp.cost if best_sp else Decimal("0.00")
         supplier_stock = best_sp.qty_available if best_sp else sum(sp.qty_available for sp in product.supplier_products)
+
+        # Feature 1: Shipping charge resolution & guard against shipping_unknown
+        shipping_charge = None
+        if best_sp:
+            shipping_charge, shipping_status = shipping_service.resolve_shipping_charge(best_sp)
+            if shipping_status == "shipping_unknown" or shipping_charge is None:
+                raise ValueError(
+                    f"Cannot publish product {product.sku}: shipping charge is unknown ('shipping_unknown'). "
+                    "Products must not be published with wrong or unknown shipping costs."
+                )
 
         # Calculate initial listed quantity applying safety buffer & zero floor (Spec Section 14)
         if custom_qty is not None:
@@ -206,19 +246,18 @@ class ListingService:
                 product_id=product.id
             )
 
-        # Calculate price using PricingEngine (Spec Section 16)
+        # Calculate price using PricingEngine (Spec Section 16) including base shipping charge
         if custom_price is not None:
             price = custom_price
         else:
             price = pricing_service.calculate_price(
                 cost=supplier_cost,
                 product_id=product.id,
-                marketplace_id=marketplace.id
+                marketplace_id=marketplace.id,
+                shipping_charge=shipping_charge
             )
 
         target_status = inventory_service.determine_listing_status(quantity, oos_action)
-
-        adapter = self.get_adapter_for_marketplace(marketplace)
 
         now = datetime.now(timezone.utc)
         if listing and listing.external_listing_id:
@@ -242,6 +281,17 @@ class ListingService:
                 self.db.commit()
                 self.db.refresh(listing)
 
+                # Register in ListingRegistry (Feature 3)
+                try:
+                    upc_service.register_listing(
+                        product=product,
+                        marketplace_name=marketplace.name,
+                        marketplace_listing_id=listing.external_listing_id,
+                        sku=product.sku
+                    )
+                except Exception as reg_err:
+                    logger.warning(f"Could not register listing in ListingRegistry: {reg_err}")
+
                 # Audit log
                 sync_log = SyncLog(
                     product_id=product.id,
@@ -257,13 +307,17 @@ class ListingService:
                 logger.warning(f"Could not update existing listing in-place on {marketplace.name}: {e}. Proceeding to create/sync.")
 
         try:
+            # Resolve the effective image list: if the user picked a custom image
+            # it will already be images[0] after the persist block above; no
+            # additional override needed here — just pass the stored images.
+            effective_images = product.images or []
             adapter_result = adapter.create_listing(
                 sku=product.sku,
                 title=custom_title or product.title,
                 description=custom_description or product.description or product.title,
                 price=price,
                 quantity=quantity,
-                image_urls=product.images or []
+                image_urls=effective_images
             )
 
             if not listing:
@@ -286,6 +340,17 @@ class ListingService:
 
             self.db.commit()
             self.db.refresh(listing)
+
+            # Register in ListingRegistry (Feature 3)
+            try:
+                upc_service.register_listing(
+                    product=product,
+                    marketplace_name=marketplace.name,
+                    marketplace_listing_id=listing.external_listing_id,
+                    sku=product.sku
+                )
+            except Exception as reg_err:
+                logger.warning(f"Could not register listing in ListingRegistry: {reg_err}")
 
             # Audit log
             sync_log = SyncLog(

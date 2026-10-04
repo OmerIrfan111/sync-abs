@@ -30,6 +30,7 @@ class OrderItemResponse(BaseModel):
     quantity: int = 1
     unit_price: Decimal = Decimal("0.00")
     supplier_cost: Optional[Decimal] = None
+    shipping_cost: Optional[Decimal] = None
     supplier_id: Optional[int] = None
     supplier_name: Optional[str] = None
     status: str = "PENDING"

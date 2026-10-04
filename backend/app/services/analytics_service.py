@@ -20,10 +20,14 @@ class AnalyticsService:
     """
     Phase V2.1: Profitability analytics and supplier performance scoring.
 
-    Net profit is computed as order_total - supplier_cost - marketplace_fees.
-    Shipping cost is intentionally excluded: no marketplace or supplier adapter
-    in this system currently reports actual shipping cost per order, so adding
-    a shipping_cost term would mean fabricating a number rather than reporting one.
+    Net profit is computed as order_total - supplier_cost - marketplace_fees - shipping_cost.
+    Shipping cost (OrderItem.shipping_cost) is currently always null: no
+    third-party rate service is used, and neither D&H nor Ingram Micro has a
+    confirmed freight-cost integration wired up yet (Ingram has a real Freight
+    Estimate API on the account but its schema isn't implemented; D&H has no
+    known equivalent). It's treated as 0 here rather than fabricated — once a
+    real per-order shipping cost source is wired up, this will reflect it
+    automatically with no further change needed here.
     Supplier cost only reflects items that have been routed (OrderItem.supplier_cost
     is null until routing runs), so profit on not-yet-routed orders is an
     underestimate of cost (and therefore an overestimate of profit) until routed.
@@ -82,7 +86,10 @@ class AnalyticsService:
         for order in orders:
             order_cost = Decimal("0")
             for item in order.items:
-                item_cost = (item.supplier_cost or Decimal("0")) * item.quantity
+                # shipping_cost is currently always null (see class docstring) —
+                # included here so it flows through automatically once a real
+                # per-order shipping cost source is wired up.
+                item_cost = (item.supplier_cost or Decimal("0")) * item.quantity + (item.shipping_cost or Decimal("0"))
                 order_cost += item_cost
 
                 if item.supplier_id:
@@ -247,23 +254,37 @@ class AnalyticsService:
             cancelled_routed = sum(1 for item in routed_items if item.order.status == "CANCELLED")
             cancellation_rate_pct = (cancelled_routed / total_routed * 100) if total_routed > 0 else 0.0
 
-            missing_data_count = (
-                self.db.query(ErrorLog)
-                .filter(
-                    ErrorLog.supplier_id == supplier.id,
-                    ErrorLog.error_type == "MISSING_DATA",
-                    ErrorLog.created_at >= since,
-                )
-                .count()
-            )
+            # Bug fixed here: originally summed MISSING_DATA errors over the
+            # whole `days` window against a single current-catalog-size
+            # snapshot. Every sync run (every 5 minutes) re-logs the same
+            # skipped SKU, so that sum grew unbounded over 90 days and
+            # produced nonsensical rates over 1000%. A meaningful rate has to
+            # come from ONE sync's incidents, not a cumulative count across
+            # hundreds of runs — so this looks only at errors from the
+            # supplier's most recent sync (a tight window right at
+            # last_synced_at), giving one skipped-SKU count per catalog scan.
             catalog_size = (
                 self.db.query(SupplierProduct)
                 .filter(SupplierProduct.supplier_id == supplier.id)
                 .count()
             )
-            catalog_missing_data_rate_pct = (
-                (missing_data_count / catalog_size * 100) if catalog_size > 0 else None
-            )
+            if supplier.last_synced_at:
+                last_sync_window_start = supplier.last_synced_at - timedelta(minutes=5)
+                missing_data_count = (
+                    self.db.query(ErrorLog)
+                    .filter(
+                        ErrorLog.supplier_id == supplier.id,
+                        ErrorLog.error_type == "MISSING_DATA",
+                        ErrorLog.created_at >= last_sync_window_start,
+                        ErrorLog.created_at <= supplier.last_synced_at,
+                    )
+                    .count()
+                )
+                catalog_missing_data_rate_pct = (
+                    round(min(missing_data_count / catalog_size * 100, 100.0), 2) if catalog_size > 0 else None
+                )
+            else:
+                catalog_missing_data_rate_pct = None
 
             scores.append({
                 "supplier_id": supplier.id,

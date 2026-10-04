@@ -5,6 +5,7 @@ from app.adapters.suppliers.base import SupplierAdapter
 from app.adapters.suppliers.mock_supplier import MockSupplierAdapter
 from app.adapters.suppliers.ingram_micro import IngramMicroAdapter
 from app.adapters.suppliers.d_and_h import DAndHAdapter
+from app.adapters.suppliers.td_synnex import TDSynnexAdapter
 
 from app.adapters.marketplaces.base import MarketplaceAdapter
 from app.adapters.marketplaces.mock_ebay import MockEBayAdapter
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 SUPPLIER_ADAPTERS: Dict[str, Type[SupplierAdapter]] = {
     "IngramMicroAdapter": IngramMicroAdapter,
     "DAndHAdapter": DAndHAdapter,
+    "TDSynnexAdapter": TDSynnexAdapter,
     "MockSupplierAdapter": MockSupplierAdapter,
 }
 

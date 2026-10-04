@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 import pytest
@@ -22,7 +23,12 @@ def test_scenario_1_new_product_to_listing(db_session):
     """
     Scenario 1: New product created in supplier -> catalog entry -> rules applied -> listing created.
     """
-    supplier = Supplier(name="Ingram Phase5", adapter_class="MockSupplierAdapter", is_active=True)
+    supplier = Supplier(
+        name="Ingram Phase5",
+        adapter_class="MockSupplierAdapter",
+        is_active=True,
+        credentials_encrypted=json.dumps({"config": {"ground_shipping_charge": "0.00"}})
+    )
     marketplace = Marketplace(name="Amazon US", adapter_class="MockAmazonAdapter", is_active=True)
     db_session.add_all([supplier, marketplace])
     db_session.commit()
@@ -116,7 +122,12 @@ def test_scenario_3_cost_change_with_markup(db_session):
     """
     Scenario 3: Supplier cost changes from $500 to $520 -> 15% markup rule applied -> marketplace price updated from $575 to $598.
     """
-    supplier = Supplier(name="TDSynnex Phase5", adapter_class="MockSupplierAdapter", is_active=True)
+    supplier = Supplier(
+        name="TDSynnex Phase5",
+        adapter_class="MockSupplierAdapter",
+        is_active=True,
+        credentials_encrypted=json.dumps({"config": {"ground_shipping_charge": "0.00"}})
+    )
     marketplace = Marketplace(name="Walmart US", adapter_class="MockWalmartAdapter", is_active=True)
     product = Product(sku="SKU-SCENARIO-3", title="Enterprise Switch 24-Port", brand="Cisco")
     db_session.add_all([supplier, marketplace, product])
@@ -378,3 +389,71 @@ def test_scenario_8_redis_concurrency_lock():
 
         # After worker 1 exits, lock.release is called
         mock_lock1.release.assert_called_once()
+
+
+# -- Regression: D&H stale-credential override (discovered 2026-10-03) --
+# Root cause: DB had test env client_id while .env had production client_id.
+# SyncService only applied fallback for bearer_token, not client_id mismatch.
+
+def _make_dandh_supplier(db_session, credentials_dict=None):
+    import json as _json
+    import app.models.supplier as _sm
+    creds_enc = _json.dumps(credentials_dict or {})
+    supplier = _sm.Supplier(
+        name='D&H',
+        adapter_class='DAndHAdapter',
+        is_active=True,
+        credentials_encrypted=creds_enc,
+    )
+    db_session.add(supplier)
+    db_session.commit()
+    return supplier
+
+
+def test_dandh_stale_db_client_id_is_overridden_by_env(db_session, monkeypatch):
+    from app.services.sync_service import SyncService
+    from app.core.config import settings
+    stale_id = 'stale-test-client-0000'
+    prod_id = 'prod-client-9999'
+    supplier = _make_dandh_supplier(db_session, {'client_id': stale_id, 'client_secret': 'stale', 'environment': 'test'})
+    monkeypatch.setattr(settings, 'DANDH_CLIENT_ID', prod_id, raising=False)
+    monkeypatch.setattr(settings, 'DANDH_CLIENT_SECRET', 'prod-secret', raising=False)
+    monkeypatch.setattr(settings, 'DANDH_ACCOUNT_NUMBER', '3302610000', raising=False)
+    monkeypatch.setattr(settings, 'DANDH_TENANT', 'dhus', raising=False)
+    monkeypatch.setattr(settings, 'DANDH_ENVIRONMENT', 'production', raising=False)
+    monkeypatch.setattr(settings, 'DANDH_BEARER_TOKEN', '', raising=False)
+    adapter = SyncService(db_session).get_adapter_for_supplier(supplier)
+    assert adapter.client_id == prod_id, f'Stale creds not overridden: {adapter.client_id!r}'
+    assert adapter.environment == 'production'
+
+
+def test_dandh_matching_db_client_id_not_overridden(db_session, monkeypatch):
+    from app.services.sync_service import SyncService
+    from app.core.config import settings
+    shared_id = 'prod-client-9999'
+    supplier = _make_dandh_supplier(db_session, {'client_id': shared_id, 'client_secret': 'sec', 'environment': 'production'})
+    monkeypatch.setattr(settings, 'DANDH_CLIENT_ID', shared_id, raising=False)
+    monkeypatch.setattr(settings, 'DANDH_CLIENT_SECRET', 'sec', raising=False)
+    monkeypatch.setattr(settings, 'DANDH_ACCOUNT_NUMBER', '3302610000', raising=False)
+    monkeypatch.setattr(settings, 'DANDH_TENANT', 'dhus', raising=False)
+    monkeypatch.setattr(settings, 'DANDH_ENVIRONMENT', 'production', raising=False)
+    monkeypatch.setattr(settings, 'DANDH_BEARER_TOKEN', '', raising=False)
+    adapter = SyncService(db_session).get_adapter_for_supplier(supplier)
+    assert adapter.client_id == shared_id
+    assert adapter.environment == 'production'
+
+
+def test_dandh_empty_db_credentials_fall_back_to_env(db_session, monkeypatch):
+    from app.services.sync_service import SyncService
+    from app.core.config import settings
+    prod_id = 'prod-client-9999'
+    supplier = _make_dandh_supplier(db_session, {})
+    monkeypatch.setattr(settings, 'DANDH_CLIENT_ID', prod_id, raising=False)
+    monkeypatch.setattr(settings, 'DANDH_CLIENT_SECRET', 'sec', raising=False)
+    monkeypatch.setattr(settings, 'DANDH_ACCOUNT_NUMBER', '3302610000', raising=False)
+    monkeypatch.setattr(settings, 'DANDH_TENANT', 'dhus', raising=False)
+    monkeypatch.setattr(settings, 'DANDH_ENVIRONMENT', 'production', raising=False)
+    monkeypatch.setattr(settings, 'DANDH_BEARER_TOKEN', '', raising=False)
+    adapter = SyncService(db_session).get_adapter_for_supplier(supplier)
+    assert adapter.client_id == prod_id
+    assert adapter.environment == 'production'

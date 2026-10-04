@@ -7,6 +7,7 @@ class SupplierBase(BaseModel):
     name: str = Field(..., max_length=255)
     adapter_class: str = Field(..., max_length=255)
     is_active: bool = True
+    default_shipping_charge: Optional[Decimal] = None
 
 class SupplierCreate(SupplierBase):
     credentials: Optional[Dict[str, Any]] = None
@@ -16,9 +17,11 @@ class SupplierUpdate(BaseModel):
     adapter_class: Optional[str] = None
     is_active: Optional[bool] = None
     credentials: Optional[Dict[str, Any]] = None
+    default_shipping_charge: Optional[Decimal] = None
 
 class SupplierResponse(SupplierBase):
     id: int
+    default_shipping_charge: Optional[Decimal] = None
     last_synced_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime

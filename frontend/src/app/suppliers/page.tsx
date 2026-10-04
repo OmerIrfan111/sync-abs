@@ -1,21 +1,27 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { 
   Truck, 
   RefreshCw, 
-  CheckCircle, 
-  Clock, 
-  Check, 
   Wifi, 
   AlertCircle,
-  HelpCircle,
   ChevronDown,
   ChevronUp,
   CheckCircle2,
-  ExternalLink
+  Filter,
+  DollarSign,
+  ArrowRight,
+  Sparkles
 } from "lucide-react";
 import { fetchApi, Supplier } from "@/lib/api";
+
+interface PrefetchFilters {
+  category: string;
+  brand: string;
+  limit: string;
+}
 
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -24,13 +30,18 @@ export default function SuppliersPage() {
   const [testingId, setTestingId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ id: number; message: string; type: "success" | "error" } | null>(null);
   const [expandedSettingsId, setExpandedSettingsId] = useState<number | null>(null);
+  const [expandedFilterId, setExpandedFilterId] = useState<number | null>(null);
+  const [filteredSyncingId, setFilteredSyncingId] = useState<number | null>(null);
+
+  // Filter form state per supplier
+  const [filterForms, setFilterForms] = useState<Record<number, PrefetchFilters>>({});
 
   const loadSuppliers = async () => {
     try {
       const data = await fetchApi<Supplier[]>("/suppliers");
-      // Keep only Ingram Micro and D&H
+      // Keep supported wholesale suppliers (Ingram Micro, D&H, TD SYNNEX)
       const supported = data.filter(s => 
-        ["ingram", "d&h", "d and h", "dandh"].some(k => s.name.toLowerCase().includes(k))
+        ["ingram", "d&h", "d and h", "dandh", "synnex", "td synnex"].some(k => s.name.toLowerCase().includes(k))
       );
       setSuppliers(supported);
     } catch (err) {
@@ -43,6 +54,20 @@ export default function SuppliersPage() {
   useEffect(() => {
     loadSuppliers();
   }, []);
+
+  const getFilter = (id: number): PrefetchFilters => {
+    return filterForms[id] || { category: "", brand: "", limit: "500" };
+  };
+
+  const updateFilter = (id: number, key: keyof PrefetchFilters, val: string) => {
+    setFilterForms(prev => ({
+      ...prev,
+      [id]: {
+        ...(prev[id] || { category: "", brand: "", limit: "500" }),
+        [key]: val
+      }
+    }));
+  };
 
   const handleTestConnection = async (id: number) => {
     setTestingId(id);
@@ -79,6 +104,50 @@ export default function SuppliersPage() {
     }
   };
 
+  const handleFilteredSync = async (id: number) => {
+    setFilteredSyncingId(id);
+    setFeedback(null);
+    try {
+      const filters = getFilter(id);
+      const params = new URLSearchParams();
+
+      if (filters.category.trim()) {
+        params.append("category", filters.category.trim());
+      }
+      if (filters.brand.trim()) {
+        params.append("brand", filters.brand.trim());
+      }
+      if (filters.limit.trim()) {
+        const lim = parseInt(filters.limit, 10);
+        if (!isNaN(lim) && lim > 0) {
+          params.append("limit", String(lim));
+        }
+      }
+
+      const queryString = params.toString() ? `?${params.toString()}` : "";
+      const res = await fetchApi<any>(`/suppliers/${id}/sync${queryString}`, {
+        method: "POST"
+      });
+
+      const filterSummary = [
+        filters.category.trim() ? `Category: "${filters.category.trim()}"` : null,
+        filters.brand.trim() ? `Brand: "${filters.brand.trim()}"` : null,
+        filters.limit.trim() ? `Limit: ${filters.limit.trim()}` : null,
+      ].filter(Boolean).join(", ");
+
+      setFeedback({ 
+        id, 
+        message: `Filtered sync completed! (${filterSummary || "All items"}) Processed ${res.products_imported || 0} products (${res.changes_detected || 0} updates applied).`, 
+        type: "success" 
+      });
+      loadSuppliers();
+    } catch (err: any) {
+      setFeedback({ id, message: "Filtered sync failed: " + err.message, type: "error" });
+    } finally {
+      setFilteredSyncingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Header - Unboxed on canvas */}
@@ -90,17 +159,27 @@ export default function SuppliersPage() {
           </p>
         </div>
 
-        <button
-          onClick={loadSuppliers}
-          className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium transition-all border border-gray-300 self-start sm:self-auto"
-        >
-          <RefreshCw className="h-3.5 w-3.5 text-[#767676]" />
-          <span>Refresh List</span>
-        </button>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <Link
+            href="/rules"
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium transition-all border border-gray-300"
+          >
+            <DollarSign className="h-3.5 w-3.5 text-[#D9720F]" />
+            <span>Manage Base Shipping</span>
+          </Link>
+
+          <button
+            onClick={loadSuppliers}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium transition-all border border-gray-300"
+          >
+            <RefreshCw className="h-3.5 w-3.5 text-[#767676]" />
+            <span>Refresh List</span>
+          </button>
+        </div>
       </div>
 
       {/* Supplier Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
         {loading ? (
           <div className="col-span-full py-20 text-center text-[#767676]">
             Loading wholesale supplier connections...
@@ -109,23 +188,26 @@ export default function SuppliersPage() {
           suppliers.map((sup) => {
             const isSyncing = syncingId === sup.id;
             const isTesting = testingId === sup.id;
+            const isFilteredSyncing = filteredSyncingId === sup.id;
             const itemFeedback = feedback?.id === sup.id ? feedback : null;
-            const isExpanded = expandedSettingsId === sup.id;
+            const isSettingsExpanded = expandedSettingsId === sup.id;
+            const isFilterExpanded = expandedFilterId === sup.id;
+            const filterState = getFilter(sup.id);
 
             return (
               <div
                 key={sup.id}
-                className="bg-white p-6 rounded-lg border border-gray-100 flex flex-col justify-between space-y-4"
+                className="bg-white p-6 rounded-lg border border-gray-100 flex flex-col justify-between space-y-4 shadow-sm"
               >
                 <div>
                   {/* Top Row: Name & Status */}
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="p-2.5 rounded-lg bg-[#D9720F]/10 text-[#A8560A]">
-                        <Truck className="h-4 w-4" />
+                        <Truck className="h-5 w-5" />
                       </div>
                       <div>
-                        <h2 className="text-sm font-bold text-[#0a0a0a]">{sup.name}</h2>
+                        <h2 className="text-base font-bold text-[#0a0a0a]">{sup.name}</h2>
                         <span className="text-[11px] text-[#767676]">Authorized Distributor</span>
                       </div>
                     </div>
@@ -146,19 +228,30 @@ export default function SuppliersPage() {
                     )}
                   </div>
 
-                  {/* Metrics */}
-                  <div className="grid grid-cols-2 gap-2.5 my-3.5">
+                  {/* Metrics: 3 Columns (Products, Base Shipping, Last Update) */}
+                  <div className="grid grid-cols-3 gap-2.5 my-3.5">
                     <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <span className="text-[11px] text-[#767676] block">Products Available</span>
+                      <span className="text-[11px] text-[#767676] block">Products</span>
                       <span className="text-lg font-bold text-[#0a0a0a]">{sup.product_count}</span>
-                      <span className="text-[10px] text-[#767676] block mt-0.5">In wholesale feed</span>
+                      <span className="text-[10px] text-[#767676] block mt-0.5">In catalog</span>
                     </div>
+
                     <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <span className="text-[11px] text-[#767676] block">Last Update Check</span>
-                      <span className="text-xs font-semibold text-[#0a0a0a] block truncate mt-1" suppressHydrationWarning>
-                        {sup.last_synced_at ? new Date(sup.last_synced_at).toLocaleTimeString() : "Pending check"}
+                      <span className="text-[11px] text-[#767676] block">Base Shipping</span>
+                      <span className="text-base font-bold text-[#0a0a0a]">
+                        {sup.default_shipping_charge != null ? `$${Number(sup.default_shipping_charge).toFixed(2)}` : "None"}
                       </span>
-                      <span className="text-[10px] text-emerald-700 font-semibold block mt-0.5">Auto-sync active</span>
+                      <span className="text-[10px] text-emerald-700 font-medium block mt-0.5">
+                        {sup.default_shipping_charge != null ? "Active on sync" : "Defaults to $0"}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <span className="text-[11px] text-[#767676] block">Last Sync</span>
+                      <span className="text-xs font-semibold text-[#0a0a0a] block truncate mt-1" suppressHydrationWarning>
+                        {sup.last_synced_at ? new Date(sup.last_synced_at).toLocaleTimeString() : "Pending"}
+                      </span>
+                      <span className="text-[10px] text-emerald-700 font-semibold block mt-0.5">Auto-active</span>
                     </div>
                   </div>
 
@@ -177,23 +270,128 @@ export default function SuppliersPage() {
                       <span>{itemFeedback.message}</span>
                     </div>
                   )}
+
+                  {/* Prefetch Filter Form Section */}
+                  <div className="mt-3 p-3.5 bg-gray-50/80 rounded-lg border border-gray-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Filter className="h-3.5 w-3.5 text-[#D9720F]" />
+                        <span className="text-xs font-semibold text-[#0a0a0a]">Prefetch Filter Sync</span>
+                      </div>
+                      <button
+                        onClick={() => setExpandedFilterId(isFilterExpanded ? null : sup.id)}
+                        className="text-[11px] text-[#767676] hover:text-[#0a0a0a] flex items-center gap-1 font-medium transition-colors"
+                      >
+                        {isFilterExpanded ? (
+                          <>
+                            <span>Hide filters</span>
+                            <ChevronUp className="h-3 w-3" />
+                          </>
+                        ) : (
+                          <>
+                            <span>Set category / brand / limit</span>
+                            <ChevronDown className="h-3 w-3" />
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {isFilterExpanded ? (
+                      <div className="pt-2 border-t border-gray-200 space-y-3">
+                        <p className="text-[11px] text-[#767676] leading-relaxed">
+                          Narrow which items are pulled from this distributor&apos;s wholesale feed to speed up sync or target specific inventory.
+                        </p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          {/* Category Field */}
+                          <div>
+                            <label className="text-[10px] font-semibold text-[#767676] uppercase tracking-wider block mb-1">
+                              Category
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Laptops, Displays"
+                              value={filterState.category}
+                              onChange={(e) => updateFilter(sup.id, "category", e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white border border-gray-300 rounded-md text-xs text-[#0a0a0a] placeholder:text-gray-400 focus:outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]"
+                            />
+                          </div>
+
+                          {/* Brand Field */}
+                          <div>
+                            <label className="text-[10px] font-semibold text-[#767676] uppercase tracking-wider block mb-1">
+                              Brand
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Dell, HP, Lenovo"
+                              value={filterState.brand}
+                              onChange={(e) => updateFilter(sup.id, "brand", e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white border border-gray-300 rounded-md text-xs text-[#0a0a0a] placeholder:text-gray-400 focus:outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]"
+                            />
+                          </div>
+
+                          {/* Limit Field */}
+                          <div>
+                            <label className="text-[10px] font-semibold text-[#767676] uppercase tracking-wider block mb-1">
+                              Max Items (Limit)
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="10000"
+                              placeholder="500"
+                              value={filterState.limit}
+                              onChange={(e) => updateFilter(sup.id, "limit", e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white border border-gray-300 rounded-md text-xs text-[#0a0a0a] placeholder:text-gray-400 focus:outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Filtered Sync Button */}
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[10px] text-[#767676]">
+                            Targeted prefetch query
+                          </span>
+                          <button
+                            onClick={() => handleFilteredSync(sup.id)}
+                            disabled={isFilteredSyncing || isSyncing}
+                            className="px-3.5 py-1.5 bg-[#A8560A] hover:bg-[#8F4706] text-white rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all disabled:opacity-50 shadow-sm"
+                          >
+                            <Filter className={`h-3.5 w-3.5 ${isFilteredSyncing ? "animate-spin" : ""}`} />
+                            <span>{isFilteredSyncing ? "Prefetching..." : "Filtered Sync"}</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between text-[11px] text-[#767676]">
+                        <span>Standard sync fetches full catalog pages</span>
+                        <button
+                          onClick={() => setExpandedFilterId(sup.id)}
+                          className="text-[#A8560A] hover:underline font-medium"
+                        >
+                          Configure filters
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Plain Actions */}
+                {/* Primary Actions */}
                 <div className="space-y-2.5 pt-3.5 border-t border-gray-100">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleSyncNow(sup.id)}
-                      disabled={isTesting || isSyncing}
+                      disabled={isTesting || isSyncing || isFilteredSyncing}
                       className="flex-1 px-3 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
                     >
                       <RefreshCw className={`h-3.5 w-3.5 text-[#D9720F] ${isSyncing ? "animate-spin" : ""}`} />
-                      <span>{isSyncing ? "Checking..." : "Check Stock & Prices"}</span>
+                      <span>{isSyncing ? "Checking..." : "Full Sync Now"}</span>
                     </button>
 
                     <button
                       onClick={() => handleTestConnection(sup.id)}
-                      disabled={isTesting || isSyncing}
+                      disabled={isTesting || isSyncing || isFilteredSyncing}
                       className="px-3 py-2 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all border border-gray-300 disabled:opacity-50"
                       title="Test API Connection"
                     >
@@ -205,14 +403,14 @@ export default function SuppliersPage() {
                   {/* Collapsible Connection Settings */}
                   <div className="pt-0.5">
                     <button
-                      onClick={() => setExpandedSettingsId(isExpanded ? null : sup.id)}
+                      onClick={() => setExpandedSettingsId(isSettingsExpanded ? null : sup.id)}
                       className="text-[11px] text-[#767676] hover:text-[#0a0a0a] flex items-center gap-1 transition-colors font-medium"
                     >
-                      {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      {isSettingsExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                       <span>Connection details (Advanced)</span>
                     </button>
 
-                    {isExpanded && (
+                    {isSettingsExpanded && (
                       <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200 text-[11px] font-mono text-[#767676] space-y-1">
                         <div className="flex justify-between">
                           <span>Adapter:</span>
@@ -224,8 +422,16 @@ export default function SuppliersPage() {
                             {sup.name.toLowerCase().includes("ingram")
                               ? "Production (OAuth 2.0)"
                               : sup.name.toLowerCase().includes("d&h")
-                              ? "Test Gateway (Axway REST)"
+                              ? "Production (Axway REST)"
+                              : sup.name.toLowerCase().includes("synnex")
+                              ? "Production (OAuth 2.0 / StreamOne)"
                               : "REST / Feed"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Base Shipping:</span>
+                          <span className="text-[#0a0a0a]">
+                            {sup.default_shipping_charge != null ? `$${Number(sup.default_shipping_charge).toFixed(2)}` : "None configured"}
                           </span>
                         </div>
                         <div className="flex justify-between">

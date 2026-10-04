@@ -68,4 +68,5 @@ Thumbs.db
 *.swp
 *.swo
 .impeccable/
+.claude/
 

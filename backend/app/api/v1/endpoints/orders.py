@@ -64,6 +64,7 @@ def _order_to_detail(order: Order) -> OrderDetailResponse:
             quantity=item.quantity,
             unit_price=item.unit_price,
             supplier_cost=item.supplier_cost,
+            shipping_cost=item.shipping_cost,
             supplier_id=item.supplier_id,
             supplier_name=item.supplier.name if item.supplier else None,
             status=item.status,
@@ -215,7 +216,24 @@ def route_order(order_id: int, db: Session = Depends(get_db)):
     service = OrderService(db)
     try:
         order = service.route_order(order_id)
-        return {"success": True, "status": order.status, "message": f"Order #{order_id} routed successfully"}
+        routed = sum(1 for item in order.items if item.status == "ROUTED")
+        unroutable = [item for item in order.items if item.status == "UNROUTABLE"]
+
+        if routed and not unroutable:
+            message = f"Order #{order_id}: all {routed} item(s) routed to a supplier."
+        elif routed and unroutable:
+            message = f"Order #{order_id}: {routed} item(s) routed, {len(unroutable)} could not be routed — see item details."
+        else:
+            reasons = "; ".join(sorted({item.routing_note for item in unroutable if item.routing_note}))
+            message = f"Order #{order_id}: nothing could be routed. {reasons}"
+
+        return {
+            "success": True,
+            "status": order.status,
+            "routed_count": routed,
+            "unroutable_count": len(unroutable),
+            "message": message,
+        }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -261,6 +279,33 @@ def submit_purchase_order(po_id: int, payload: PurchaseOrderSubmit, db: Session 
 
 
 # ──────────────────────────────────────────────
+# POST /purchase-orders/{id}/submit-live  —  Actually place the order with the real supplier
+# ──────────────────────────────────────────────
+
+@router.post("/purchase-orders/{po_id}/submit-live")
+def submit_purchase_order_live(po_id: int, db: Session = Depends(get_db)):
+    """
+    Places this DRAFT purchase order with the real supplier via their order
+    API (currently D&H only). This spends real money — the button click that
+    calls this endpoint IS the human confirmation; there is no second
+    "are you sure" beyond the one already required client-side.
+    """
+    service = OrderService(db)
+    try:
+        po = service.submit_purchase_order_live(po_id)
+        return {
+            "success": True,
+            "status": po.status,
+            "supplier_order_id": po.supplier_order_id,
+            "message": f"PO {po.po_number} submitted to the real supplier. Confirmation: {po.supplier_order_id}",
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ConnectionError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+# ──────────────────────────────────────────────
 # PUT /orders/{id}/tracking  —  Update tracking
 # ──────────────────────────────────────────────
 
@@ -275,6 +320,34 @@ def update_tracking(order_id: int, payload: TrackingUpdate, db: Session = Depend
             "tracking_number": payload.tracking_number,
             "message": f"Tracking updated and pushed to marketplace for Order #{order_id}",
         }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# PUT /orders/{id}/deliver  —  Mark delivered
+# ──────────────────────────────────────────────
+
+@router.put("/{order_id}/deliver")
+def deliver_order(order_id: int, db: Session = Depends(get_db)):
+    service = OrderService(db)
+    try:
+        order = service.mark_delivered(order_id)
+        return {"success": True, "status": order.status, "message": f"Order #{order_id} marked delivered"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# PUT /orders/{id}/complete  —  Mark completed
+# ──────────────────────────────────────────────
+
+@router.put("/{order_id}/complete")
+def complete_order(order_id: int, db: Session = Depends(get_db)):
+    service = OrderService(db)
+    try:
+        order = service.complete_order(order_id)
+        return {"success": True, "status": order.status, "message": f"Order #{order_id} marked completed"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

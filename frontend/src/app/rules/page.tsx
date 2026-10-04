@@ -8,21 +8,17 @@ import {
   Truck, 
   Plus, 
   Trash2, 
-  Check, 
   AlertCircle, 
   RefreshCw, 
   Play, 
   ArrowRight, 
   ShieldCheck, 
-  TrendingUp, 
-  Boxes, 
-  HelpCircle, 
   Sparkles,
   ChevronDown,
   ChevronUp,
-  Store,
   CheckCircle2,
-  X
+  X,
+  Store
 } from "lucide-react";
 import { 
   fetchApi, 
@@ -43,9 +39,14 @@ export default function RulesPage() {
   const [markupPercent, setMarkupPercent] = useState("20");
   const [fixedDollar, setFixedDollar] = useState("10.00");
   const [sampleCost, setSampleCost] = useState("50.00");
+  const [sampleShipping, setSampleShipping] = useState("10.00");
   const [safetyBuffer, setSafetyBuffer] = useState("2");
   const [outOfStockAction, setOutOfStockAction] = useState("DISABLE_LISTING");
   const [savingGlobal, setSavingGlobal] = useState(false);
+
+  // Supplier shipping charges state
+  const [supplierShippingCharges, setSupplierShippingCharges] = useState<Record<number, string>>({});
+  const [savingShippingId, setSavingShippingId] = useState<number | null>(null);
 
   // Advanced section toggle
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -81,7 +82,19 @@ export default function RulesPage() {
       setInventoryRules(invRes);
       setSupplierPriorities(priorityRes);
       setProducts(prodRes.items);
-      setSuppliers(suppRes);
+
+      // Keep supported wholesale suppliers (Ingram Micro, D&H, TD SYNNEX)
+      const supportedSuppliers = suppRes.filter(s => 
+        ["ingram", "d&h", "d and h", "dandh", "synnex", "td synnex", "tdsynnex"].some(k => s.name.toLowerCase().includes(k))
+      );
+      setSuppliers(supportedSuppliers.length > 0 ? supportedSuppliers : suppRes);
+
+      // Populate supplier shipping charges
+      const shippingMap: Record<number, string> = {};
+      (supportedSuppliers.length > 0 ? supportedSuppliers : suppRes).forEach(s => {
+        shippingMap[s.id] = s.default_shipping_charge != null ? String(s.default_shipping_charge) : "0.00";
+      });
+      setSupplierShippingCharges(shippingMap);
 
       // Find global rule if set
       const globalRule = pricingRes.find(r => !r.product_id && !r.marketplace_id);
@@ -119,7 +132,7 @@ export default function RulesPage() {
 
   const showFeedback = (message: string, type: "success" | "error") => {
     setFeedback({ message, type });
-    setTimeout(() => setFeedback(null), 4000);
+    setTimeout(() => setFeedback(null), 5000);
   };
 
   const handleSaveGlobalRules = async (e: React.FormEvent) => {
@@ -153,6 +166,35 @@ export default function RulesPage() {
     }
   };
 
+  const handleSaveSupplierShipping = async (supplierId: number) => {
+    setSavingShippingId(supplierId);
+    try {
+      const val = parseFloat(supplierShippingCharges[supplierId] || "0");
+      if (isNaN(val) || val < 0) {
+        showFeedback("Please enter a valid non-negative shipping charge", "error");
+        return;
+      }
+
+      await fetchApi(`/suppliers/${supplierId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          default_shipping_charge: val
+        })
+      });
+
+      const sup = suppliers.find(s => s.id === supplierId);
+      showFeedback(
+        `Default shipping set to $${val.toFixed(2)} for ${sup?.name || "Supplier"}! Applied to all ${sup?.product_count || 0} existing products and will automatically apply to future syncs.`,
+        "success"
+      );
+      loadData();
+    } catch (err: any) {
+      showFeedback(err.message || "Failed to save supplier shipping charge", "error");
+    } finally {
+      setSavingShippingId(null);
+    }
+  };
+
   const handleRunSimulator = async () => {
     if (!simProductId) return;
     setSimulating(true);
@@ -176,17 +218,20 @@ export default function RulesPage() {
     }
   };
 
+  // Live preview calculations
   const costNum = parseFloat(sampleCost) || 0;
+  const shipNum = parseFloat(sampleShipping) || 0;
+  const effectiveCostNum = costNum + shipNum;
   let sellingPricePreview = 0;
   let profitAmountPreview = 0;
 
   if (pricingMode === "PERCENTAGE_MARKUP") {
     const pct = parseFloat(markupPercent) || 0;
-    profitAmountPreview = (costNum * pct) / 100;
-    sellingPricePreview = costNum + profitAmountPreview;
+    profitAmountPreview = (effectiveCostNum * pct) / 100;
+    sellingPricePreview = effectiveCostNum + profitAmountPreview;
   } else {
     profitAmountPreview = parseFloat(fixedDollar) || 0;
-    sellingPricePreview = costNum + profitAmountPreview;
+    sellingPricePreview = effectiveCostNum + profitAmountPreview;
   }
 
   return (
@@ -196,7 +241,7 @@ export default function RulesPage() {
         <div>
           <h1 className="text-2xl font-brand font-normal text-[#0a0a0a]">Pricing & Stock Rules</h1>
           <p className="text-sm text-[#767676] mt-1 max-w-2xl leading-relaxed">
-            Set how much profit you want to make on each product. The system will automatically calculate the selling price and update your stores.
+            Configure supplier base shipping charges and profit markups so your final listing prices never result in a loss.
           </p>
         </div>
       </div>
@@ -213,16 +258,89 @@ export default function RulesPage() {
         </div>
       )}
 
+      {/* FEATURE: Supplier Default Shipping Charges Section */}
+      <div className="bg-white p-6 rounded-lg border border-gray-100 space-y-4 shadow-sm">
+        <div className="border-b border-gray-100 pb-3 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-base font-bold text-[#0a0a0a] flex items-center gap-2">
+              <Truck className="h-4 w-4 text-[#D9720F]" />
+              <span>Distributor Default Shipping Charges (Base Freight)</span>
+            </h2>
+            <p className="text-xs text-[#767676] mt-0.5 leading-relaxed">
+              Set a baseline shipping charge per distributor. This is added directly to the wholesale cost before applying your markup: 
+              <strong className="text-[#0a0a0a] font-semibold ml-1">Effective Cost = Wholesale Cost + Base Shipping</strong>.
+              Setting this updates all current products and guarantees future syncs include shipping protection.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+          {suppliers.map((sup) => {
+            const isSaving = savingShippingId === sup.id;
+            const currentCharge = supplierShippingCharges[sup.id] ?? (sup.default_shipping_charge != null ? String(sup.default_shipping_charge) : "0.00");
+
+            return (
+              <div 
+                key={sup.id}
+                className="p-4 bg-gray-50/80 rounded-lg border border-gray-200 flex flex-col justify-between space-y-3"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-sm text-[#0a0a0a]">{sup.name}</span>
+                    <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                      {sup.product_count} products
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#767676]">
+                    Baseline ground shipping cost added to every product from this distributor.
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-[#767676] font-medium">Flat Rate:</span>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#767676] text-xs font-bold">$</span>
+                      <input
+                        type="number"
+                        step="0.50"
+                        min="0"
+                        value={currentCharge}
+                        onChange={(e) => setSupplierShippingCharges({
+                          ...supplierShippingCharges,
+                          [sup.id]: e.target.value
+                        })}
+                        placeholder="0.00"
+                        className="w-24 pl-5 pr-2 py-1.5 bg-white border border-gray-300 rounded-md text-xs font-bold text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleSaveSupplierShipping(sup.id)}
+                    disabled={isSaving}
+                    className="px-3 py-1.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-md text-xs font-medium transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                  >
+                    {isSaving && <RefreshCw className="h-3 w-3 animate-spin text-[#D9720F]" />}
+                    <span>{isSaving ? "Applying..." : "Save & Apply"}</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Main Profit Form */}
       <form onSubmit={handleSaveGlobalRules} className="space-y-6">
-        <div className="bg-white p-6 rounded-lg border border-gray-100 space-y-5">
+        <div className="bg-white p-6 rounded-lg border border-gray-100 space-y-5 shadow-sm">
           <div className="border-b border-gray-100 pb-3">
             <h2 className="text-base font-bold text-[#0a0a0a] flex items-center gap-2">
               <DollarSign className="h-4 w-4 text-[#D9720F]" />
               <span>How much profit do you want to make?</span>
             </h2>
             <p className="text-xs text-[#767676] mt-0.5">
-              Choose percentage markup or fixed dollar profit. We automatically adjust every item in your catalog.
+              Choose percentage markup or fixed dollar profit. Applied on top of your Effective Cost Basis (Cost + Shipping).
             </p>
           </div>
 
@@ -248,7 +366,7 @@ export default function RulesPage() {
                   />
                 </div>
                 <div className="text-sm font-semibold text-[#0a0a0a] mb-2">
-                  Make a percentage profit on every product
+                  Make a percentage profit on effective cost basis
                 </div>
                 <div className="flex items-center gap-2 mt-2">
                   <span className="text-xs text-[#767676] font-medium">Add</span>
@@ -260,11 +378,11 @@ export default function RulesPage() {
                     onChange={(e) => setMarkupPercent(e.target.value)}
                     className="w-20 px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-[#0a0a0a] text-center focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                   />
-                  <span className="text-sm font-semibold text-[#A8560A]">% profit</span>
+                  <span className="text-sm font-semibold text-[#A8560A]">% markup</span>
                 </div>
               </div>
               <p className="text-[11px] text-[#767676] mt-3">
-                Example: On a $50 product, a 20% markup sells for $60.
+                Example: On a $50 product with $10 shipping (Cost Basis $60), a 20% markup sells for $72.
               </p>
             </div>
 
@@ -308,35 +426,51 @@ export default function RulesPage() {
                 </div>
               </div>
               <p className="text-[11px] text-[#767676] mt-3">
-                Example: On a $50 product, adding $10 sells for $60.
+                Example: On a $50 product with $10 shipping ($60 basis), adding $10 flat profit sells for $70.
               </p>
             </div>
           </div>
 
-          {/* Live Preview Box */}
-          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-            <div className="flex items-center justify-between mb-3">
+          {/* Live Preview Box with Shipping */}
+          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <span className="text-xs font-semibold text-[#A8560A] uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5" />
-                <span>Live Calculation Preview</span>
+                <span>Live Cost & Price Preview</span>
               </span>
-              <div className="flex items-center gap-2 text-xs text-[#767676]">
-                <span>Test with Supplier Cost:</span>
-                <div className="relative">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#767676] text-xs">$</span>
-                  <input
-                    type="number"
-                    value={sampleCost}
-                    onChange={(e) => setSampleCost(e.target.value)}
-                    className="w-20 pl-5 pr-2 py-1 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-[#0a0a0a] text-right"
-                  />
+
+              <div className="flex items-center gap-3 text-xs text-[#767676]">
+                <div className="flex items-center gap-1.5">
+                  <span>Product Cost:</span>
+                  <div className="relative">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[#767676] text-xs">$</span>
+                    <input
+                      type="number"
+                      value={sampleCost}
+                      onChange={(e) => setSampleCost(e.target.value)}
+                      className="w-18 pl-4 pr-1 py-1 bg-white border border-gray-300 rounded-md text-xs font-semibold text-[#0a0a0a] text-right"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span>Base Ship:</span>
+                  <div className="relative">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[#767676] text-xs">$</span>
+                    <input
+                      type="number"
+                      value={sampleShipping}
+                      onChange={(e) => setSampleShipping(e.target.value)}
+                      className="w-16 pl-4 pr-1 py-1 bg-white border border-gray-300 rounded-md text-xs font-semibold text-[#0a0a0a] text-right"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="p-3.5 bg-white rounded-lg border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
-              <div className="text-[#1a1a1a]">
-                If the wholesale supplier charges you <span className="font-semibold text-[#0a0a0a]">${costNum.toFixed(2)}</span>:
+              <div className="text-[#1a1a1a] text-xs sm:text-sm">
+                Wholesale <span className="font-semibold text-[#0a0a0a]">${costNum.toFixed(2)}</span> + Shipping <span className="font-semibold text-[#0a0a0a]">${shipNum.toFixed(2)}</span> = Cost Basis <strong className="text-[#0a0a0a]">${effectiveCostNum.toFixed(2)}</strong>:
               </div>
               <div className="flex items-center gap-5">
                 <div className="text-right">
@@ -353,14 +487,14 @@ export default function RulesPage() {
         </div>
 
         {/* Stock Safety Buffer Section */}
-        <div className="bg-white p-6 rounded-lg border border-gray-100 space-y-4">
+        <div className="bg-white p-6 rounded-lg border border-gray-100 space-y-4 shadow-sm">
           <div className="border-b border-gray-100 pb-3">
             <h2 className="text-base font-bold text-[#0a0a0a] flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-[#D9720F]" />
               <span>Stock Protection & Safety Buffer</span>
             </h2>
             <p className="text-xs text-[#767676] mt-0.5">
-              Prevent accidentally selling items that are already out of stock at the warehouse.
+              Prevent accidentally selling items that are already out of stock at the distributor warehouse.
             </p>
           </div>
 
@@ -424,7 +558,7 @@ export default function RulesPage() {
             <button
               type="submit"
               disabled={savingGlobal}
-              className="px-5 py-2.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+              className="px-5 py-2.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all disabled:opacity-50 shadow-sm"
             >
               {savingGlobal ? "Saving Settings..." : "Save Profit & Stock Rules"}
             </button>
@@ -433,7 +567,7 @@ export default function RulesPage() {
       </form>
 
       {/* Advanced Collapsible Section */}
-      <div className="bg-white p-6 rounded-lg border border-gray-100 space-y-4">
+      <div className="bg-white p-6 rounded-lg border border-gray-100 space-y-4 shadow-sm">
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
@@ -461,7 +595,7 @@ export default function RulesPage() {
                 <h4 className="text-xs font-semibold text-[#767676] uppercase tracking-wider">Active Custom Overrides</h4>
                 <button
                   onClick={() => setShowOverrideModal(true)}
-                  className="px-3 py-1.5 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium flex items-center gap-1.5 border border-gray-300"
+                  className="px-3 py-1.5 bg-white hover:bg-gray-50 text-[#0a0a0a] rounded-lg text-xs font-medium flex items-center gap-1.5 border border-gray-300 shadow-sm"
                 >
                   <Plus className="h-3 w-3" />
                   <span>Add Product Override</span>
@@ -510,7 +644,7 @@ export default function RulesPage() {
                 <span>Live Calculator Simulator</span>
               </h4>
               <p className="text-[11px] text-[#767676]">
-                Select any product to see exactly how its supplier cost, safety buffer, and profit rule will calculate in real-time.
+                Select any product to see exactly how its supplier cost, base shipping, safety buffer, and profit rule calculate in real-time.
               </p>
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -519,38 +653,49 @@ export default function RulesPage() {
                   onChange={(e) => setSimProductId(Number(e.target.value))}
                   className="flex-1 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
                 >
+                  <option value="">Choose a product to simulate...</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.title} (Cost: ${Number(p.lowest_cost || 0).toFixed(2)})
+                      {p.title} ({p.sku})
                     </option>
                   ))}
                 </select>
 
                 <button
+                  type="button"
                   onClick={handleRunSimulator}
-                  disabled={simulating || !simProductId}
-                  className="px-4 py-1.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                  disabled={!simProductId || simulating}
+                  className="px-4 py-1.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
                 >
-                  {simulating ? "Calculating..." : "Test Calculation"}
+                  <Play className={`h-3 w-3 ${simulating ? "animate-spin" : ""}`} />
+                  <span>{simulating ? "Calculating..." : "Test Product"}</span>
                 </button>
               </div>
 
               {simPreview && (
-                <div className="mt-2.5 p-3 bg-white rounded-lg border border-gray-200 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div className="mt-3 p-3.5 bg-white rounded-lg border border-gray-200 grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs">
                   <div>
-                    <span className="text-[#767676] block text-[10px]">Supplier Cost</span>
+                    <span className="text-[#767676] block text-[10px]">Wholesale Cost</span>
                     <span className="font-semibold text-[#0a0a0a]">${Number(simPreview.pricing?.supplier_cost ?? 0).toFixed(2)}</span>
                   </div>
                   <div>
-                    <span className="text-[#767676] block text-[10px]">Calculated Selling Price</span>
+                    <span className="text-[#767676] block text-[10px]">Base Shipping</span>
+                    <span className="font-semibold text-[#0a0a0a]">${Number(simPreview.pricing?.base_shipping_charge ?? 0).toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[#767676] block text-[10px]">Cost Basis</span>
+                    <span className="font-bold text-[#0a0a0a]">${Number(simPreview.pricing?.effective_cost ?? simPreview.pricing?.supplier_cost ?? 0).toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[#767676] block text-[10px]">Selling Price</span>
                     <span className="font-bold text-[#A8560A]">${Number(simPreview.pricing?.calculated_price ?? 0).toFixed(2)}</span>
                   </div>
                   <div>
-                    <span className="text-[#767676] block text-[10px]">Stock Shown in Store</span>
+                    <span className="text-[#767676] block text-[10px]">Stock in Store</span>
                     <span className="font-semibold text-emerald-700">{simPreview.inventory?.calculated_marketplace_qty ?? 0} units</span>
                   </div>
                   <div>
-                    <span className="text-[#767676] block text-[10px]">Store Status</span>
+                    <span className="text-[#767676] block text-[10px]">Status</span>
                     <span className="font-semibold text-[#0a0a0a]">{simPreview.inventory?.target_listing_status ?? "ACTIVE"}</span>
                   </div>
                 </div>
@@ -622,17 +767,18 @@ export default function RulesPage() {
                       body: JSON.stringify({
                         product_id: parseInt(overrideProductId),
                         rule_type: "PERCENTAGE_MARKUP",
-                        percentage: parseFloat(overridePercent) || 0
+                        percentage: parseFloat(overridePercent),
+                        notes: "Custom product markup override"
                       })
                     });
+                    showFeedback("Custom override added!", "success");
                     setShowOverrideModal(false);
-                    showFeedback("Custom product rule created!", "success");
                     loadData();
                   } catch (err: any) {
-                    alert("Error: " + err.message);
+                    showFeedback(err.message || "Failed to create override", "error");
                   }
                 }}
-                className="px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium"
+                className="px-4 py-2 bg-[#0a0a0a] text-white rounded-lg text-xs font-medium hover:bg-[#222222]"
               >
                 Save Override
               </button>

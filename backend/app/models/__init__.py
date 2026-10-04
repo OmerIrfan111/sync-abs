@@ -17,6 +17,8 @@ from app.models.order_event import OrderEvent
 from app.models.warehouse import Warehouse, WarehouseStock
 from app.models.marketplace_fee_schedule import MarketplaceFeeSchedule
 from app.models.product_restriction import ProductRestriction
+from app.models.shipping_history import ProductShippingHistory
+from app.models.listing_registry import ListingRegistry
 
 __all__ = [
     "TimestampMixin",
@@ -39,4 +41,6 @@ __all__ = [
     "WarehouseStock",
     "MarketplaceFeeSchedule",
     "ProductRestriction",
+    "ProductShippingHistory",
+    "ListingRegistry",
 ]

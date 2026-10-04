@@ -48,6 +48,21 @@ class Settings(BaseSettings):
     DANDH_TENANT: str = "dhus"
     DANDH_ENVIRONMENT: str = "test"
 
+    TDSYNNEX_CLIENT_ID: Optional[str] = None
+    TDSYNNEX_CLIENT_SECRET: Optional[str] = None
+    TDSYNNEX_ACCOUNT_NUMBER: Optional[str] = None
+    TDSYNNEX_ENVIRONMENT: str = "production"
+
+    # Global Sandbox / Dry Run Flag (Feature 5)
+    # Default is True in development/testing. Production requires explicit DRY_RUN=False.
+    DRY_RUN: bool = True
+
+    # UPC & Product Matching Configuration (Features 3 & 4)
+    UPC_SIMILARITY_THRESHOLD: float = 0.60
+
+    # Image Search Provider Configuration (Feature 4)
+    IMAGE_SEARCH_PROVIDER: str = "bing"  # "bing", "mock", "serper", "google"
+    IMAGE_SEARCH_API_KEY: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),

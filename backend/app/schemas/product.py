@@ -10,9 +10,19 @@ class SupplierProductInfo(BaseModel):
     supplier_sku: str
     cost: Decimal
     qty_available: int
+    is_unlimited_stock: bool = False
+    # True when qty_available is a supplier-side sentinel for "no physical
+    # unit limit" (e.g. Ingram Micro reports software licenses/support
+    # contracts as multiples of 9,999,999 rather than a real stock count).
+    # Confirmed pattern from real catalog data, not a guess — the UI should
+    # never display qty_available literally when this is true.
     stock_status: str
     availability_status: str
     shipping_info: Dict[str, Any] = Field(default_factory=dict)
+    base_shipping_charge: Optional[Decimal] = None
+    shipping_source: Optional[str] = None
+    shipping_status: Optional[str] = None
+    shipping_updated_at: Optional[datetime] = None
     last_seen_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -51,6 +61,7 @@ class ProductResponse(ProductBase):
     updated_at: datetime
     supplier_products: List[SupplierProductInfo] = Field(default_factory=list)
     total_stock: Optional[int] = 0
+    is_unlimited_stock: bool = False
     lowest_cost: Optional[Decimal] = None
     model_config = ConfigDict(from_attributes=True)
 

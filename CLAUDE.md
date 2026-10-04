@@ -1,15 +1,17 @@
 # ABS Sync — Claude Code Context & Handoff Guide
 
 ## Project Overview
-**ABS Sync (Sync ABS)** is an enterprise-grade multi-marketplace dropshipping synchronization, catalog aggregation, and automated order fulfillment platform. It connects wholesale distributors directly to retail marketplace channels.
+**ABS Sync (Sync ABS)** is a multi-marketplace dropshipping synchronization, catalog aggregation, and order fulfillment platform. It connects wholesale distributors directly to retail marketplace channels.
 
-- **Wholesale Suppliers Supported:** Ingram Micro (Production REST/OAuth 2.0), D&H Distributing (Axway REST API), and Mock Supplier (deterministic development/testing).
-- **Marketplace Sales Channels:** eBay (Live Production OAuth with 18-month token & Sell Fulfillment/Inventory API), Amazon (SP-API), Shopify (Admin REST API), plus mock adapters for all three.
+- **Wholesale Suppliers Supported:** Ingram Micro (Production REST/OAuth 2.0), D&H Distributing (Axway REST API), TD SYNNEX (Production REST Partner API / cis-partner-api, Account 813367), and Mock Supplier (deterministic development/testing).
+- **Marketplace Sales Channels:** eBay (Live Production OAuth, Sell Fulfillment/Inventory API — the only channel with real order ingestion/tracking today), Amazon (SP-API adapter exists but order methods are explicit `NotImplementedError` stubs, not wired to real orders), Shopify (Admin REST API adapter, same order-method caveat as Amazon), plus mock adapters for all three.
 - **Core Operations:**
-  - Automated catalog sync with UPC/EAN normalization and manufacturer imagery resolution.
+  - Catalog sync with UPC/EAN normalization, per-branch warehouse stock, and image resolution (supplier photo → UPC lookup → curated brand/category stock photo fallback).
   - Dynamic repricing with tiered markups, marketplace commission deductions, and minimum margin safeguards.
   - Multi-supplier inventory allocation, physical stock pooling, and automatic out-of-stock zeroing/delisting.
-  - **V2 Order Operations:** Automated order ingestion, supplier routing engine, purchase order (PO) generation, tracking sync back to marketplace channels.
+  - **Order Operations:** Order ingestion (eBay live; Amazon/Shopify honestly unimplemented), supplier routing (with real Ingram Micro freight-cost estimate and TD SYNNEX base shipping rules at routing time), purchase order generation, real order submission to D&H, Ingram Micro, and TD SYNNEX, automatic tracking discovery and push back to marketplace channels.
+  - **Analytics:** Real profitability (revenue/cost/fees/shipping → net profit), supplier scoring, catalog data-quality metrics — never fabricated placeholder numbers.
+  - **RBAC:** Staff accounts with `admin`/`operator` roles gating destructive or credential-sensitive actions.
 
 ---
 
@@ -20,7 +22,7 @@
 | **Backend Framework** | Python 3.12 / FastAPI | RESTful API, Pydantic v2 validation |
 | **ORM & Database** | SQLAlchemy 2.0 / PostgreSQL 16 | Relational persistence, Alembic migrations |
 | **Task Queue & Async** | Celery 5.x / RabbitMQ / Redis 7 | Periodic sync tasks, background worker & beat scheduler |
-| **Frontend** | Next.js 14 (App Router) / TypeScript | Tailwind CSS, Lucide icons, Dark/Glassmorphic design |
+| **Frontend** | Next.js 14 (App Router) / TypeScript | Tailwind CSS, Lucide icons |
 | **Containerization** | Docker Compose | 7 coordinated services |
 
 ### Running Containers (`docker ps`)
@@ -34,83 +36,79 @@
 
 ---
 
+## Design System
+The frontend identity is **"The Dispatch Desk"** — documented in `DESIGN.md` (colors, typography, elevation, components) and `PRODUCT.md` (brand personality, anti-references, register). Read those before making any visual change; don't reintroduce the earlier generic violet/indigo "AI-SaaS" look that was deliberately replaced. Key facts: hazard-orange/steel/ink/paper palette, Bebas Neue display font (used once per screen) + Scheherazade New for Arabic wordmark text, border-first elevation (no default drop shadows), radius hierarchy (tags 4px / buttons 6px / containers 8px).
+
+---
+
 ## Key Project Architecture & File Paths
 
 ```
 Sync ABS/
 ├── backend/
-│   ├── alembic/
-│   │   └── versions/
-│   │       ├── 001_initial_schema.py       # V1 schema (suppliers, products, listings, rules, logs)
-│   │       └── 002_v2_orders.py            # [V2] Migration for orders, items, POs, events
+│   ├── alembic/versions/           # 12 migrations (001 initial schema → 012 supplier default shipping)
 │   ├── app/
 │   │   ├── adapters/
 │   │   │   ├── marketplaces/
-│   │   │   │   ├── base.py                 # Abstract MarketplaceAdapter (includes V2 order methods)
-│   │   │   │   ├── live_ebay.py            # Live eBay Inventory & Fulfillment API integration
-│   │   │   │   ├── live_amazon.py          # Amazon SP-API integration
-│   │   │   │   ├── live_shopify.py         # Shopify Admin REST integration
-│   │   │   │   ├── mock_ebay.py            # Mock eBay adapter with V2 order mock methods
-│   │   │   │   ├── mock_amazon.py          # Mock Amazon adapter with V2 order mock methods
-│   │   │   │   └── mock_shopify.py         # Mock Shopify adapter with V2 order mock methods
+│   │   │   │   ├── base.py                 # Abstract MarketplaceAdapter. fetch_orders/update_tracking/
+│   │   │   │   │                           #   acknowledge_order default to raising NotImplementedError —
+│   │   │   │   │                           #   never a fabricated success/empty-result fallback.
+│   │   │   │   ├── live_ebay.py            # Real order fetch/tracking/acknowledge via Sell Fulfillment API
+│   │   │   │   ├── live_amazon.py          # Listing/inventory only — order methods NOT overridden (raise)
+│   │   │   │   ├── live_shopify.py         # Listing/inventory only — order methods NOT overridden (raise)
+│   │   │   │   └── mock_*.py               # Mock eBay/Amazon/Shopify, including simulated orders
 │   │   │   └── suppliers/
-│   │   │       ├── ingram_micro.py         # Live Ingram Micro API integration (production & sandbox)
-│   │   │       ├── d_and_h.py              # Live D&H Distributing Axway REST integration
+│   │   │       ├── ingram_micro.py         # Live OAuth2 + resumable page-cursor catalog pagination (caps at 200);
+│   │   │       │                           #   real submit_order() (Order Create v7) and
+│   │   │       │                           #   check_shipment_status() (Search + Get Order Details v7) — production
+│   │   │       ├── d_and_h.py              # Live bearer/OAuth2 + resumable scrollId pagination,
+│   │   │       │                           #   real submit_order()/check_shipment_status() against
+│   │   │       │                           #   D&H Customer Order Management API — test env only
+│   │   │       ├── td_synnex.py            # Live REST Partner API (cis-partner-api) with candidate MPN matching
+│   │   │       │                           #   via GetPriceAvailability, live stock GetAvailability, base shipping charge
+│   │   │       │                           #   rules, live SubmitPO, and GetOrderStatus tracking polling — production
 │   │   │       ├── mock_supplier.py        # Local mock supplier generator
-│   │   │       └── image_resolver.py       # Dynamic manufacturer UPC photo lookup
-│   │   ├── api/v1/
-│   │   │   ├── api.py                      # Main router mounting all sub-routers
-│   │   │   └── endpoints/
-│   │   │       ├── orders.py               # [V2] 8 order management endpoints
-│   │   │       ├── dashboard.py            # Executive KPIs & metrics
-│   │   │       ├── suppliers.py            # Supplier configurations & credentials
-│   │   │       ├── products.py             # Unified catalog browser & sync triggers
-│   │   │       ├── listings.py             # Marketplace listing publishing & status
-│   │   │       ├── rules.py                # Pricing & inventory rule configuration
-│   │   │       ├── marketplaces.py         # Marketplace credentials & health checks
-│   │   │       └── sync_logs.py            # Sync history & error audit logs
+│   │   │       └── image_resolver.py       # supplier photo → UPC lookup → brand/category stock photo
+│   │   ├── api/v1/endpoints/
+│   │   │   ├── orders.py                   # Order list/detail/route/create-po/tracking/cancel +
+│   │   │   │                               #   POST /purchase-orders/{id}/submit-live (real order via
+│   │   │   │                               #   D&H, Ingram Micro, or TD SYNNEX, auto-detected from supplier)
+│   │   │   ├── analytics.py                # Profitability summary, supplier scoring
+│   │   │   ├── auth.py                     # Login/token issuance, current-user
+│   │   │   ├── dashboard.py                # KPIs incl. pricing-changes widget, async reconcile-all
+│   │   │   ├── suppliers.py, products.py, listings.py, rules.py, marketplaces.py, sync_logs.py
 │   │   ├── models/
-│   │   │   ├── __init__.py                 # Exports all models (including V2 order models)
-│   │   │   ├── order.py                    # [V2] Customer order model
-│   │   │   ├── order_item.py               # [V2] Order line item model with supplier assignment
-│   │   │   ├── purchase_order.py           # [V2] Supplier purchase order model with tracking
-│   │   │   ├── order_event.py              # [V2] Order audit trail model
-│   │   │   ├── product.py                  # Canonical product catalog model
-│   │   │   ├── supplier_product.py         # Per-supplier raw product & price data
-│   │   │   ├── supplier.py                 # Supplier configuration model
-│   │   │   ├── listing.py                  # Marketplace listing model
-│   │   │   ├── marketplace.py              # Marketplace credentials & config
-│   │   │   ├── pricing_rule.py             # Tiered markup rules
-│   │   │   ├── inventory_rule.py           # Stock buffering & threshold rules
-│   │   │   └── sync_log.py                 # Sync execution logs
-│   │   ├── schemas/
-│   │   │   └── order.py                    # [V2] Pydantic request/response schemas for orders
+│   │   │   ├── order.py / order_item.py / purchase_order.py / order_event.py
+│   │   │   ├── product.py / supplier_product.py / supplier.py (+ catalog_sync_cursor,
+│   │   │   │   catalog_sync_exhausted_at for resumable pagination) / listing.py / marketplace.py
+│   │   │   ├── pricing_rule.py / inventory_rule.py / sync_log.py
+│   │   │   ├── user.py                     # RBAC: email/password + role ("admin"/"operator")
+│   │   │   ├── product_restriction.py      # Marketplace publish blocks (hazmat, brand-gated, etc.)
+│   │   │   ├── marketplace_fee_schedule.py # Per-marketplace default commission %
+│   │   │   └── warehouse.py                # Per-branch physical stock (D&H branches; Ingram & TD are
+│   │   │                                   #   aggregate-only, no Warehouse rows)
 │   │   ├── services/
-│   │   │   ├── order_service.py            # [V2] Order ingestion, routing, PO, tracking service
-│   │   │   ├── catalog_service.py          # Supplier catalog ingestion & normalization
-│   │   │   ├── inventory_service.py        # Stock calculation, buffering, out-of-stock delisting
-│   │   │   ├── pricing_service.py          # Dynamic repricing calculation & margin safety
-│   │   │   ├── listing_service.py          # Marketplace publishing orchestration
-│   │   │   └── supplier_selection_service.py # Routing logic for best supplier selection
+│   │   │   ├── order_service.py            # Ingestion, routing, PO generation, live PO submission
+│   │   │   │                               #   (D&H + Ingram Micro + TD SYNNEX), poll_supplier_tracking() (auto-
+│   │   │   │                               #   discovers real tracking, called by tracking_sync_task)
+│   │   │   ├── analytics_service.py        # Real net-profit/margin/supplier-scoring, no fabricated numbers
+│   │   │   ├── restriction_service.py      # Product/category/brand marketplace publish-block checks
+│   │   │   ├── catalog_service.py          # Ingestion, normalization, price/marketplace/supplier filters
+│   │   │   ├── inventory_service.py, pricing_service.py, listing_service.py, sync_service.py
+│   │   │   └── supplier_selection_service.py
 │   │   └── tasks/
-│   │       ├── celery_app.py               # Celery app & beat schedule configuration
-│   │       └── sync_tasks.py               # Background task definitions
-│   └── tests/
-│       ├── unit/                           # Isolated unit tests
-│       └── integration/                    # End-to-end integration tests
-└── frontend/
-    └── src/
-        ├── app/
-        │   ├── page.tsx                    # Executive Dashboard
-        │   ├── catalog/page.tsx            # Unified Catalog browser
-        │   ├── listings/page.tsx           # Marketplace Listings table & sync
-        │   ├── marketplaces/page.tsx       # Channels & OAuth connection statuses
-        │   ├── suppliers/page.tsx          # Supplier connectors & sync triggers
-        │   ├── rules/page.tsx              # Pricing & Inventory rules editor
-        │   ├── logs/page.tsx               # Sync history & error audit table
-        │   └── orders/page.tsx             # [V2 - PENDING] Order management dashboard
-        └── components/
-            └── Sidebar.tsx                 # Navigation sidebar
+│   │       ├── celery_app.py               # Beat schedule (5 periodic tasks — see below)
+│   │       └── sync_tasks.py
+│   └── tests/{unit,integration}/           # 120 passing tests
+└── frontend/src/
+    ├── app/
+    │   ├── page.tsx                    # Dashboard (manifest ledger, pricing-changes panel, supplier mix)
+    │   ├── catalog/page.tsx            # Catalog: brand/category/supplier/price-range/in-stock filters
+    │   ├── orders/page.tsx             # Order management: route/create-po/tracking/cancel/live-submit
+    │   ├── analytics/page.tsx          # Profitability & supplier-scoring dashboard
+    │   ├── listings/page.tsx, marketplaces/page.tsx, suppliers/page.tsx, rules/page.tsx, logs/page.tsx
+    │   └── login/page.tsx              # Two-panel Dispatch Desk login (see DESIGN.md)
+    └── components/Sidebar.tsx, Navbar.tsx, Donut.tsx, Sparkline.tsx
 ```
 
 ---
@@ -124,11 +122,8 @@ docker ps
 # Run database migration (inside backend container)
 docker exec sync_backend alembic upgrade head
 
-# Run unit tests
-docker exec sync_backend pytest tests/unit -v
-
-# Run integration tests
-docker exec sync_backend pytest tests/integration -v
+# Run unit + integration tests
+docker exec sync_backend pytest tests/unit tests/integration -v
 
 # View logs for any service
 docker logs -f sync_backend
@@ -136,146 +131,73 @@ docker logs -f sync_celery_worker
 docker logs -f sync_celery_beat
 docker logs -f sync_frontend
 
-# Restart services when modifying Celery tasks or models
+# Restart services when modifying Celery tasks, models, or .env
 docker restart sync_backend sync_celery_worker sync_celery_beat
 ```
 
----
-
-## Detailed Project Status & Progress Tracker
-
-### V1 — Completed Features (100% Finished)
-- [x] **Supplier Connectors:**
-  - [x] Ingram Micro API integration (live production & sandbox support, multi-page pagination for 250+ products).
-  - [x] D&H Distributing Axway REST integration (live pricing, warehouse stock, part numbers).
-  - [x] Mock Supplier adapter for offline development and testing.
-  - [x] Dynamic manufacturer UPC photo resolver with category fallbacks.
-- [x] **Catalog & Normalization Engine:**
-  - [x] Canonical product mapping, SKU and UPC harmonization.
-  - [x] Physical warehouse stock aggregation.
-  - [x] Real-time cost calculation.
-- [x] **Pricing & Repricing Rules:**
-  - [x] Fixed dollar markups, percentage markups, tiered price brackets.
-  - [x] Marketplace fee modeling (eBay 13.25%, Amazon 15%).
-  - [x] Hard minimum margin safeguards and MAP protection.
-- [x] **Inventory Allocation & Delisting Engine:**
-  - [x] Multi-supplier prioritization (lowest cost, highest stock, priority rankings).
-  - [x] Safety stock buffer thresholds.
-  - [x] Automatic out-of-stock detection and quantity zeroing/delisting.
-- [x] **Marketplace Synchronization & Publishing:**
-  - [x] Live eBay OAuth 2.0 token connected (18-month validity).
-  - [x] eBay Inventory API integration for publishing, updating inventory, and setting prices.
-  - [x] Mock adapters for Amazon and Shopify.
-- [x] **Frontend Admin UI:**
-  - [x] Next.js 14 responsive admin panel (Dashboard, Catalog, Listings, Suppliers, Channels, Rules, Logs).
-  - [x] Manual trigger buttons for immediate supplier sync and marketplace push.
-- [x] **Testing & Infrastructure:**
-  - [x] Docker Compose orchestrating 7 containers.
-  - [x] 62 automated unit and integration tests passing.
+### Celery Beat Schedule
+| Task | Interval | Purpose |
+|---|---|---|
+| `sync_all_suppliers_task` | every 5 min | Resumable catalog page-through per supplier (Ingram Micro, D&H, TD SYNNEX) |
+| `out_of_stock_monitor_task` | every 5 min | Zero/delist out-of-stock listings |
+| `order_ingestion_task` | every 2 min | Poll active marketplaces for new orders |
+| `tracking_sync_task` | every 10 min | Poll D&H/Ingram/TD SYNNEX for real tracking, then push it to marketplaces |
+| `catalog_reconcile_task` | daily 2am | Full reconciliation pass |
 
 ---
 
-### V2 — Order Management, Fulfillment Automation & Analytics (IN PROGRESS)
+## Detailed Project Status
 
-Claude was actively implementing **Phase V2.0 (Order Management Core)** when switching. Here is the exact status of what has been implemented and what remains:
+### Fully Working End-to-End
+- **Catalog sync (Ingram Micro, D&H, and TD SYNNEX):**
+  - **Ingram Micro:** Live pricing/stock, resumable pagination up to 200 pages (10,000 items). Page 201 404 response cleanly marks catalog exhausted and cycles back to page 1.
+  - **D&H Distributing:** ScrollId cursor pagination across 29,000+ items.
+  - **TD SYNNEX Partner API (`cis-partner-api`):** Candidate MPN query batches via `POST /api/v1/webservice/json/GetPriceAvailability`. Automatically matches dealer costs, warehouse stock, and internal `synnexSKU`s. Paginates candidate pools across sync runs with persistent cursor.
+  - **Automated Background Scheduling:** Celery Beat dispatches `sync_all_suppliers_task` every 5 minutes, querying all 3 distributors in parallel and updating inventory/costs without manual intervention.
+- **Product imagery:** 4-tier resolution (supplier photo → UPC lookup → brand-specific stock photo → category-generic stock photo). The stock-photo pools were fully audited — removed several photos that were miscategorized or wrong-brand, and two dead 404 URLs.
+- **Pricing & inventory rules:** markups, marketplace fee modeling, minimum margin/MAP protection, multi-supplier allocation, safety stock, auto-delisting.
+- **Multi-supplier comparison:** Aggregates offers across distributors for identical products (e.g., HP EliteDesk, Lenovo Pro 14), automatically routing orders to the lowest landed cost supplier.
+- **eBay:** full live OAuth listing publish + real order ingestion/tracking/acknowledge via the Sell Fulfillment API.
+- **Order routing:** items with no catalog match, no supplier stock, or a deleted product get an honest `UNROUTABLE` status with a specific `routing_note` — never silently stuck or falsely reported as routed.
+- **Real purchase order submission (D&H, Ingram Micro, and TD SYNNEX):** `POST /purchase-orders/{id}/submit-live` auto-detects which supplier the PO belongs to and calls the matching adapter's `submit_order()`:
+  - D&H: Customer Order Management API (test env).
+  - Ingram Micro: Order Create v7 (`api.ingrammicro.com/resellers/v7/orders`) (production env).
+  - TD SYNNEX: Partner API `POST /api/v1/webservice/json/SubmitPO` (production env).
+- **Automatic tracking discovery:** `tracking_sync_task` (every 10 min) polls submitted POs via each supplier's real tracking endpoint:
+  - D&H: real tracking status API.
+  - Ingram Micro: Search Orders v7 → Get Order Details v7.
+  - TD SYNNEX: `GET /api/v1/webservice/json/GetOrderStatus/orderNo/{orderNo}`.
+- **Real shipping cost & rules:**
+  - Ingram Micro: calls Freight Estimate v6 API (`POST /resellers/v6/freightestimate`).
+  - TD SYNNEX: configurable base shipping flat rate via Rules page, with `POST /api/v1/webservice/json/GetFreightQuote` integration.
+  - D&H: default flat rate or weight-based estimate.
+- **Analytics:** real net profit (`revenue − supplier_cost − marketplace_fees − shipping_cost`), gross margin, supplier scoring, catalog missing-data rate.
+- **RBAC:** login/JWT auth, `admin`/`operator` roles gating credential and destructive actions.
+- **Product disable toggle:** persisted via `Product.is_enabled`.
+- **Dashboard:** order KPIs, pricing-changes widget, supplier inventory mix breakdown, async "Update Everything Now".
+- **Catalog filters:** brand, category, supplier, in-stock, min/max price, marketplace.
 
-#### V2.0 Completed So Far:
-1. **Database Models (`backend/app/models/`):**
-   - [x] `Order` (`order.py`): Buyer name, username, shipping address, total, status, marketplace foreign key.
-   - [x] `OrderItem` (`order_item.py`): Line items, selling unit price, supplier cost, routed `supplier_id`.
-   - [x] `PurchaseOrder` (`purchase_order.py`): PO reference, carrier, tracking number, supplier order reference.
-   - [x] `OrderEvent` (`order_event.py`): Audit log for all state changes (`ORDER_RECEIVED`, `SUPPLIER_ROUTED`, etc.).
-   - [x] Registered in `backend/app/models/__init__.py`.
-2. **Database Migration Script:**
-   - [x] Created `backend/alembic/versions/002_v2_orders.py` defining tables `orders`, `order_items`, `purchase_orders`, `order_events`.
-3. **Pydantic Schemas:**
-   - [x] `backend/app/schemas/order.py`: OrderCreate, OrderOut, OrderItemOut, PurchaseOrderOut, TrackingUpdate, OrderStats.
-4. **Service Layer (`backend/app/services/`):**
-   - [x] `order_service.py`: Ingests orders, routes items via supplier selection, generates purchase orders, updates tracking, and transitions statuses.
-5. **Marketplace Adapters Extended:**
-   - [x] `base.py`: Added abstract `fetch_orders()`, `update_tracking()`, and `acknowledge_order()`.
-   - [x] `mock_ebay.py`, `mock_amazon.py`, `mock_shopify.py`: Implemented simulated order generation and tracking updates.
-   - [x] `live_ebay.py`: Implemented live eBay Sell Fulfillment API calls (`GET /sell/fulfillment/v1/order`, `POST /shipping_fulfillment`).
-6. **REST API Router:**
-   - [x] `backend/app/api/v1/endpoints/orders.py`: 8 endpoints implemented:
-     - `GET /api/v1/orders` (list with filters)
-     - `GET /api/v1/orders/stats` (KPIs)
-     - `GET /api/v1/orders/{id}` (detail with items and POs)
-     - `POST /api/v1/orders/sync` (trigger manual ingestion)
-     - `POST /api/v1/orders/{id}/route` (route items to best supplier)
-     - `POST /api/v1/orders/{id}/create-po` (generate purchase order)
-     - `PUT /api/v1/orders/{id}/tracking` (update tracking & push to marketplace)
-     - `PUT /api/v1/orders/{id}/cancel` (cancel order)
-   - [x] Registered router in `backend/app/api/v1/api.py`.
-
----
-
-#### V2.0 Remaining Tasks (IMMEDIATE ACTION ITEMS FOR CLAUDE CODE):
-
-1. **Apply Database Migration in PostgreSQL:**
-   ```bash
-   docker exec sync_backend alembic upgrade head
-   ```
-   *Action:* Run this command to create the 4 new tables (`orders`, `order_items`, `purchase_orders`, `order_events`) in the running database.
-
-2. **Extend `SupplierSelectionService` with Order Routing:**
-   - *File:* `backend/app/services/supplier_selection_service.py`
-   - *Action:* Add `select_best_supplier_for_order_item(self, product_id: int, quantity: int = 1)` to select the optimal supplier based on available physical stock >= quantity, lowest cost, and supplier priority.
-
-3. **Add Celery Background Tasks for Orders:**
-   - *File:* `backend/app/tasks/sync_tasks.py`
-   - *Action:* Add:
-     - `order_ingestion_task()` — Polls all active marketplaces every 2 minutes for new orders.
-     - `tracking_sync_task()` — Checks pending POs and synchronizes tracking numbers.
-   - *File:* `backend/app/tasks/celery_app.py`
-   - *Action:* Add Celery Beat schedule entries:
-     - `order-ingestion-every-2-mins` (`schedule: crontab(minute="*/2")`)
-     - `tracking-sync-every-10-mins` (`schedule: crontab(minute="*/10")`)
-   - *Action:* Restart worker and beat containers: `docker restart sync_backend sync_celery_worker sync_celery_beat`.
-
-4. **Complete Live Amazon & Shopify Adapter Order Stubs:**
-   - *Files:* `backend/app/adapters/marketplaces/live_amazon.py` and `live_shopify.py`
-   - *Action:* Add empty or fallback implementations of `fetch_orders()`, `update_tracking()`, and `acknowledge_order()` so live calls don't raise `NotImplementedError`.
-
-5. **Create Frontend Orders Management Page:**
-   - *File:* `frontend/src/app/orders/page.tsx`
-   - *Features needed:*
-     - Order summary KPI cards at top (Today's Orders, Pending Routing, Awaiting Shipment, 30d Revenue).
-     - Filter controls by Status (`ALL`, `PENDING_ROUTING`, `ROUTED`, `PO_SUBMITTED`, `SHIPPED`, `DELIVERED`, `CANCELLED`) and Marketplace.
-     - Orders table with expandable rows showing line items, item unit price, supplier cost, estimated profit, and routed supplier.
-     - Action buttons: "Route Order", "Generate PO", "Add Tracking" modal/dialog, "Cancel".
-     - "Sync Orders Now" button calling `POST /api/v1/orders/sync`.
-   - *File:* `frontend/src/components/Sidebar.tsx`
-   - *Action:* Add `{ name: "Orders", href: "/orders", icon: ShoppingCart, hint: "Customer orders & fulfillment" }` to the navigation menu.
-
-6. **Add Order KPIs to Main Dashboard:**
-   - *Backend:* `backend/app/api/v1/endpoints/dashboard.py` — include `total_orders_today`, `pending_orders`, and `revenue_30d` in dashboard response.
-   - *Frontend:* `frontend/src/app/page.tsx` — render order cards alongside catalog and listing metrics.
-
-7. **Add V2 Automated Tests:**
-   - *File:* `backend/tests/unit/test_order_service.py` — test order ingestion, routing, PO creation, tracking update.
-   - *File:* `backend/tests/integration/test_orders_api.py` — test all 8 REST endpoints.
-   - Verify complete test suite passes without regressions.
-
----
-
-### V2.1 & V2.2 — Future Planned Phases
-
-#### Phase V2.1 — Profitability Analytics & Supplier Scoring (Next)
-- Real-time net profit computation: `net_profit = order_total - supplier_cost - marketplace_fees - shipping_cost`.
-- Dedicated Analytics Dashboard (`/analytics`) showing revenue trends, gross margin % by supplier, and top-performing SKUs.
-- Supplier performance scoring based on fulfillment lead times, inventory accuracy, and cancellation rates.
-
-#### Phase V2.2 — Advanced Automation & Scale
-- Automated electronic Purchase Order dispatch to Ingram Micro and D&H order submission endpoints.
-- Competitor repricing integration.
-- Multi-account marketplace support (multiple eBay/Amazon seller stores under one dashboard).
-- Additional marketplace connectors (Walmart Marketplace, TikTok Shop, Etsy).
+### Explicitly NOT Implemented (raises, never fabricates)
+- **Amazon / Shopify order integration:** `fetch_orders()`, `update_tracking()`, `acknowledge_order()` are not overridden by `LiveAmazonAdapter`/`LiveShopifyAdapter`, so they raise `NotImplementedError` (caught and logged per-marketplace by calling tasks).
+- **D&H production order submission:** current `DANDH_CLIENT_ID`/`SECRET` are sandbox credentials. Real production submission requires registering a separate application in D&H Axway portal.
+- **Order completion lifecycle:** `OrderService.mark_delivered()` / `complete_order()` exist but are not scheduled; orders currently sit at `SHIPPED`.
+- **Non-physical Ingram Micro SKUs** (software licenses, support contracts): return sentinel quantity (e.g. `9999999`) instead of physical stock count.
+- **Additional connectors** (Walmart, TikTok Shop, Etsy): explicitly out of scope per current direction.
 
 ---
 
 ## Important Technical Notes & Credentials
-- **eBay Live Token:** Production OAuth token is stored in the environment (`.env`). The token has 18 months validity (user consent token). Do not commit raw secrets to git.
-- **Ingram Micro API:** Production endpoints use `api.ingrammicro.com`. Sandbox uses `sandbox/resellers/v6`.
-- **D&H Distributing API:** Uses Axway API Gateway with customer number and API credentials.
-- **Database Migrations:** Never execute Alembic directly on the host machine without the container environment; always use `docker exec sync_backend alembic ...`.
+- **All credentials live in `backend/.env`** (gitignored — never commit real secrets). Includes: eBay OAuth token, `INGRAM_MICRO_*`, `DANDH_*`, `TDSYNNEX_*`.
+- **Ingram Micro API:** `INGRAM_MICRO_ENVIRONMENT=production` — live production account. Catalog caps at page 200 (50 items/page, max 10,000 items per search); page 201 returns 404 Record not found, handled by resetting cursor to page 1. Orders: Order Create v7.
+- **D&H Distributing API:** `DANDH_ENVIRONMENT=test` — test environment (`test.api.dandh.com`). ScrollId cursor pagination (up to 100 items per request).
+- **TD SYNNEX Partner API:** `TDSYNNEX_ENVIRONMENT=production` — registered via TD SYNNEX Developer Portal under Default Application US (`813367`).
+  - Base URL: `https://api.us.tdsynnex.com`
+  - Authentication: `x-api-key: sk-3629aa28...`, `Authorization: Bearer sk-4ff7e520...`, `customerNo: 813367`.
+  - Price & Availability: `POST /api/v1/webservice/json/GetPriceAvailability` (candidate MPN batches of 50).
+  - Stock Check: `POST /api/v1/webservice/json/GetAvailability`.
+  - Purchase Orders: `POST /api/v1/webservice/json/SubmitPO`.
+  - Order Tracking: `GET /api/v1/webservice/json/GetOrderStatus/orderNo/{orderNo}`.
+  - Automated Sync: Automatically polled every 5 minutes by Celery Beat (`sync_all_suppliers_task`).
+  - Worker Reload Requirement: Whenever modifying supplier adapters or sync tasks, restart both worker and beat containers (`docker restart sync_celery_worker sync_celery_beat`) so Python code changes reload in Celery worker processes.
+- **Registry safety invariant:** `app/adapters/registry.py` raises on an unrecognized `adapter_class` rather than silently defaulting to `MockSupplierAdapter`. All live supplier adapters raise `ConnectionError` (never fabricate catalog data) when credentials are missing or invalid.
+- **Database Migrations:** Never execute Alembic directly on the host machine; always `docker exec sync_backend alembic upgrade head`.

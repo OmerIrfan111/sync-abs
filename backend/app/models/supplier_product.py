@@ -15,6 +15,10 @@ class SupplierProduct(Base, TimestampMixin):
     stock_status = Column(String(50), default="IN_STOCK", nullable=False) # IN_STOCK, OUT_OF_STOCK, BACKORDER
     availability_status = Column(String(50), default="ACTIVE", nullable=False) # ACTIVE, DISCONTINUED, UNAVAILABLE
     shipping_info = Column(JSON, default=dict, nullable=False)
+    base_shipping_charge = Column(Numeric(10, 2), nullable=True)
+    shipping_source = Column(String(50), nullable=True)  # "live", "history"
+    shipping_status = Column(String(50), default="valid", nullable=False)  # "valid", "shipping_unknown"
+    shipping_updated_at = Column(DateTime, nullable=True)
     last_seen_at = Column(DateTime, nullable=True)
 
     product = relationship("Product", back_populates="supplier_products")

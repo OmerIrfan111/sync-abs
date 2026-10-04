@@ -43,3 +43,47 @@ Default Admin Credentials: `admin@syncplatform.io` / `adminpassword123`.
 - [Setup & Deployment](SETUP.md)
 - [Testing Guide](TESTING.md)
 - [Environment & Free API Keys Guide](ENVIRONMENT.md)
+
+---
+
+## 🔍 Prefetch Filters (Feature 2)
+
+Prefetch filters allow sync jobs to filter products **before** fetching or processing data from wholesale suppliers, avoiding unnecessary network traffic and memory overhead:
+- **`limit`**: Positive integer specifying the maximum items to fetch (e.g. `limit=50`).
+- **`category`**: Case-insensitive substring match pushed to supplier API or filtered in code (e.g. `category=Monitors`).
+- **`brand`**: Case-insensitive brand match (e.g. `brand=Logitech`).
+- **`supplier`**: Validates that the supplier sync request targets the intended supplier name.
+
+### API Usage Example:
+```bash
+POST /api/v1/suppliers/1/sync?limit=25&category=Computer%20Accessories&brand=Logitech
+```
+All parameters are combinable and validated with descriptive 400 Bad Request error messages.
+
+---
+
+## 🧪 Testing Order Routing in Sandbox / Dry-Run Mode (Feature 5)
+
+The platform includes a global **`DRY_RUN / SANDBOX`** mode that defaults to `True` in development and test environments to guarantee that no real money, real supplier purchase orders, or live credit card charges occur:
+- Controlled by `DRY_RUN=True` (in `.env`).
+- Displays a prominent `[SANDBOX]` log banner across all order routing and simulation steps.
+- Hard guard: Raises `SandboxViolationError` immediately if an actual financial or supplier ordering call is attempted when `DRY_RUN=True`.
+
+### Running the Seeded Sandbox Routing Scenarios:
+To execute the automated suite of seeded order routing test scenarios:
+```bash
+# Inside Docker:
+docker compose exec backend pytest tests/integration/test_feature5_sandbox_order_routing.py -v
+
+# Or locally with poetry/virtualenv:
+pytest backend/tests/integration/test_feature5_sandbox_order_routing.py -v
+```
+
+This suite validates all 6 core routing scenarios:
+1. **Cheapest Supplier Wins** (lowest delivered cost: base price + ground shipping).
+2. **Cheapest Supplier Out of Stock** (graceful fallback to next available supplier with stock).
+3. **Delivered Cost Comparison** (a higher base price wins if cheaper ground shipping makes it less expensive overall).
+4. **Supplier API Error / Outage** (automatic failover to next responsive supplier).
+5. **Duplicate UPC Protection** (blocks upload/routing if mismatched products share UPC).
+6. **Cross-Marketplace UPC Conflict** (blocks conflicting product uploads across Amazon, eBay, etc.).
+

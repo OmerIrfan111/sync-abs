@@ -153,8 +153,18 @@ def order_ingestion_task():
 @celery_app.task
 def tracking_sync_task():
     """
-    Periodic task: checks purchase orders pending shipment and syncs any
-    available tracking numbers back to the originating marketplace.
+    Periodic task, three steps:
+    1. Poll each real-supplier PO that's been submitted (has a
+       supplier_order_id) but has no tracking number yet, via the supplier's
+       own check_shipment_status() API (D&H, Ingram Micro) — auto-discovers
+       real tracking instead of requiring a human to check the supplier's
+       site and type it in.
+    2. Push any tracking number already on a PO (found in step 1, or entered
+       manually via the UI) back to the originating marketplace.
+    3. Poll each shipped PO for real delivery confirmation (Ingram Micro
+       only — see poll_supplier_delivery docstring), marking the order
+       DELIVERED once every PO on it has delivered. Without this, orders
+       sat at SHIPPED forever with no path forward.
     """
     from app.models.purchase_order import PurchaseOrder
     from app.services.order_service import OrderService
@@ -162,6 +172,9 @@ def tracking_sync_task():
     db = SessionLocal()
     try:
         service = OrderService(db)
+
+        polled_count = service.poll_supplier_tracking()
+
         pending_pos = db.query(PurchaseOrder).filter(
             PurchaseOrder.status.in_(["SUBMITTED", "CONFIRMED"]),
             PurchaseOrder.tracking_number.isnot(None),
@@ -175,7 +188,12 @@ def tracking_sync_task():
             except Exception as exc:
                 logger.error(f"Tracking sync failed for PO {po.po_number}: {exc}")
 
-        logger.info(f"Tracking sync task complete: {synced} PO(s) synced")
-        return {"synced_count": synced}
+        delivered_count = service.poll_supplier_delivery()
+
+        logger.info(
+            f"Tracking sync task complete: {polled_count} PO(s) got real tracking from supplier "
+            f"polling, {synced} PO(s) pushed to marketplace, {delivered_count} PO(s) confirmed delivered"
+        )
+        return {"polled_count": polled_count, "synced_count": synced, "delivered_count": delivered_count}
     finally:
         db.close()

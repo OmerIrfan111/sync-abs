@@ -1,3 +1,4 @@
+import json
 import pytest
 from decimal import Decimal
 from app.models.product import Product
@@ -13,7 +14,12 @@ from app.schemas.supplier import NormalizedProduct
 
 def test_publish_product_to_marketplace_and_propagation(db_session):
     # 1. Setup Supplier, Marketplace, and Product
-    supplier = Supplier(name="Ingram Micro", adapter_class="MockSupplierAdapter", is_active=True)
+    supplier = Supplier(
+        name="Ingram Micro",
+        adapter_class="MockSupplierAdapter",
+        is_active=True,
+        credentials_encrypted=json.dumps({"config": {"ground_shipping_charge": "0.00"}})
+    )
     marketplace = Marketplace(name="eBay", adapter_class="MockEBayAdapter", is_active=True)
     product = Product(
         sku="TEST-MXKEYS-PIPE",

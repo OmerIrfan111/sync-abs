@@ -140,11 +140,21 @@ export default function OrdersPage() {
     }
   };
 
-  const runAction = async (key: string, orderId: number, fn: () => Promise<any>, successMsg: string) => {
+  const runAction = async (
+    key: string,
+    orderId: number,
+    fn: () => Promise<any>,
+    successMsg: string | ((res: any) => { type: "success" | "error"; message: string })
+  ) => {
     setActionLoading((prev) => ({ ...prev, [key]: true }));
     try {
-      await fn();
-      showFeedback("success", successMsg);
+      const res = await fn();
+      if (typeof successMsg === "function") {
+        const { type, message } = successMsg(res);
+        showFeedback(type, message);
+      } else {
+        showFeedback("success", successMsg);
+      }
       await Promise.all([loadOrders(), loadStats(), refreshDetail(orderId)]);
     } catch (err: any) {
       showFeedback("error", err.message || "Action failed");
@@ -154,13 +164,22 @@ export default function OrdersPage() {
   };
 
   const handleRoute = (orderId: number) =>
-    runAction(`route-${orderId}`, orderId, () => fetchApi(`/orders/${orderId}/route`, { method: "POST" }), `Order #${orderId} routed to suppliers.`);
+    runAction(`route-${orderId}`, orderId, () => fetchApi(`/orders/${orderId}/route`, { method: "POST" }), (res) => ({
+      type: res.routed_count > 0 ? "success" : "error",
+      message: res.message || `Order #${orderId} routed.`,
+    }));
 
   const handleCreatePO = (orderId: number) =>
     runAction(`po-${orderId}`, orderId, () => fetchApi(`/orders/${orderId}/create-po`, { method: "POST" }), `Purchase order(s) created for Order #${orderId}.`);
 
   const handleCancel = (orderId: number) =>
     runAction(`cancel-${orderId}`, orderId, () => fetchApi(`/orders/${orderId}/cancel`, { method: "PUT" }), `Order #${orderId} cancelled.`);
+
+  const handleDeliver = (orderId: number) =>
+    runAction(`deliver-${orderId}`, orderId, () => fetchApi(`/orders/${orderId}/deliver`, { method: "PUT" }), `Order #${orderId} marked delivered.`);
+
+  const handleCompleteOrder = (orderId: number) =>
+    runAction(`complete-${orderId}`, orderId, () => fetchApi(`/orders/${orderId}/complete`, { method: "PUT" }), `Order #${orderId} marked completed.`);
 
   const openTrackingModal = (order: Order) => {
     setTrackingModalOrder(order);
@@ -207,6 +226,25 @@ export default function OrdersPage() {
       showFeedback("error", "Failed to record PO submission: " + err.message);
     } finally {
       setSavingSubmitPo(false);
+    }
+  };
+
+  const handleSubmitPoLive = async (po: PurchaseOrder, orderId: number) => {
+    if (!window.confirm(
+      `This places a REAL order with ${po.supplier_name || "the supplier"} and spends real money (PO ${po.po_number}). Continue?`
+    )) return;
+    setActionLoading(prev => ({ ...prev, [`submit-live-${po.id}`]: true }));
+    try {
+      const res = await fetchApi<{ supplier_order_id: string; message: string }>(
+        `/orders/purchase-orders/${po.id}/submit-live`,
+        { method: "POST" }
+      );
+      showFeedback("success", res.message || `PO ${po.po_number} placed with the real supplier.`);
+      await Promise.all([loadOrders(), refreshDetail(orderId)]);
+    } catch (err: any) {
+      showFeedback("error", "Live order submission failed: " + err.message);
+    } finally {
+      setActionLoading(prev => ({ ...prev, [`submit-live-${po.id}`]: false }));
     }
   };
 
@@ -336,6 +374,8 @@ export default function OrdersPage() {
                   const canRoute = order.status === "PENDING_ROUTING" || order.status === "ROUTED";
                   const canCreatePO = order.status === "ROUTED";
                   const canTrack = ["PO_SUBMITTED", "SHIPPED"].includes(order.status);
+                  const canDeliver = order.status === "SHIPPED";
+                  const canComplete = order.status === "DELIVERED";
                   const canCancel = !["DELIVERED", "COMPLETED", "CANCELLED"].includes(order.status);
 
                   return (
@@ -393,6 +433,28 @@ export default function OrdersPage() {
                               >
                                 <Send className="h-3.5 w-3.5 text-teal-600" />
                                 <span>Add Tracking</span>
+                              </button>
+                            )}
+                            {canDeliver && (
+                              <button
+                                onClick={() => handleDeliver(order.id)}
+                                disabled={actionLoading[`deliver-${order.id}`]}
+                                className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 text-gray-700 text-xs transition-colors inline-flex items-center gap-1 font-medium disabled:opacity-50"
+                                title="Mark this order as delivered (auto-detected for Ingram Micro; manual otherwise)"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                <span>{actionLoading[`deliver-${order.id}`] ? "Marking..." : "Mark Delivered"}</span>
+                              </button>
+                            )}
+                            {canComplete && (
+                              <button
+                                onClick={() => handleCompleteOrder(order.id)}
+                                disabled={actionLoading[`complete-${order.id}`]}
+                                className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 text-gray-700 text-xs transition-colors inline-flex items-center gap-1 font-medium disabled:opacity-50"
+                                title="Mark this order as fully completed"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                <span>{actionLoading[`complete-${order.id}`] ? "Marking..." : "Mark Completed"}</span>
                               </button>
                             )}
                             {canCancel && (
@@ -502,14 +564,32 @@ export default function OrdersPage() {
                                             </div>
                                           )}
                                           {po.status === "DRAFT" && (
-                                            <button
-                                              onClick={() => openSubmitPoModal(po, order.id)}
-                                              className="mt-2 w-full px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-[11px] font-medium text-gray-700 transition-colors inline-flex items-center justify-center gap-1"
-                                              title="Record that this PO was placed with the real supplier"
-                                            >
-                                              <Send className="h-3 w-3 text-indigo-600" />
-                                              <span>Mark as Submitted to Supplier</span>
-                                            </button>
+                                            <div className="mt-2 space-y-1.5">
+                                              {(() => {
+                                                const supplierLower = (po.supplier_name || "").toLowerCase();
+                                                const isLiveSupported = supplierLower.includes("d&h") || supplierLower.includes("ingram") || supplierLower.includes("synnex");
+                                                if (!isLiveSupported) return null;
+                                                return (
+                                                  <button
+                                                    onClick={() => handleSubmitPoLive(po, order.id)}
+                                                    disabled={actionLoading[`submit-live-${po.id}`]}
+                                                    className="w-full px-2.5 py-1.5 rounded-lg border border-[#D9720F]/30 bg-[#D9720F]/10 hover:bg-[#D9720F]/20 text-[11px] font-semibold text-[#A8560A] transition-colors inline-flex items-center justify-center gap-1 disabled:opacity-50"
+                                                    title={`Actually places this order with ${po.supplier_name} via their real order API — spends real money`}
+                                                  >
+                                                    <Send className="h-3 w-3" />
+                                                    <span>{actionLoading[`submit-live-${po.id}`] ? "Placing Order..." : `Place Order with ${po.supplier_name} (Live)`}</span>
+                                                  </button>
+                                                );
+                                              })()}
+                                              <button
+                                                onClick={() => openSubmitPoModal(po, order.id)}
+                                                className="w-full px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-[11px] font-medium text-gray-700 transition-colors inline-flex items-center justify-center gap-1"
+                                                title="Record that this PO was placed manually with the real supplier"
+                                              >
+                                                <Send className="h-3 w-3 text-indigo-600" />
+                                                <span>Mark as Submitted Manually</span>
+                                              </button>
+                                            </div>
                                           )}
                                         </div>
                                       ))}

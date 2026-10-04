@@ -19,8 +19,14 @@ from app.models.supplier import Supplier
 from app.models.supplier_product import SupplierProduct
 from app.services.supplier_selection_service import SupplierSelectionService
 from app.core.security import decrypt_credential
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class SandboxViolationError(RuntimeError):
+    """Raised when a live financial transaction or order is attempted while DRY_RUN is active."""
+    pass
 
 
 class OrderService:
@@ -160,15 +166,78 @@ class OrderService:
                 unroutable_items += 1
                 continue
 
-            best_sp = selector.select_best_supplier(product)
-            if best_sp:
-                item.supplier_id = best_sp.supplier_id
-                item.supplier_cost = best_sp.cost
+            banner = "[SANDBOX] " if settings.DRY_RUN else ""
+            active_sps = [
+                sp for sp in product.supplier_products
+                if sp.availability_status == "ACTIVE" and sp.supplier and sp.supplier.is_active
+            ]
+
+            # Separate items with stock covering requested quantity vs best available
+            candidates_with_stock = [sp for sp in active_sps if sp.qty_available >= item.quantity]
+            if not candidates_with_stock:
+                candidates_with_stock = [sp for sp in active_sps if sp.qty_available > 0]
+
+            def delivered_cost(sp: SupplierProduct) -> Decimal:
+                shipping = sp.base_shipping_charge if sp.base_shipping_charge is not None else Decimal("0.00")
+                return sp.cost + Decimal(str(shipping))
+
+            candidates_to_try = sorted(candidates_with_stock, key=delivered_cost)
+
+            chosen_sp = None
+            for cand in candidates_to_try:
+                # Test connectivity to verify supplier is healthy and responsive
+                try:
+                    from app.services.sync_service import SyncService
+                    adapter = SyncService(self.db).get_adapter_for_supplier(cand.supplier)
+                    adapter.test_connection()
+                    chosen_sp = cand
+                    break
+                except Exception as sup_err:
+                    logger.warning(
+                        f"{banner}Supplier {cand.supplier.name} unavailable for order item {item.id} ({sup_err}). "
+                        "Falling back to next available supplier."
+                    )
+                    continue
+
+            # If all connection tests failed, fallback to the top candidate if available
+            if not chosen_sp and candidates_to_try:
+                chosen_sp = candidates_to_try[0]
+
+            if chosen_sp:
+                item.supplier_id = chosen_sp.supplier_id
+                item.supplier_cost = chosen_sp.cost
                 item.status = "ROUTED"
+                tot_cost = delivered_cost(chosen_sp)
+                item.routing_note = (
+                    f"{banner}Routed to {chosen_sp.supplier.name} (Delivered Cost: ${tot_cost} "
+                    f"[base: ${chosen_sp.cost}, shipping: ${chosen_sp.base_shipping_charge or 0.00}], "
+                    f"Stock: {chosen_sp.qty_available})"
+                )
                 routed_items += 1
+
+                # Real freight cost from Ingram Micro if applicable
+                supplier = chosen_sp.supplier
+                if supplier and "ingram" in supplier.name.lower():
+                    try:
+                        from app.services.sync_service import SyncService
+                        adapter = SyncService(self.db).get_adapter_for_supplier(supplier)
+                        item.shipping_cost = adapter.get_freight_estimate(
+                            ship_to_address=order.shipping_address or {},
+                            line_items=[{"ingramPartNumber": chosen_sp.supplier_sku, "quantity": item.quantity}],
+                        )
+                    except Exception as e:
+                        logger.warning(f"Freight estimate failed for order item {item.id}: {e}")
+                        item.shipping_cost = chosen_sp.base_shipping_charge
+                else:
+                    item.shipping_cost = chosen_sp.base_shipping_charge
             else:
                 item.status = "UNROUTABLE"
-                item.routing_note = "No connected supplier currently has stock for this item."
+                if not active_sps:
+                    item.routing_note = f"{banner}No connected supplier on file for this item."
+                elif not candidates_with_stock:
+                    item.routing_note = f"{banner}All connected suppliers are currently out of stock for this item."
+                else:
+                    item.routing_note = f"{banner}All candidate suppliers encountered API errors or are unavailable."
                 unroutable_items += 1
 
         if routed_items > 0:
@@ -284,9 +353,249 @@ class OrderService:
         self.db.commit()
         return po
 
+    def submit_purchase_order_live(self, po_id: int) -> PurchaseOrder:
+        """
+        Actually places a DRAFT purchase order with the real supplier via
+        their order-submission API, instead of requiring a human to place it
+        manually on the supplier's own website and type the confirmation
+        number back in. Implemented for D&H and Ingram Micro — the only two
+        suppliers whose real order-submission API spec is wired up here.
+
+        This still requires an explicit, human-triggered call — placing a
+        real order spends real money, so this is never invoked from a
+        schedule or automatically after routing. The human confirmation is
+        the button click that calls this endpoint, not a second manual step
+        on the supplier's own site.
+        """
+        po = self.db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+        if not po:
+            raise ValueError(f"Purchase order {po_id} not found")
+        if po.status != "DRAFT":
+            raise ValueError(f"Purchase order {po_id} must be DRAFT to submit (status: {po.status})")
+
+        supplier = self.db.query(Supplier).filter(Supplier.id == po.supplier_id).first()
+        if not supplier:
+            raise ValueError(f"Supplier {po.supplier_id} not found")
+
+        banner = "[SANDBOX] " if settings.DRY_RUN else ""
+        if settings.DRY_RUN:
+            if getattr(self, "force_real_money", False):
+                raise SandboxViolationError("SANDBOX GUARD: Real money transaction blocked while DRY_RUN is active!")
+
+            logger.info(f"{banner}Dry run active. Simulating purchase order submission for PO #{po.po_number} to {supplier.name}")
+            simulated_order_id = f"SANDBOX-{supplier.name[:3].upper()}-{uuid.uuid4().hex[:8].upper()}"
+            po.supplier_order_id = simulated_order_id
+            po.status = "SUBMITTED"
+            po.submitted_at = datetime.now(timezone.utc)
+            self._add_event(po.order_id, "PO_SUBMITTED_TO_SUPPLIER", {
+                "po_number": po.po_number,
+                "supplier_order_id": po.supplier_order_id,
+                "method": "sandbox_simulated",
+            })
+            self.db.commit()
+            return po
+
+        name_lower = supplier.name.lower()
+        adapter_lower = supplier.adapter_class.lower()
+        is_dandh = "d&h" in name_lower or "dandh" in adapter_lower
+        is_ingram = "ingram" in name_lower or "ingram" in adapter_lower
+        is_synnex = "synnex" in name_lower or "synnex" in adapter_lower
+        if not is_dandh and not is_ingram and not is_synnex:
+            raise ValueError(
+                f"Live order submission is only implemented for D&H, Ingram Micro, and TD SYNNEX right now, not {supplier.name}. "
+                "Use the manual 'Mark as Submitted' flow for this supplier."
+            )
+
+        order = self._get_order(po.order_id)
+        items = [item for item in order.items if item.supplier_id == po.supplier_id and item.status == "ROUTED"]
+        if not items:
+            raise ValueError(f"No routed items for supplier {supplier.name} on order {order.id}")
+
+        line_items = []
+        for item in items:
+            sp = (
+                self.db.query(SupplierProduct)
+                .filter(SupplierProduct.product_id == item.product_id, SupplierProduct.supplier_id == po.supplier_id)
+                .first()
+            )
+            if not sp:
+                raise ValueError(
+                    f"No {supplier.name} catalog entry found for order item {item.id} (product {item.product_id}); "
+                    "cannot determine the real supplier item ID to order."
+                )
+            line_items.append({"itemId": sp.supplier_sku, "orderQuantity": item.quantity})
+
+        addr = order.shipping_address or {}
+        delivery_address = {
+            "country": addr.get("country", "US"),
+            "city": addr.get("city", ""),
+            "street": addr.get("street", ""),
+            "postalCode": addr.get("zip", addr.get("postalCode", "")),
+            "region": addr.get("state", addr.get("region", "")),
+            "attention": addr.get("name", ""),
+            "deliveryName": addr.get("name", ""),
+        }
+
+        from app.services.sync_service import SyncService
+        adapter = SyncService(self.db).get_adapter_for_supplier(supplier)
+
+        result = adapter.submit_order(
+            customer_purchase_order=po.po_number,
+            line_items=line_items,
+            delivery_address=delivery_address,
+        )
+
+        po.supplier_order_id = str(result.get("id") or result.get("orderNumber") or "")
+        po.status = "SUBMITTED"
+        po.submitted_at = datetime.now(timezone.utc)
+
+        self._add_event(po.order_id, "PO_SUBMITTED_TO_SUPPLIER", {
+            "po_number": po.po_number,
+            "supplier_order_id": po.supplier_order_id,
+            "method": "live_api",
+        })
+
+        self.db.commit()
+        return po
+
     # ──────────────────────────────────────────────
     # 4. TRACKING & SHIPMENT
     # ──────────────────────────────────────────────
+
+    def poll_supplier_tracking(self) -> int:
+        """
+        Polls each real-supplier PO that's been submitted but has no tracking
+        number yet, via the adapter's check_shipment_status(), and records
+        any real tracking info found. Without this, a supplier's order
+        confirmation number (from submit_purchase_order_live) would sit on
+        the PO forever with nothing ever checking whether it shipped — this
+        is what actually closes that loop automatically.
+
+        Suppliers without a meaningful check_shipment_status() (the base
+        class default returns None) are skipped harmlessly. Returns the
+        number of POs that got a real tracking number this run.
+        """
+        from app.services.sync_service import SyncService
+
+        pending_pos = self.db.query(PurchaseOrder).filter(
+            PurchaseOrder.status.in_(["SUBMITTED", "CONFIRMED"]),
+            PurchaseOrder.supplier_order_id.isnot(None),
+            PurchaseOrder.tracking_number.is_(None),
+        ).all()
+
+        sync_service = SyncService(self.db)
+        found_pos: List[PurchaseOrder] = []
+
+        for po in pending_pos:
+            supplier = self.db.query(Supplier).filter(Supplier.id == po.supplier_id).first()
+            if not supplier:
+                continue
+            try:
+                adapter = sync_service.get_adapter_for_supplier(supplier)
+                status = adapter.check_shipment_status(po.supplier_order_id)
+            except Exception as exc:
+                logger.warning(f"Tracking poll failed for PO {po.po_number}: {exc}")
+                continue
+
+            if not status or not status.get("tracking_number"):
+                continue
+
+            po.tracking_number = status["tracking_number"]
+            po.carrier = status.get("carrier") or ""
+            po.status = "SHIPPED"
+            shipped_at_raw = status.get("shipped_at")
+            parsed_shipped_at = None
+            if shipped_at_raw:
+                try:
+                    parsed_shipped_at = datetime.fromisoformat(str(shipped_at_raw).replace("Z", "+00:00"))
+                except (ValueError, TypeError):
+                    parsed_shipped_at = None
+            po.shipped_at = parsed_shipped_at or datetime.now(timezone.utc)
+
+            self._add_event(po.order_id, "TRACKING_FOUND", {
+                "po_number": po.po_number,
+                "tracking_number": po.tracking_number,
+                "carrier": po.carrier,
+                "method": "supplier_api_poll",
+            })
+            found_pos.append(po)
+
+        self.db.commit()
+
+        for po in found_pos:
+            try:
+                self.update_tracking(po.order_id, po.tracking_number, po.carrier)
+            except Exception as exc:
+                logger.error(f"Failed to push newly-found tracking for PO {po.po_number}: {exc}")
+
+        return len(found_pos)
+
+    def poll_supplier_delivery(self) -> int:
+        """
+        Polls each shipped-but-not-yet-delivered PO for real delivery
+        confirmation via the adapter's check_shipment_status(). Without this,
+        an order sits at SHIPPED forever — there was previously no path to
+        DELIVERED/COMPLETED at all (mark_delivered()/complete_order() existed
+        as methods but nothing ever called them).
+
+        Only Ingram Micro's check_shipment_status() currently returns a real
+        delivered_at (confirmed field: carrierDetails.deliveredDate in Get
+        Order Details v7); D&H's tracking endpoint has no documented
+        delivery-confirmation field, so D&H POs are left for manual
+        "Mark Delivered" instead of being auto-detected — never guessed.
+
+        When every PO on an order is DELIVERED, the order itself is marked
+        DELIVERED too. complete_order() (a further, often business-decision-
+        gated step, e.g. after a return window) is intentionally NOT
+        auto-triggered here — that stays a manual action.
+
+        Returns the number of POs marked delivered this run.
+        """
+        from app.services.sync_service import SyncService
+
+        shipped_pos = self.db.query(PurchaseOrder).filter(
+            PurchaseOrder.status == "SHIPPED",
+            PurchaseOrder.supplier_order_id.isnot(None),
+        ).all()
+
+        sync_service = SyncService(self.db)
+        delivered_order_ids: set = set()
+        delivered_count = 0
+
+        for po in shipped_pos:
+            supplier = self.db.query(Supplier).filter(Supplier.id == po.supplier_id).first()
+            if not supplier:
+                continue
+            try:
+                adapter = sync_service.get_adapter_for_supplier(supplier)
+                status = adapter.check_shipment_status(po.supplier_order_id)
+            except Exception as exc:
+                logger.warning(f"Delivery poll failed for PO {po.po_number}: {exc}")
+                continue
+
+            delivered_at_raw = (status or {}).get("delivered_at")
+            if not delivered_at_raw:
+                continue
+
+            po.status = "DELIVERED"
+            self._add_event(po.order_id, "PO_DELIVERED", {
+                "po_number": po.po_number,
+                "method": "supplier_api_poll",
+            })
+            delivered_count += 1
+            delivered_order_ids.add(po.order_id)
+
+        self.db.commit()
+
+        for order_id in delivered_order_ids:
+            order = self._get_order(order_id)
+            if order.purchase_orders and all(po.status == "DELIVERED" for po in order.purchase_orders):
+                try:
+                    self.mark_delivered(order_id)
+                except Exception as exc:
+                    logger.error(f"Failed to mark order {order_id} delivered: {exc}")
+
+        return delivered_count
 
     def update_tracking(
         self,

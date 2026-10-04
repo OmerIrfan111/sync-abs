@@ -119,3 +119,53 @@ def test_rules_api_crud_and_preview(client, admin_auth_headers, db_session):
     assert client.delete(f"/api/v1/rules/pricing/{rule_id}", headers=admin_auth_headers).status_code == 204
     assert client.delete(f"/api/v1/rules/inventory/{inv_id}", headers=admin_auth_headers).status_code == 204
     assert client.delete(f"/api/v1/rules/supplier-priority/{p_id}", headers=admin_auth_headers).status_code == 204
+
+
+def test_supplier_default_shipping_propagation_and_preview(client, admin_auth_headers, db_session):
+    """
+    Verify that updating a supplier's default_shipping_charge:
+    1. Persists on the Supplier record
+    2. Propagates base_shipping_charge to all existing SupplierProducts
+    3. Is accurately factored into /rules/preview/{product_id}
+    """
+    from app.models.supplier_product import SupplierProduct
+
+    prod = Product(sku="SHIP-PREVIEW-01", title="Shipping Test Product")
+    supp = Supplier(name="Ship Dist Co", adapter_class="MockSupplierAdapter", is_active=True)
+    db_session.add_all([prod, supp])
+    db_session.commit()
+
+    sp = SupplierProduct(
+        product_id=prod.id,
+        supplier_id=supp.id,
+        supplier_sku="SHIP-DIST-SKU",
+        cost=Decimal("100.00"),
+        qty_available=10,
+    )
+    db_session.add(sp)
+    db_session.commit()
+
+    # Update supplier with default shipping charge
+    update_resp = client.put(
+        f"/api/v1/suppliers/{supp.id}",
+        json={"default_shipping_charge": 15.00},
+        headers=admin_auth_headers,
+    )
+    assert update_resp.status_code == 200, update_resp.text
+    assert float(update_resp.json()["default_shipping_charge"]) == 15.00
+
+    # Verify existing product got base_shipping_charge updated
+    db_session.refresh(sp)
+    assert sp.base_shipping_charge == Decimal("15.00")
+    assert sp.shipping_status == "valid"
+
+    # Verify Preview calculation includes base shipping
+    preview_resp = client.get(f"/api/v1/rules/preview/{prod.id}", headers=admin_auth_headers)
+    assert preview_resp.status_code == 200, preview_resp.text
+    pricing_data = preview_resp.json()["pricing"]
+    assert pricing_data["supplier_cost"] == 100.00
+    assert pricing_data["base_shipping_charge"] == 15.00
+    assert pricing_data["effective_cost"] == 115.00
+    # Default 15% markup on $115.00 effective cost = $132.25
+    assert pricing_data["calculated_price"] == 132.25
+

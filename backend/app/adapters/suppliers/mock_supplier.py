@@ -212,14 +212,32 @@ class MockSupplierAdapter(SupplierAdapter):
             raise ConnectionError("Simulated 503 Service Unavailable: Supplier gateway timeout")
         return True
 
-    def fetch_catalog(self) -> List[NormalizedProduct]:
+    def fetch_catalog(self, resume_cursor: Optional[str] = None, filters: Optional[Dict[str, Any]] = None) -> List[NormalizedProduct]:
+        # Small fixed fixture, not paginated — always returns everything in
+        # one call and reports itself fully exhausted.
+        self.next_cursor = None
+        self.catalog_exhausted = True
         self.test_connection()
         if self.config.get("simulate_latency_ms"):
             time.sleep(self.config["simulate_latency_ms"] / 1000.0)
 
+        filters = filters or {}
+        supplier_filter = filters.get("supplier")
+        if supplier_filter and supplier_filter.strip().lower() not in self.supplier_name.lower():
+            # Prefetch filter: target supplier does not match
+            return []
+
+        category_filter = (filters.get("category") or "").strip().lower()
+        brand_filter = (filters.get("brand") or "").strip().lower()
+
         products = []
         supplier_data = MOCK_SUPPLIER_STATE.get(self.supplier_name, {})
         for _, raw in supplier_data.items():
+            if category_filter and category_filter not in (raw.get("category") or "").lower():
+                continue
+            if brand_filter and brand_filter not in (raw.get("brand") or "").lower():
+                continue
+
             products.append(NormalizedProduct(
                 supplier_sku=raw["supplier_sku"],
                 upc=raw.get("upc"),
@@ -237,7 +255,24 @@ class MockSupplierAdapter(SupplierAdapter):
                 shipping_info=raw.get("shipping_info", {}),
                 availability_status=raw.get("availability_status", "ACTIVE")
             ))
+
+        limit = filters.get("limit")
+        if limit is not None:
+            products = products[:int(limit)]
+
         return products
+
+    def get_ground_shipping_estimate(self, supplier_sku: str, destination_zip: str = "90210") -> Optional[Decimal]:
+        self.test_connection()
+        if self.config.get("simulate_shipping_unknown"):
+            return None
+        if "ground_shipping_charge" in self.config:
+            val = self.config["ground_shipping_charge"]
+            return Decimal(str(val)) if val is not None else None
+        if "mock_shipping_charges" in self.config and supplier_sku in self.config["mock_shipping_charges"]:
+            val = self.config["mock_shipping_charges"][supplier_sku]
+            return Decimal(str(val)) if val is not None else None
+        return Decimal("9.95")
 
     def fetch_inventory(self, skus: Optional[List[str]] = None) -> Dict[str, int]:
         self.test_connection()

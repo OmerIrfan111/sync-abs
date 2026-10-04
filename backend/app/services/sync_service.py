@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 import json
 from sqlalchemy.orm import Session
@@ -16,12 +16,17 @@ class SyncService:
     def get_adapter_for_supplier(self, supplier: Supplier):
         credentials = {}
         if supplier.credentials_encrypted:
-            try:
-                decrypted = decrypt_credential(supplier.credentials_encrypted)
-                if decrypted:
+            decrypted = decrypt_credential(supplier.credentials_encrypted)
+            if decrypted:
+                try:
                     credentials = json.loads(decrypted)
-            except Exception:
-                pass
+                except Exception:
+                    pass
+            else:
+                try:
+                    credentials = json.loads(supplier.credentials_encrypted)
+                except Exception:
+                    pass
 
         from app.core.config import settings
 
@@ -45,34 +50,90 @@ class SyncService:
                 credentials["customer_number"] = getattr(settings, "INGRAM_MICRO_CUSTOMER_NUMBER", "21-186632")
                 credentials["environment"] = getattr(settings, "INGRAM_MICRO_ENVIRONMENT", "production")
 
-        if is_sole_account_of_its_type and ("d&h" in supplier.name.lower() or "dandh" in supplier.name.lower()) and not credentials.get("bearer_token"):
-            if getattr(settings, "DANDH_BEARER_TOKEN", None):
-                credentials["bearer_token"] = settings.DANDH_BEARER_TOKEN
+        if is_sole_account_of_its_type and ("d&h" in supplier.name.lower() or "dandh" in supplier.name.lower()):
+            env_client_id = getattr(settings, "DANDH_CLIENT_ID", "") or ""
+            env_client_secret = getattr(settings, "DANDH_CLIENT_SECRET", "") or ""
+            env_bearer = getattr(settings, "DANDH_BEARER_TOKEN", "") or ""
+            db_client_id = credentials.get("client_id", "") or ""
+            db_bearer = credentials.get("bearer_token", "") or ""
+
+            # Use .env credentials when DB has no credentials at all, or when
+            # the DB client_id differs from .env (e.g. stale test/sandbox
+            # client_id left over from a previous setup). This lets .env act as
+            # the authoritative credential store without requiring a DB update
+            # every time credentials are rotated or the environment changes.
+            env_has_creds = bool(env_client_id and env_client_secret) or bool(env_bearer)
+            db_missing = not db_client_id and not db_bearer
+            db_stale = bool(env_client_id and db_client_id and db_client_id != env_client_id)
+            if env_has_creds and (db_missing or db_stale):
+                import logging as _logging
+                _logging.getLogger(__name__).info(
+                    f"D&H credentials: overriding DB {'stale' if db_stale else 'empty'} "
+                    f"client_id={db_client_id!r} with .env client_id={env_client_id!r} "
+                    f"(environment={getattr(settings, 'DANDH_ENVIRONMENT', 'test')})"
+                )
+                if env_bearer:
+                    credentials["bearer_token"] = env_bearer
+                if env_client_id:
+                    credentials["client_id"] = env_client_id
+                if env_client_secret:
+                    credentials["client_secret"] = env_client_secret
                 credentials["account_number"] = getattr(settings, "DANDH_ACCOUNT_NUMBER", "3302610000")
-                credentials["client_id"] = getattr(settings, "DANDH_CLIENT_ID", "")
-                credentials["client_secret"] = getattr(settings, "DANDH_CLIENT_SECRET", "")
                 credentials["tenant"] = getattr(settings, "DANDH_TENANT", "dhus")
                 credentials["environment"] = getattr(settings, "DANDH_ENVIRONMENT", "test")
 
+        if is_sole_account_of_its_type and ("synnex" in supplier.name.lower() or "tdsynnex" in supplier.name.lower()):
+            env_client_id = getattr(settings, "TDSYNNEX_CLIENT_ID", "") or ""
+            env_client_secret = getattr(settings, "TDSYNNEX_CLIENT_SECRET", "") or ""
+            db_client_id = credentials.get("client_id", "") or ""
+            env_has_creds = bool(env_client_id and env_client_secret)
+            db_missing = not db_client_id
+            db_stale = bool(env_client_id and db_client_id and db_client_id != env_client_id)
+            if env_has_creds and (db_missing or db_stale):
+                credentials["client_id"] = env_client_id
+                credentials["client_secret"] = env_client_secret
+                credentials["account_number"] = getattr(settings, "TDSYNNEX_ACCOUNT_NUMBER", None)
+                credentials["environment"] = getattr(settings, "TDSYNNEX_ENVIRONMENT", "production")
+
         from app.adapters.registry import get_supplier_adapter
+        adapter_config = getattr(supplier, "_adapter_config", {})
+        if "config" in credentials and isinstance(credentials["config"], dict):
+            adapter_config = {**adapter_config, **credentials["config"]}
         return get_supplier_adapter(
             adapter_class=supplier.adapter_class,
             supplier_name=supplier.name,
-            credentials=credentials
+            credentials=credentials,
+            config=adapter_config
         )
 
-    def sync_supplier(self, supplier_id: int) -> Dict[str, Any]:
+    def sync_supplier(self, supplier_id: int, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Executes full synchronization for a supplier:
-        1. Tests connection
-        2. Fetches supplier catalog items
-        3. Upserts and matches products into central catalog
-        4. Detects field-level changes and records SyncLog
-        5. Logs any errors to ErrorLog
+        Executes synchronization for a supplier with optional prefetch filters:
+        - limit: int > 0
+        - category: str
+        - brand: str
+        - supplier: str (must match target supplier)
         """
         supplier = self.db.query(Supplier).filter(Supplier.id == supplier_id).first()
         if not supplier:
             raise ValueError(f"Supplier ID {supplier_id} not found")
+
+        # Validate Feature 2 prefetch filters
+        if filters:
+            limit = filters.get("limit")
+            if limit is not None:
+                try:
+                    limit_int = int(limit)
+                    if limit_int <= 0:
+                        raise ValueError("Prefetch filter 'limit' must be a positive integer greater than 0")
+                except (ValueError, TypeError) as e:
+                    raise ValueError(f"Invalid prefetch filter 'limit': {e}")
+
+            supplier_filter = filters.get("supplier")
+            if supplier_filter and supplier_filter.strip().lower() not in supplier.name.lower():
+                raise ValueError(
+                    f"Prefetch filter supplier='{supplier_filter}' does not match target supplier '{supplier.name}'"
+                )
 
         adapter = self.get_adapter_for_supplier(supplier)
         imported_count = 0
@@ -80,7 +141,17 @@ class SyncService:
 
         try:
             adapter.test_connection()
-            items = adapter.fetch_catalog()
+            items = adapter.fetch_catalog(resume_cursor=supplier.catalog_sync_cursor, filters=filters)
+
+            # Persist where this run left off so the next scheduled sync
+            # continues through the rest of the catalog instead of always
+            # restarting from the beginning — a real supplier catalog (Ingram
+            # Micro: 14,000+ SKUs) takes many runs to fully page through.
+            next_cursor = getattr(adapter, "next_cursor", None)
+            catalog_exhausted = getattr(adapter, "catalog_exhausted", False)
+            supplier.catalog_sync_cursor = next_cursor
+            if catalog_exhausted:
+                supplier.catalog_sync_exhausted_at = datetime.now(timezone.utc)
 
             # Adapters record items they deliberately excluded (missing real
             # price/quantity data) rather than fabricating values for them.
@@ -146,6 +217,7 @@ class SyncService:
                 "supplier_name": supplier.name,
                 "products_imported": imported_count,
                 "changes_detected": changed_count,
+                "skipped_missing_data": len(getattr(adapter, "_skipped_items", [])),
                 "synced_at": supplier.last_synced_at.isoformat()
             }
 

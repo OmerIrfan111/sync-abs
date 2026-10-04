@@ -19,12 +19,8 @@ import {
 } from "lucide-react";
 import { fetchApi, Listing, Product } from "@/lib/api";
 
-const MARKETPLACE_TABS = [
-  { id: "ALL", name: "All Stores" },
-  { id: "eBay", name: "eBay" },
-  { id: "Amazon", name: "Amazon" },
-  { id: "Shopify", name: "Shopify" },
-];
+
+const STATIC_ALL_TAB = { id: "ALL", name: "All Stores" };
 
 export default function ListingsPage() {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -42,11 +38,17 @@ export default function ListingsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<number | "">("");
-  const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<number>(1);
+  const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<number | "">("");
   const [marketplaces, setMarketplaces] = useState<any[]>([]);
   const [addingListing, setAddingListing] = useState(false);
   const [addCustomPrice, setAddCustomPrice] = useState("");
   const [reconciling, setReconciling] = useState(false);
+
+  // Dynamic marketplace tabs: "All Stores" + one tab per connected marketplace
+  const marketplaceTabs = [
+    STATIC_ALL_TAB,
+    ...marketplaces.map((m) => ({ id: String(m.id), name: m.name })),
+  ];
 
   const handleReconcile = async () => {
     setReconciling(true);
@@ -97,7 +99,8 @@ export default function ListingsPage() {
     loadCatalogAndChannels();
   }, []);
 
-  const updateAddPrice = (pId: number, mId: number) => {
+  const updateAddPrice = (pId: number, mId: number | "") => {
+    if (typeof mId !== "number") return;
     const existing = listings.find(
       l => l.product_id === pId && 
            (l.marketplace_id === mId || 
@@ -115,8 +118,8 @@ export default function ListingsPage() {
   };
 
   useEffect(() => {
-    if (selectedProductId) {
-      updateAddPrice(Number(selectedProductId), selectedMarketplaceId);
+    if (selectedProductId && selectedMarketplaceId !== "") {
+      updateAddPrice(Number(selectedProductId), Number(selectedMarketplaceId));
     }
   }, [selectedProductId, selectedMarketplaceId, catalogProducts, listings, marketplaces]);
 
@@ -223,9 +226,8 @@ export default function ListingsPage() {
 
   const filteredListings = listings.filter((l) => {
     if (selectedTab === "ALL") return true;
-    const mName = (l.marketplace_name || "").toLowerCase();
-    const tabTarget = selectedTab.toLowerCase();
-    return mName.includes(tabTarget) || tabTarget.includes(mName);
+    // selectedTab is the marketplace id (as string); match by id
+    return String(l.marketplace_id) === selectedTab;
   });
 
   return (
@@ -276,13 +278,11 @@ export default function ListingsPage() {
 
       {/* Marketplace Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {MARKETPLACE_TABS.map((tab) => {
+        {marketplaceTabs.map((tab) => {
           const isActive = selectedTab === tab.id;
           const count = listings.filter((l) => {
             if (tab.id === "ALL") return true;
-            const mName = (l.marketplace_name || "").toLowerCase();
-            const tabTarget = tab.id.toLowerCase();
-            return mName.includes(tabTarget) || tabTarget.includes(mName);
+            return String(l.marketplace_id) === tab.id;
           }).length;
 
           return (

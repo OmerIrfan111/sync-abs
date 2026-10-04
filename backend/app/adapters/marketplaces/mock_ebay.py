@@ -135,9 +135,16 @@ class MockEBayAdapter(MarketplaceAdapter):
     # ── V2: Mock Order Methods ──
 
     def fetch_orders(self, since_datetime=None) -> list:
-        """Returns simulated eBay orders for testing the order pipeline."""
+        """
+        Returns simulated eBay orders when DRY_RUN / sandbox mode is active (or simulate_orders=True)
+        to allow end-to-end testing of the order ingestion and routing pipeline without real money.
+        """
         from datetime import datetime, timezone
-        # Return a sample order with items matching our catalog SKUs
+        from app.core.config import settings
+
+        if not settings.DRY_RUN and not self.config.get("simulate_orders", False):
+            return []
+
         return [
             {
                 "order_id": f"ebay-order-{uuid.uuid4().hex[:8]}",

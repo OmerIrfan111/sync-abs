@@ -1,26 +1,21 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { 
-  Search, 
-  Filter, 
-  Layers, 
-  ChevronLeft, 
-  ChevronRight, 
-  Tag, 
-  Eye, 
-  X, 
-  DollarSign, 
-  Truck, 
-  Store, 
-  Check, 
-  HelpCircle, 
-  SlidersHorizontal,
-  Info,
+import React, { useEffect, useState, useCallback } from "react";
+import {
+  Search,
+  Filter,
+  Layers,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Truck,
+  Store,
+  Check,
   CheckCircle2,
-  AlertCircle,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Camera,
+  ImageIcon,
 } from "lucide-react";
 import { fetchApi, Product, Listing } from "@/lib/api";
 
@@ -34,36 +29,38 @@ export default function CatalogPage() {
   const [selectedBrand, setSelectedBrand] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [inStockOnly, setInStockOnly] = useState(false);
+  const [selectedSupplierId, setSelectedSupplierId] = useState("");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [suppliers, setSuppliers] = useState<{ id: number; name: string }[]>([]);
   const [filterOptions, setFilterOptions] = useState<{ brands: string[]; categories: string[] }>({
     brands: [],
     categories: [],
   });
+
+  // -- Single unified product drawer --
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [publishingId, setPublishingId] = useState<number | null>(null);
   const [publishSuccess, setPublishSuccess] = useState<string | null>(null);
   const [marketplaces, setMarketplaces] = useState<any[]>([]);
   const [selectedChannelId, setSelectedChannelId] = useState<number>(1);
-  const [disabledProducts, setDisabledProducts] = useState<Record<number, boolean>>({});
-
-  // Store selection modal state for row listing
-  const [listingModalProduct, setListingModalProduct] = useState<Product | null>(null);
-  const [selectedModalChannelId, setSelectedModalChannelId] = useState<number>(1);
-  const [existingListingsMap, setExistingListingsMap] = useState<Record<number, { id: number; marketplace_id: number; marketplace_name: string; status: string; selling_price: number }[]>>({});
-  const [modalCustomPrice, setModalCustomPrice] = useState<string>("");
+  const [existingListingsMap, setExistingListingsMap] = useState<
+    Record<number, { id: number; marketplace_id: number; marketplace_name: string; status: string; selling_price: number }[]>
+  >({});
   const [drawerCustomPrice, setDrawerCustomPrice] = useState<string>("");
-  const [modalCustomTitle, setModalCustomTitle] = useState<string>("");
-  const [modalCustomDescription, setModalCustomDescription] = useState<string>("");
   const [drawerCustomTitle, setDrawerCustomTitle] = useState<string>("");
   const [drawerCustomDescription, setDrawerCustomDescription] = useState<string>("");
-  const [showModalContentEdit, setShowModalContentEdit] = useState<boolean>(false);
   const [showDrawerContentEdit, setShowDrawerContentEdit] = useState<boolean>(false);
 
-  const randomizeModalPrice = (cost: number) => {
-    const mult = 1 + (Math.floor(Math.random() * 25) + 10) / 100;
-    const p = Math.floor(cost * mult) + 0.99;
-    setModalCustomPrice(p.toFixed(2));
-  };
+  // -- Photo picker --
+  const [imageSuggestions, setImageSuggestions] = useState<string[]>([]);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string>("");
+  const [loadingImages, setLoadingImages] = useState(false);
+  const [imageSearchQuery, setImageSearchQuery] = useState<string>("");
+  const [customImageUrlInput, setCustomImageUrlInput] = useState<string>("");
+  const [savingImage, setSavingImage] = useState(false);
+  const [imageSaveSuccess, setImageSaveSuccess] = useState<string | null>(null);
 
   const randomizeDrawerPrice = (cost: number) => {
     const mult = 1 + (Math.floor(Math.random() * 25) + 10) / 100;
@@ -76,9 +73,7 @@ export default function CatalogPage() {
       const res = await fetchApi<{ items: Listing[] }>("/listings?page=1&page_size=100");
       const map: Record<number, { id: number; marketplace_id: number; marketplace_name: string; status: string; selling_price: number }[]> = {};
       res.items.forEach((l) => {
-        if (!map[l.product_id]) {
-          map[l.product_id] = [];
-        }
+        if (!map[l.product_id]) map[l.product_id] = [];
         map[l.product_id].push({
           id: l.id,
           marketplace_id: l.marketplace_id,
@@ -93,19 +88,70 @@ export default function CatalogPage() {
     }
   };
 
+  const fetchImageSuggestions = async (productId: number, queryOverride?: string) => {
+    setLoadingImages(true);
+    try {
+      const qParam = queryOverride ? `?q=${encodeURIComponent(queryOverride)}` : "";
+      const res = await fetchApi<{ product_id: number; suggestions: string[]; query_used?: string }>(
+        `/products/${productId}/image-suggestions${qParam}`
+      );
+      const suggestions = res.suggestions || [];
+      setImageSuggestions(suggestions);
+      if (suggestions.length > 0 && (!selectedImageUrl || queryOverride)) {
+        setSelectedImageUrl(suggestions[0]);
+      }
+      if (res.query_used && !queryOverride) {
+        setImageSearchQuery(res.query_used);
+      }
+    } catch (err) {
+      console.error("Could not fetch image suggestions:", err);
+    } finally {
+      setLoadingImages(false);
+    }
+  };
+
+  const handleSaveProductImage = async (imageUrlToSave: string) => {
+    if (!selectedProduct || !imageUrlToSave) return;
+    setSavingImage(true);
+    setImageSaveSuccess(null);
+    try {
+      const updated = await fetchApi<Product>(`/products/${selectedProduct.id}/set-image`, {
+        method: "POST",
+        body: JSON.stringify({ image_url: imageUrlToSave }),
+      });
+      setSelectedProduct((prev) => (prev ? { ...prev, images: updated.images || [imageUrlToSave] } : null));
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === selectedProduct.id
+            ? { ...p, images: updated.images || [imageUrlToSave] }
+            : p
+        )
+      );
+      setImageSaveSuccess("Photo saved as the permanent product image!");
+      setTimeout(() => setImageSaveSuccess(null), 4000);
+    } catch (err: any) {
+      alert("Failed to save image: " + err.message);
+    } finally {
+      setSavingImage(false);
+    }
+  };
+
   const handlePublishToChannel = async (
-    product: Product, 
-    targetMarketplaceId: number, 
+    product: Product,
+    targetMarketplaceId: number,
     customPrice?: number,
     customTitle?: string,
-    customDescription?: string
+    customDescription?: string,
+    customImageUrl?: string,
   ) => {
     setPublishingId(product.id);
     setPublishSuccess(null);
     try {
-      const channel = marketplaces.find(m => m.id === targetMarketplaceId);
+      const channel = marketplaces.find((m) => m.id === targetMarketplaceId);
       const channelName = channel ? channel.name : "Your Store";
-      const isUpdate = (existingListingsMap[product.id] || []).some(l => l.marketplace_id === targetMarketplaceId);
+      const isUpdate = (existingListingsMap[product.id] || []).some(
+        (l) => l.marketplace_id === targetMarketplaceId
+      );
 
       await fetchApi<any>("/listings/publish", {
         method: "POST",
@@ -115,16 +161,18 @@ export default function CatalogPage() {
           custom_price: customPrice !== undefined && !isNaN(customPrice) ? customPrice : undefined,
           custom_title: customTitle?.trim() || undefined,
           custom_description: customDescription?.trim() || undefined,
+          custom_image_url: customImageUrl || undefined,
         }),
       });
-      const priceText = customPrice !== undefined && !isNaN(customPrice) ? ` at $${customPrice.toFixed(2)}` : "";
+      const priceText =
+        customPrice !== undefined && !isNaN(customPrice) ? ` at $${customPrice.toFixed(2)}` : "";
       setPublishSuccess(
-        isUpdate 
-          ? `Successfully updated "${customTitle || product.title}" on ${channelName}${priceText}!` 
+        isUpdate
+          ? `Successfully updated "${customTitle || product.title}" on ${channelName}${priceText}!`
           : `Successfully listed "${customTitle || product.title}" on ${channelName}${priceText}!`
       );
       setTimeout(() => setPublishSuccess(null), 5000);
-      setListingModalProduct(null);
+      setSelectedProduct(null);
       await loadListingsMap();
     } catch (err: any) {
       alert("Action failed: " + err.message);
@@ -133,26 +181,57 @@ export default function CatalogPage() {
     }
   };
 
-  const handleOpenProductDetails = (product: Product) => {
+  /**
+   * Opens the unified product drawer.
+   * Called both from the product name click AND from the action button.
+   */
+  const handleOpenProductDrawer = (product: Product, currentListingsMap: typeof existingListingsMap, currentMarketplaces: typeof marketplaces, currentChannelId: number) => {
     setSelectedProduct(product);
     setDrawerCustomTitle(product.title || "");
     setDrawerCustomDescription(product.description || "");
     setShowDrawerContentEdit(false);
-    const live = existingListingsMap[product.id] || [];
-    const existing = live.find(l => l.marketplace_id === selectedChannelId);
+
+    const live = currentListingsMap[product.id] || [];
+    const listedStoreIds = live.map((l) => l.marketplace_id);
+    const unlisted = currentMarketplaces.filter((m) => !listedStoreIds.includes(m.id));
+    const targetId = unlisted.length > 0 ? unlisted[0].id : (currentMarketplaces[0]?.id ?? currentChannelId);
+    setSelectedChannelId(targetId);
+
+    const existing = live.find((l) => l.marketplace_id === targetId);
     if (existing && existing.selling_price > 0) {
       setDrawerCustomPrice(existing.selling_price.toFixed(2));
     } else {
       const cost = Number(product.lowest_cost || 0);
       setDrawerCustomPrice((cost * 1.15).toFixed(2));
     }
+
+    const defaultQuery = [product.upc, product.brand, product.mpn || product.title?.slice(0, 30)].filter(Boolean).join(" ");
+    setImageSearchQuery(defaultQuery);
+    setCustomImageUrlInput("");
+    setImageSaveSuccess(null);
+    setImageSuggestions([]);
+    setSelectedImageUrl(product.images?.[0] || "");
+    fetchImageSuggestions(product.id);
   };
 
-  const toggleNotSelling = (productId: number) => {
-    setDisabledProducts(prev => ({
-      ...prev,
-      [productId]: !prev[productId]
-    }));
+  const toggleNotSelling = async (productId: number) => {
+    const product = products.find((p) => p.id === productId);
+    if (!product) return;
+    const nextEnabled = !product.is_enabled;
+    setProducts((prev) =>
+      prev.map((p) => (p.id === productId ? { ...p, is_enabled: nextEnabled } : p))
+    );
+    try {
+      await fetchApi(`/products/${productId}`, {
+        method: "PUT",
+        body: JSON.stringify({ is_enabled: nextEnabled }),
+      });
+    } catch (err: any) {
+      setProducts((prev) =>
+        prev.map((p) => (p.id === productId ? { ...p, is_enabled: !nextEnabled } : p))
+      );
+      alert("Could not save this change: " + err.message);
+    }
   };
 
   const loadProducts = async () => {
@@ -165,6 +244,9 @@ export default function CatalogPage() {
       if (selectedBrand) params.append("brand", selectedBrand);
       if (selectedCategory) params.append("category", selectedCategory);
       if (inStockOnly) params.append("in_stock", "true");
+      if (selectedSupplierId) params.append("supplier_id", selectedSupplierId);
+      if (minPrice) params.append("min_price", minPrice);
+      if (maxPrice) params.append("max_price", maxPrice);
 
       const res = await fetchApi<{
         items: Product[];
@@ -192,19 +274,20 @@ export default function CatalogPage() {
     fetchApi<any[]>("/marketplaces")
       .then((res) => {
         setMarketplaces(res);
-        if (res.length > 0) {
-          setSelectedChannelId(res[0].id);
-          setSelectedModalChannelId(res[0].id);
-        }
+        if (res.length > 0) setSelectedChannelId(res[0].id);
       })
       .catch((err) => console.error("Could not fetch marketplaces:", err));
+
+    fetchApi<any[]>("/suppliers")
+      .then((res) => setSuppliers(res.map((s: any) => ({ id: s.id, name: s.name }))))
+      .catch((err) => console.error("Could not fetch suppliers:", err));
 
     loadListingsMap();
   }, []);
 
   useEffect(() => {
     loadProducts();
-  }, [page, selectedBrand, selectedCategory, inStockOnly]);
+  }, [page, selectedBrand, selectedCategory, inStockOnly, selectedSupplierId]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -217,14 +300,19 @@ export default function CatalogPage() {
     setSelectedBrand("");
     setSelectedCategory("");
     setInStockOnly(false);
+    setSelectedSupplierId("");
+    setMinPrice("");
+    setMaxPrice("");
     setPage(1);
   };
 
-  const hasActiveFilters = Boolean(searchQuery || selectedBrand || selectedCategory || inStockOnly);
+  const hasActiveFilters = Boolean(
+    searchQuery || selectedBrand || selectedCategory || inStockOnly || selectedSupplierId || minPrice || maxPrice
+  );
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Header - Unboxed on canvas */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-200">
         <div>
           <h1 className="text-2xl font-brand font-normal text-[#0a0a0a]">Products to Sell</h1>
@@ -248,7 +336,7 @@ export default function CatalogPage() {
               placeholder="Search products by title, brand, or product code..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-lg text-sm text-[#1a1a1a] placeholder-[#767676] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06] focus:ring-1 focus:ring-[#0a0a0a] transition-all"
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-lg text-sm text-[#1a1a1a] placeholder-[#767676] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06] transition-all"
             />
           </form>
           <button
@@ -266,7 +354,6 @@ export default function CatalogPage() {
             <span>Filter By:</span>
           </div>
 
-          {/* Brand Filter */}
           <select
             value={selectedBrand}
             onChange={(e) => { setSelectedBrand(e.target.value); setPage(1); }}
@@ -278,7 +365,6 @@ export default function CatalogPage() {
             ))}
           </select>
 
-          {/* Category Filter */}
           <select
             value={selectedCategory}
             onChange={(e) => { setSelectedCategory(e.target.value); setPage(1); }}
@@ -290,18 +376,44 @@ export default function CatalogPage() {
             ))}
           </select>
 
-          {/* In-Stock Toggle */}
+          <select
+            value={selectedSupplierId}
+            onChange={(e) => { setSelectedSupplierId(e.target.value); setPage(1); }}
+            className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#1a1a1a] font-medium focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
+          >
+            <option value="">All Suppliers</option>
+            {suppliers.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+
+          <div className="flex items-center gap-1.5 bg-white border border-gray-300 rounded-lg px-2 py-1">
+            <span className="text-[11px] text-[#767676]">$</span>
+            <input
+              type="number" min="0" step="0.01" placeholder="Min"
+              value={minPrice} onChange={(e) => setMinPrice(e.target.value)}
+              onBlur={() => { setPage(1); loadProducts(); }}
+              className="w-14 text-xs text-[#1a1a1a] focus:outline-none"
+            />
+            <span className="text-[#767676] text-[11px]">-</span>
+            <span className="text-[11px] text-[#767676]">$</span>
+            <input
+              type="number" min="0" step="0.01" placeholder="Max"
+              value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)}
+              onBlur={() => { setPage(1); loadProducts(); }}
+              className="w-14 text-xs text-[#1a1a1a] focus:outline-none"
+            />
+          </div>
+
           <label className="flex items-center gap-2 cursor-pointer select-none bg-white border border-gray-300 px-3 py-1.5 rounded-lg hover:border-gray-400 transition-colors">
             <input
-              type="checkbox"
-              checked={inStockOnly}
+              type="checkbox" checked={inStockOnly}
               onChange={(e) => { setInStockOnly(e.target.checked); setPage(1); }}
-              className="rounded border-gray-300 text-[#0a0a0a] focus:ring-0 h-3.5 w-3.5 cursor-pointer accent-[#0a0a0a]"
+              className="rounded border-gray-300 h-3.5 w-3.5 cursor-pointer accent-[#0a0a0a]"
             />
-            <span className="text-xs text-[#1a1a1a] font-medium">In Stock Only (Ready to ship)</span>
+            <span className="text-xs text-[#1a1a1a] font-medium">In Stock Only</span>
           </label>
 
-          {/* Clear Filters Button */}
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
@@ -327,7 +439,7 @@ export default function CatalogPage() {
         </div>
       )}
 
-      {/* Products Table Card */}
+      {/* Products Table */}
       <div className="bg-white rounded-lg overflow-hidden border border-gray-100">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-[#1a1a1a]">
@@ -344,9 +456,7 @@ export default function CatalogPage() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-20 text-[#767676]">
-                    Loading products...
-                  </td>
+                  <td colSpan={6} className="text-center py-20 text-[#767676]">Loading products...</td>
                 </tr>
               ) : products.length === 0 ? (
                 <tr>
@@ -358,14 +468,14 @@ export default function CatalogPage() {
                 products.map((product) => {
                   const cost = Number(product.lowest_cost || 0);
                   const suggestedPrice = (cost * 1.15).toFixed(2);
-                  const isExcluded = disabledProducts[product.id] || false;
+                  const isExcluded = !product.is_enabled;
 
                   return (
-                    <tr 
-                      key={product.id} 
+                    <tr
+                      key={product.id}
                       className={`hover:bg-gray-50/60 transition-colors ${isExcluded ? "opacity-50" : ""}`}
                     >
-                      {/* 1. Product Image & Name */}
+                      {/* Product Image & Name */}
                       <td className="px-6 py-3.5">
                         <div className="flex items-center gap-3">
                           {product.images && product.images[0] ? (
@@ -375,7 +485,7 @@ export default function CatalogPage() {
                               referrerPolicy="no-referrer"
                               onError={(e) => {
                                 e.currentTarget.onerror = null;
-                                e.currentTarget.src = "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&auto=format&fit=crop&q=80";
+                                e.currentTarget.src = "https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?w=800&auto=format&fit=crop&q=80";
                               }}
                               className="h-12 w-12 rounded-lg object-cover bg-white border border-gray-200 shrink-0"
                             />
@@ -385,56 +495,81 @@ export default function CatalogPage() {
                             </div>
                           )}
                           <div className="max-w-xs sm:max-w-md">
+                            {/* Name click -> same unified drawer */}
                             <button
-                              onClick={() => handleOpenProductDetails(product)}
+                              onClick={() => handleOpenProductDrawer(product, existingListingsMap, marketplaces, selectedChannelId)}
                               className="font-semibold text-[#0a0a0a] hover:text-[#A8560A] text-left line-clamp-1 transition-colors"
                             >
                               {product.title}
                             </button>
                             <div className="text-xs text-[#767676] mt-0.5">
-                              {product.brand || "Standard Brand"} • {product.category || "General Merchandise"}
+                              {product.brand || "Standard Brand"}
+                              {product.category && (
+                                <><span className="mx-1 opacity-40">&bull;</span>{product.category}</>
+                              )}
                             </div>
                             <button
-                              onClick={() => handleOpenProductDetails(product)}
+                              onClick={() => handleOpenProductDrawer(product, existingListingsMap, marketplaces, selectedChannelId)}
                               className="text-[11px] text-[#A8560A] hover:underline mt-0.5 font-medium block"
                             >
-                              View product codes & details &rarr;
+                              View details &amp; list &rarr;
                             </button>
                           </div>
                         </div>
                       </td>
 
-                      {/* 2. Your Cost */}
+                      {/* Your Cost */}
                       <td className="px-4 py-3.5">
                         <div className="font-semibold text-[#0a0a0a] text-sm">
-                          {cost > 0 ? `$${cost.toFixed(2)}` : "—"}
+                          {cost > 0 ? `$${cost.toFixed(2)}` : "-"}
                         </div>
                         <div className="text-[11px] text-[#767676]">What you pay supplier</div>
                       </td>
 
-                      {/* 3. Suggested Selling Price */}
+                      {/* Suggested Selling Price */}
                       <td className="px-4 py-3.5">
                         <div className="font-bold text-[#A8560A] text-sm">
-                          {cost > 0 ? `$${suggestedPrice}` : "—"}
+                          {cost > 0 ? `$${suggestedPrice}` : "-"}
                         </div>
                         <div className="text-[11px] text-[#767676]">With 15% profit markup</div>
                       </td>
 
-                      {/* 4. Stock Available */}
+                      {/* Stock Available */}
                       <td className="px-4 py-3.5">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium ${
-                          product.total_stock > 0
-                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                            : "bg-rose-50 text-rose-800 border border-rose-200"
-                        }`}>
-                          {product.total_stock > 0 ? `${product.total_stock} ready to ship` : "Out of Stock"}
-                        </span>
+                        {(() => {
+                          const hasUnlimited = product.is_unlimited_stock || product.supplier_products?.some(sp => sp.is_unlimited_stock || sp.qty_available >= 9999999);
+                          const inStockCount = product.total_stock;
+                          const inStockSuppliers = product.supplier_products?.filter(sp => sp.qty_available > 0 || sp.stock_status === "IN_STOCK") || [];
+
+                          if (inStockCount > 0) {
+                            return (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                {inStockCount} ready to ship
+                              </span>
+                            );
+                          }
+
+                          if (hasUnlimited || inStockSuppliers.length > 0) {
+                            return (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                In Stock (License / Digital)
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200">
+                              Out of Stock
+                            </span>
+                          );
+                        })()}
                         <div className="text-[11px] text-[#767676] mt-0.5">
-                          {product.supplier_products.length} {product.supplier_products.length === 1 ? "supplier" : "suppliers"}
+                          {product.supplier_products.length}{" "}
+                          {product.supplier_products.length === 1 ? "supplier" : "suppliers"}
                         </div>
                       </td>
 
-                      {/* 5. Live In Stores */}
+                      {/* Live In Stores */}
                       <td className="px-4 py-3.5">
                         {(() => {
                           const currentListings = existingListingsMap[product.id] || [];
@@ -465,59 +600,32 @@ export default function CatalogPage() {
                         })()}
                       </td>
 
-                      {/* 6. Action Buttons */}
+                      {/* Action Buttons */}
                       <td className="px-6 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-2">
                           {(() => {
                             const liveList = existingListingsMap[product.id] || [];
-                            const listedStoreIds = liveList.map(l => l.marketplace_id);
-                            const allListed = marketplaces.length > 0 && marketplaces.every(m => listedStoreIds.includes(m.id));
+                            const listedStoreIds = liveList.map((l) => l.marketplace_id);
+                            const allListed = marketplaces.length > 0 && marketplaces.every((m) => listedStoreIds.includes(m.id));
                             const someListed = liveList.length > 0;
 
-                            const handleOpenModal = () => {
-                              setListingModalProduct(product);
-                              setModalCustomTitle(product.title || "");
-                              setModalCustomDescription(product.description || "");
-                              setShowModalContentEdit(false);
-                              const unlisted = marketplaces.filter(m => !listedStoreIds.includes(m.id));
-                              const targetChannelId = unlisted.length > 0 ? unlisted[0].id : (marketplaces[0]?.id || 1);
-                              setSelectedModalChannelId(targetChannelId);
-
-                              const existing = liveList.find(l => l.marketplace_id === targetChannelId);
-                              if (existing && existing.selling_price > 0) {
-                                setModalCustomPrice(existing.selling_price.toFixed(2));
-                              } else {
-                                const cost = Number(product.lowest_cost || 0);
-                                setModalCustomPrice((cost * 1.15).toFixed(2));
-                              }
-                            };
-
                             return (
+                              // Both name click and this button open the same drawer
                               <button
-                                onClick={handleOpenModal}
+                                onClick={() => handleOpenProductDrawer(product, existingListingsMap, marketplaces, selectedChannelId)}
                                 disabled={publishingId === product.id || isExcluded}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 ${
-                                  allListed 
-                                    ? "bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100" 
+                                  allListed
+                                    ? "bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100"
                                     : "bg-[#0a0a0a] hover:bg-[#222222] text-white"
                                 }`}
-                                title={allListed ? "Manage or update prices across stores" : "Sell or update listing on store"}
                               >
                                 {allListed ? (
-                                  <>
-                                    <Check className="h-3.5 w-3.5 text-emerald-600" />
-                                    <span>Listed Everywhere (Update)</span>
-                                  </>
+                                  <><Check className="h-3.5 w-3.5 text-emerald-600" /><span>Listed Everywhere (Update)</span></>
                                 ) : someListed ? (
-                                  <>
-                                    <RefreshCw className="h-3.5 w-3.5 text-white/80" />
-                                    <span>Sell / Update</span>
-                                  </>
+                                  <><RefreshCw className="h-3.5 w-3.5 text-white/80" /><span>Sell / Update</span></>
                                 ) : (
-                                  <>
-                                    <Store className="h-3.5 w-3.5" />
-                                    <span>Start Selling This</span>
-                                  </>
+                                  <><Store className="h-3.5 w-3.5" /><span>Start Selling This</span></>
                                 )}
                               </button>
                             );
@@ -526,15 +634,13 @@ export default function CatalogPage() {
                           <button
                             onClick={() => toggleNotSelling(product.id)}
                             className={`px-2.5 py-1.5 rounded-lg border text-xs transition-colors ${
-                              isExcluded 
-                                ? "bg-amber-50 border-amber-300 text-amber-800" 
+                              isExcluded
+                                ? "bg-amber-50 border-amber-300 text-amber-800"
                                 : "bg-white border-gray-300 text-gray-600 hover:text-gray-900"
                             }`}
                             title={isExcluded ? "Click to enable" : "Don't sell this product"}
                           >
-                            <span className="text-[11px] font-medium">
-                              {isExcluded ? "Disabled" : "Hide"}
-                            </span>
+                            <span className="text-[11px] font-medium">{isExcluded ? "Disabled" : "Hide"}</span>
                           </button>
                         </div>
                       </td>
@@ -546,7 +652,7 @@ export default function CatalogPage() {
           </table>
         </div>
 
-        {/* Pagination Bar */}
+        {/* Pagination */}
         <div className="p-4 bg-gray-50/80 border-t border-gray-200 flex items-center justify-between text-xs text-[#767676]">
           <div>
             Showing Page <span className="text-[#0a0a0a] font-semibold">{page}</span> of{" "}
@@ -571,10 +677,15 @@ export default function CatalogPage() {
         </div>
       </div>
 
-      {/* Product Details Drawer / Modal */}
+      {/* {/*
+          UNIFIED PRODUCT DRAWER
+          Opened by BOTH: product name click AND "Start Selling" button.
+          Contains: product details, 3-photo picker (real supplier API
+          images), store selector, price, title/desc edit, publish action.
+           */}
       {selectedProduct && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="relative bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+          <div className="relative bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-3xl w-full max-h-[92vh] overflow-y-auto shadow-2xl">
             <button
               onClick={() => setSelectedProduct(null)}
               className="absolute top-4 right-4 z-10 p-1.5 rounded-full bg-white/90 text-[#767676] hover:text-[#0a0a0a] hover:bg-white transition-colors"
@@ -582,43 +693,223 @@ export default function CatalogPage() {
               <X className="h-5 w-5" />
             </button>
 
-            {/* Image + Summary Hero */}
+            {/* Hero: Photo picker + Summary */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-6 pb-4">
+              {/* Left: Photo picker */}
               <div>
-                {selectedProduct.images && selectedProduct.images.length > 0 ? (
-                  <img
-                    src={selectedProduct.images[0]}
-                    alt={selectedProduct.title}
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&auto=format&fit=crop&q=80";
-                    }}
-                    className="w-full aspect-square object-cover rounded-lg bg-gray-50 border border-gray-100"
-                  />
-                ) : (
-                  <div className="w-full aspect-square rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center text-[#767676]">
-                    <Layers className="h-10 w-10" />
+                {/* Primary selected image preview */}
+                <div className="relative">
+                  {selectedImageUrl ? (
+                    <img
+                      src={selectedImageUrl}
+                      alt={selectedProduct.title}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = "https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?w=800&auto=format&fit=crop&q=80";
+                      }}
+                      className="w-full aspect-square object-cover rounded-lg bg-gray-50 border border-gray-100"
+                    />
+                  ) : (
+                    <div className="w-full aspect-square rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center text-[#767676]">
+                      <Layers className="h-10 w-10" />
+                    </div>
+                  )}
+
+                  {/* Status badges */}
+                  <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
+                    {selectedProduct.images?.[0] && selectedImageUrl === selectedProduct.images[0] ? (
+                      <span className="text-[10px] font-semibold bg-emerald-600 text-white px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1">
+                        <Check className="h-3 w-3" /> Current Product Photo
+                      </span>
+                    ) : selectedImageUrl ? (
+                      <span className="text-[10px] font-semibold bg-amber-600 text-white px-2 py-0.5 rounded-full shadow-sm">
+                        Previewing Candidate
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* Permanent Save Button when a different image is selected */}
+                {selectedImageUrl && selectedImageUrl !== selectedProduct.images?.[0] && (
+                  <button
+                    type="button"
+                    onClick={() => handleSaveProductImage(selectedImageUrl)}
+                    disabled={savingImage}
+                    className="w-full mt-2 py-2 px-3 bg-[#A8560A] hover:bg-[#8F4708] text-white text-xs font-semibold rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                  >
+                    {savingImage ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4" />
+                    )}
+                    <span>{savingImage ? "Saving Photo..." : "Set as Permanent Product Photo"}</span>
+                  </button>
+                )}
+
+                {/* Success feedback toast */}
+                {imageSaveSuccess && (
+                  <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium rounded-lg flex items-center gap-1.5 animate-fadeIn">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span>{imageSaveSuccess}</span>
                   </div>
                 )}
-                {selectedProduct.images && selectedProduct.images.length > 1 && (
-                  <div className="flex gap-2 mt-2.5">
-                    {selectedProduct.images.slice(0, 5).map((img, i) => (
-                      <img
-                        key={i}
-                        src={img}
-                        alt=""
-                        referrerPolicy="no-referrer"
-                        className="h-12 w-12 rounded-lg object-cover bg-gray-50 border border-gray-100"
-                      />
-                    ))}
+
+                {/* Web Search Box */}
+                <div className="mt-3 p-2.5 bg-gray-50 border border-gray-200 rounded-lg">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-semibold text-[#1a1a1a] flex items-center gap-1">
+                      <Search className="h-3.5 w-3.5 text-[#D9720F]" /> Search Web for Photos
+                    </span>
+                    {selectedProduct.upc && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const upcQ = `${selectedProduct.upc} ${selectedProduct.brand || ""}`.trim();
+                          setImageSearchQuery(upcQ);
+                          fetchImageSuggestions(selectedProduct.id, upcQ);
+                        }}
+                        className="text-[10px] text-[#A8560A] hover:underline font-medium"
+                      >
+                        Reset to UPC
+                      </button>
+                    )}
                   </div>
-                )}
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={imageSearchQuery}
+                      onChange={(e) => setImageSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          fetchImageSuggestions(selectedProduct.id, imageSearchQuery);
+                        }
+                      }}
+                      placeholder="Search UPC, brand, model..."
+                      className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-md text-[#0a0a0a] focus:outline-none focus:border-[#D9720F]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fetchImageSuggestions(selectedProduct.id, imageSearchQuery)}
+                      disabled={loadingImages}
+                      className="px-3 py-1.5 bg-[#D9720F] hover:bg-[#A8560A] text-white text-xs font-medium rounded-md transition-colors flex items-center gap-1 shrink-0 disabled:opacity-50"
+                    >
+                      {loadingImages ? (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Search className="h-3.5 w-3.5" />
+                      )}
+                      <span>Search</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Photo suggestions strip */}
+                <div className="mt-2.5">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <Camera className="h-3.5 w-3.5 text-[#D9720F]" />
+                    <span className="text-[11px] font-semibold text-[#1a1a1a]">Select Photo Candidate</span>
+                    {loadingImages && (
+                      <RefreshCw className="h-3 w-3 text-[#767676] animate-spin ml-auto" />
+                    )}
+                  </div>
+
+                  {loadingImages ? (
+                    <div className="flex gap-2">
+                      {[0, 1, 2, 3].map((i) => (
+                        <div key={i} className="h-16 w-16 rounded-lg bg-gray-100 border border-gray-200 animate-pulse" />
+                      ))}
+                    </div>
+                  ) : imageSuggestions.length > 0 ? (
+                    <div className="flex gap-2 flex-wrap max-h-36 overflow-y-auto p-0.5">
+                      {imageSuggestions.map((url, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setSelectedImageUrl(url)}
+                          title={`Candidate ${i + 1}`}
+                          className={`relative h-16 w-16 rounded-lg overflow-hidden border-2 transition-all ${
+                            selectedImageUrl === url
+                              ? "border-[#D9720F] ring-2 ring-[#D9720F]/30 scale-105 z-10"
+                              : "border-gray-200 hover:border-gray-400"
+                          }`}
+                        >
+                          <img
+                            src={url}
+                            alt={`Photo option ${i + 1}`}
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = "https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?w=200&auto=format&fit=crop&q=60";
+                            }}
+                            className="h-full w-full object-cover"
+                          />
+                          {selectedImageUrl === url && (
+                            <span className="absolute inset-0 flex items-center justify-center bg-[#D9720F]/25">
+                              <Check className="h-5 w-5 text-white drop-shadow" />
+                            </span>
+                          )}
+                          {selectedProduct.images?.[0] === url && (
+                            <span className="absolute bottom-0 left-0 right-0 text-center text-[7px] font-bold bg-emerald-600/90 text-white py-0.5">
+                              Current
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-[11px] text-[#767676] bg-gray-50 border border-gray-200 rounded-lg p-2.5">
+                      <ImageIcon className="h-4 w-4 shrink-0" />
+                      <span>No photos found. Try searching by UPC above.</span>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-[#767676] mt-1.5">
+                    Click any thumbnail above to preview it, then click &ldquo;Set as Permanent Product Photo&rdquo;.
+                  </p>
+                </div>
+
+                {/* Paste direct URL */}
+                <div className="mt-2.5 pt-2 border-t border-gray-200">
+                  <label className="text-[10px] font-medium text-[#767676] block mb-1">
+                    Or paste direct image URL from Google / manufacturer:
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="url"
+                      value={customImageUrlInput}
+                      onChange={(e) => setCustomImageUrlInput(e.target.value)}
+                      placeholder="https://example.com/product-photo.jpg"
+                      className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-md text-[#0a0a0a] focus:outline-none focus:border-[#D9720F]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cleanUrl = customImageUrlInput.trim();
+                        if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
+                          setSelectedImageUrl(cleanUrl);
+                          handleSaveProductImage(cleanUrl);
+                          setCustomImageUrlInput("");
+                        } else {
+                          alert("Please enter a valid URL starting with http:// or https://");
+                        }
+                      }}
+                      disabled={!customImageUrlInput.trim() || savingImage}
+                      className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-medium rounded-md transition-colors disabled:opacity-50 shrink-0"
+                    >
+                      Use &amp; Save
+                    </button>
+                  </div>
+                </div>
               </div>
 
+              {/* Right: Summary */}
               <div className="flex flex-col">
                 <span className="text-[11px] font-semibold text-[#A8560A] uppercase tracking-wide">
-                  {selectedProduct.brand || "Unbranded"} · {selectedProduct.category || "General"}
+                  {selectedProduct.brand || "Unbranded"}
+                  {selectedProduct.category && (
+                    <><span className="mx-1 opacity-60">&middot;</span>{selectedProduct.category}</>
+                  )}
                 </span>
                 <h3 className="text-lg font-bold text-[#0a0a0a] mt-1 leading-snug">{selectedProduct.title}</h3>
 
@@ -654,460 +945,229 @@ export default function CatalogPage() {
             </div>
 
             <div className="px-6 pb-6 space-y-5">
-
-            {/* Distributors carrying this item */}
-            <div>
-              <h4 className="text-xs font-semibold text-[#0a0a0a] mb-2 flex items-center gap-2">
-                <Truck className="h-4 w-4 text-[#D9720F]" />
-                <span>Wholesale Distributors Supplying This Item</span>
-              </h4>
-              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-gray-50 text-[#767676] uppercase text-[10px] border-b border-gray-200">
-                    <tr>
-                      <th className="px-3.5 py-2.5">Distributor</th>
-                      <th className="px-3.5 py-2.5">What You Pay</th>
-                      <th className="px-3.5 py-2.5">Stock Ready</th>
-                      <th className="px-3.5 py-2.5">Shipping</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {selectedProduct.supplier_products.map((sp) => (
-                      <tr key={sp.id} className="hover:bg-gray-50/60">
-                        <td className="px-3.5 py-2.5 font-medium text-[#0a0a0a]">{sp.supplier_name || "Supplier"}</td>
-                        <td className="px-3.5 py-2.5 font-semibold text-[#A8560A]">${Number(sp.cost).toFixed(2)}</td>
-                        <td className="px-3.5 py-2.5 text-emerald-800 font-medium">{sp.qty_available} units</td>
-                        <td className="px-3.5 py-2.5 text-[#767676]">
-                          {sp.shipping_info?.lead_time_days != null ? `Ships in ${sp.shipping_info.lead_time_days} day(s)` : "—"}
-                        </td>
+              {/* Distributors table */}
+              <div>
+                <h4 className="text-xs font-semibold text-[#0a0a0a] mb-2 flex items-center gap-2">
+                  <Truck className="h-4 w-4 text-[#D9720F]" />
+                  <span>Wholesale Distributors Supplying This Item</span>
+                </h4>
+                <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-gray-50 text-[#767676] uppercase text-[10px] border-b border-gray-200">
+                      <tr>
+                        <th className="px-3.5 py-2.5">Distributor</th>
+                        <th className="px-3.5 py-2.5">Wholesale Cost</th>
+                        <th className="px-3.5 py-2.5">Base Shipping</th>
+                        <th className="px-3.5 py-2.5">Cost Basis</th>
+                        <th className="px-3.5 py-2.5">Stock Ready</th>
+                        <th className="px-3.5 py-2.5">Lead Time</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {selectedProduct.supplier_products.map((sp) => {
+                        const cost = Number(sp.cost);
+                        const ship = sp.base_shipping_charge != null ? Number(sp.base_shipping_charge) : 0;
+                        const totalBasis = cost + ship;
 
-            {/* Live in stores info in drawer */}
-            {(() => {
-              const live = existingListingsMap[selectedProduct.id] || [];
-              if (live.length > 0) {
+                        return (
+                          <tr key={sp.id} className="hover:bg-gray-50/60">
+                            <td className="px-3.5 py-2.5 font-medium text-[#0a0a0a]">{sp.supplier_name || "Supplier"}</td>
+                            <td className="px-3.5 py-2.5 font-semibold text-[#A8560A]">${cost.toFixed(2)}</td>
+                            <td className="px-3.5 py-2.5 font-medium text-[#0a0a0a]">
+                              {sp.base_shipping_charge != null ? (
+                                <span>
+                                  ${ship.toFixed(2)}
+                                  <span className="text-[10px] text-[#767676] block lowercase">{sp.shipping_source || "base"}</span>
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">$0.00</span>
+                              )}
+                            </td>
+                            <td className="px-3.5 py-2.5 font-bold text-[#0a0a0a]">
+                              ${totalBasis.toFixed(2)}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-emerald-800 font-medium">
+                              {sp.is_unlimited_stock ? "License / Service - no unit limit" : `${sp.qty_available} units`}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-[#767676]">
+                              {sp.shipping_info?.lead_time_days != null ? `Ships in ${sp.shipping_info.lead_time_days}d` : "-"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Already listed on stores */}
+              {(() => {
+                const live = existingListingsMap[selectedProduct.id] || [];
+                if (live.length === 0) return null;
                 return (
                   <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                     <span className="text-xs font-semibold text-[#1a1a1a] block mb-1.5">Already Listed On:</span>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {live.map((l) => (
-                        <span
-                          key={l.id}
-                          className="text-[11px] font-medium px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200"
-                        >
-                          {l.marketplace_name} ({l.status === "ACTIVE" ? "Live" : "Hidden"})
+                        <span key={l.id} className="text-[11px] font-medium px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          {l.marketplace_name} ({l.status === "ACTIVE" ? "Live" : "Hidden"}) - ${l.selling_price.toFixed(2)}
                         </span>
                       ))}
                     </div>
                   </div>
                 );
-              }
-              return null;
-            })()}
+              })()}
 
-            {/* Choose store & custom price action in drawer */}
-            {(() => {
-              const liveList = existingListingsMap[selectedProduct.id] || [];
-              const isDrawerStoreListed = liveList.some(l => l.marketplace_id === selectedChannelId);
-              return (
-                <div className="pt-3.5 border-t border-gray-200 space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-[#1a1a1a] font-semibold block mb-1">Choose Store to List on:</label>
-                      <select
-                        value={selectedChannelId}
-                        onChange={(e) => {
-                          const mId = Number(e.target.value);
-                          setSelectedChannelId(mId);
-                          const existing = liveList.find(l => l.marketplace_id === mId);
-                          if (existing && existing.selling_price > 0) {
-                            setDrawerCustomPrice(existing.selling_price.toFixed(2));
-                          } else {
-                            const cost = Number(selectedProduct.lowest_cost || 0);
-                            setDrawerCustomPrice((cost * 1.15).toFixed(2));
-                          }
-                        }}
-                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs text-[#0a0a0a] font-medium focus:outline-none"
-                      >
-                        {marketplaces.map((m) => {
-                          const existing = liveList.find((l) => l.marketplace_id === m.id);
-                          return (
-                            <option key={m.id} value={m.id}>
-                              {m.name} {existing ? `— Listed ($${existing.selling_price.toFixed(2)})` : ""}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
+              {/* Listing action form */}
+              {(() => {
+                const liveList = existingListingsMap[selectedProduct.id] || [];
+                const isStoreListed = liveList.some((l) => l.marketplace_id === selectedChannelId);
 
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs text-[#1a1a1a] font-semibold block">Selling Price ($):</label>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => randomizeDrawerPrice(Number(selectedProduct.lowest_cost || 50))}
-                            className="text-[10px] text-[#A8560A] font-medium bg-[#D9720F]/10 px-1.5 py-0.5 rounded border border-[#D9720F]/20 flex items-center gap-0.5"
-                            title="Pick random price with 10%-35% margin"
-                          >
-                            <Sparkles className="h-2.5 w-2.5" />
-                            <span>Random Price</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDrawerCustomPrice((Number(selectedProduct.lowest_cost || 0) * 1.15).toFixed(2))}
-                            className="text-[10px] text-gray-500 underline font-medium"
-                            title="Reset to rule formula (+15% margin)"
-                          >
-                            Reset
-                          </button>
-                        </div>
-                      </div>
-                      <div className="relative">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#767676] font-medium text-xs">$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={drawerCustomPrice || (Number(selectedProduct.lowest_cost || 0) * 1.15).toFixed(2)}
-                          onChange={(e) => setDrawerCustomPrice(e.target.value)}
-                          placeholder="Custom price..."
-                          className="w-full pl-6 pr-2 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Title & Description Customization (Collapsible) */}
-                  <div className="border border-gray-200 rounded-lg p-3 bg-gray-50/70 space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowDrawerContentEdit(!showDrawerContentEdit)}
-                      className="w-full flex items-center justify-between text-xs font-semibold text-[#0a0a0a]"
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <Sparkles className="h-3.5 w-3.5 text-[#D9720F]" />
-                        <span>Customize Title & Description</span>
-                        {(drawerCustomTitle !== selectedProduct.title || drawerCustomDescription !== (selectedProduct.description || "")) && (
-                          <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium">Modified</span>
-                        )}
-                      </span>
-                      <span className="text-[11px] text-[#A8560A] font-medium">
-                        {showDrawerContentEdit ? "Hide fields" : "Edit before listing"}
-                      </span>
-                    </button>
-
-                    {showDrawerContentEdit && (
-                      <div className="space-y-3 pt-2 border-t border-gray-200">
-                        <div>
-                          <label className="block text-[11px] font-semibold text-[#1a1a1a] mb-1">
-                            Store Listing Title
-                          </label>
-                          <input
-                            type="text"
-                            value={drawerCustomTitle}
-                            onChange={(e) => setDrawerCustomTitle(e.target.value)}
-                            placeholder="Enter listing title..."
-                            className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-semibold text-[#1a1a1a] mb-1">
-                            Store Product Description
-                          </label>
-                          <textarea
-                            rows={3}
-                            value={drawerCustomDescription}
-                            onChange={(e) => setDrawerCustomDescription(e.target.value)}
-                            placeholder="Enter custom product description..."
-                            className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {isDrawerStoreListed && (
-                    <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-900 flex items-center gap-2">
-                      <RefreshCw className="h-3.5 w-3.5 text-amber-700 shrink-0" />
-                      <span>Already listed in this store. Submitting will update the title, price, and stock without creating duplicates.</span>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-end">
-                    <button
-                      onClick={() => handlePublishToChannel(
-                        selectedProduct, 
-                        selectedChannelId, 
-                        drawerCustomPrice ? Number(drawerCustomPrice) : Number((Number(selectedProduct.lowest_cost || 0) * 1.15).toFixed(2)),
-                        drawerCustomTitle,
-                        drawerCustomDescription
-                      )}
-                      disabled={publishingId === selectedProduct.id}
-                      className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all disabled:opacity-50"
-                    >
-                      {isDrawerStoreListed ? <RefreshCw className="h-3.5 w-3.5" /> : <Store className="h-4 w-4" />}
-                      <span>
-                        {publishingId === selectedProduct.id 
-                          ? (isDrawerStoreListed ? "Updating..." : "Listing...") 
-                          : (isDrawerStoreListed ? "Update Listing on Store" : "Start Selling on Store")}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })()}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Start Selling / List on Store Modal */}
-      {listingModalProduct && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-lg w-full p-6 shadow-xl space-y-4">
-            <div className="flex items-start justify-between pb-3 border-b border-gray-200">
-              <div>
-                <h3 className="text-lg font-bold text-[#0a0a0a]">Select Store to Sell On</h3>
-                <p className="text-xs text-[#767676] mt-0.5">Choose which marketplace to publish this product to.</p>
-              </div>
-              <button
-                onClick={() => setListingModalProduct(null)}
-                className="p-1.5 rounded-lg text-[#767676] hover:text-[#0a0a0a] hover:bg-gray-100 transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Product Summary */}
-            <div className="p-3.5 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
-              <div className="font-semibold text-sm text-[#0a0a0a] line-clamp-1">
-                {listingModalProduct.title}
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div>
-                  <span className="text-[10px] text-[#767676] block">Wholesale Cost</span>
-                  <span className="font-semibold text-[#0a0a0a]">
-                    ${Number(listingModalProduct.lowest_cost || 0).toFixed(2)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-[#767676] block">Selling Price</span>
-                  <span className="font-bold text-[#A8560A]">
-                    ${(Number(listingModalProduct.lowest_cost || 0) * 1.15).toFixed(2)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-[#767676] block">Stock Available</span>
-                  <span className="font-semibold text-emerald-700">
-                    {listingModalProduct.total_stock} units
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Already Live Stores Status */}
-            {(() => {
-              const liveOn = existingListingsMap[listingModalProduct.id] || [];
-              if (liveOn.length > 0) {
                 return (
-                  <div className="text-xs">
-                    <span className="text-[#767676] block mb-1 font-medium">Currently listed on:</span>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {liveOn.map((l) => (
-                        <span
-                          key={l.id}
-                          className="text-[11px] font-medium px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200"
+                  <div className="pt-3.5 border-t border-gray-200 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-[#1a1a1a] font-semibold block mb-1">Choose Store to List on:</label>
+                        <select
+                          value={selectedChannelId}
+                          onChange={(e) => {
+                            const mId = Number(e.target.value);
+                            setSelectedChannelId(mId);
+                            const existing = liveList.find((l) => l.marketplace_id === mId);
+                            if (existing && existing.selling_price > 0) {
+                              setDrawerCustomPrice(existing.selling_price.toFixed(2));
+                            } else {
+                              const cost = Number(selectedProduct.lowest_cost || 0);
+                              setDrawerCustomPrice((cost * 1.15).toFixed(2));
+                            }
+                          }}
+                          className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs text-[#0a0a0a] font-medium focus:outline-none"
                         >
-                          {l.marketplace_name} ({l.status === "ACTIVE" ? "Live" : "Hidden"})
+                          {marketplaces.map((m) => {
+                            const existing = liveList.find((l) => l.marketplace_id === m.id);
+                            return (
+                              <option key={m.id} value={m.id}>
+                                {m.name}{existing ? ` - Listed ($${existing.selling_price.toFixed(2)})` : ""}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs text-[#1a1a1a] font-semibold block">Selling Price ($):</label>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => randomizeDrawerPrice(Number(selectedProduct.lowest_cost || 50))}
+                              className="text-[10px] text-[#A8560A] font-medium bg-[#D9720F]/10 px-1.5 py-0.5 rounded border border-[#D9720F]/20 flex items-center gap-0.5"
+                            >
+                              <Sparkles className="h-2.5 w-2.5" />
+                              <span>Random</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDrawerCustomPrice((Number(selectedProduct.lowest_cost || 0) * 1.15).toFixed(2))}
+                              className="text-[10px] text-gray-500 underline font-medium"
+                            >
+                              Reset
+                            </button>
+                          </div>
+                        </div>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#767676] font-medium text-xs">$</span>
+                          <input
+                            type="number" step="0.01"
+                            value={drawerCustomPrice || (Number(selectedProduct.lowest_cost || 0) * 1.15).toFixed(2)}
+                            onChange={(e) => setDrawerCustomPrice(e.target.value)}
+                            className="w-full pl-6 pr-2 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Title & Description customisation */}
+                    <div className="border border-gray-200 rounded-lg p-3 bg-gray-50/70 space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowDrawerContentEdit(!showDrawerContentEdit)}
+                        className="w-full flex items-center justify-between text-xs font-semibold text-[#0a0a0a]"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Sparkles className="h-3.5 w-3.5 text-[#D9720F]" />
+                          <span>Customize Title &amp; Description</span>
+                          {(drawerCustomTitle !== selectedProduct.title || drawerCustomDescription !== (selectedProduct.description || "")) && (
+                            <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium">Modified</span>
+                          )}
                         </span>
-                      ))}
+                        <span className="text-[11px] text-[#A8560A] font-medium">
+                          {showDrawerContentEdit ? "Hide fields" : "Edit before listing"}
+                        </span>
+                      </button>
+
+                      {showDrawerContentEdit && (
+                        <div className="space-y-3 pt-2 border-t border-gray-200">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-[#1a1a1a] mb-1">Store Listing Title</label>
+                            <input
+                              type="text"
+                              value={drawerCustomTitle}
+                              onChange={(e) => setDrawerCustomTitle(e.target.value)}
+                              className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-[#1a1a1a] mb-1">Store Product Description</label>
+                            <textarea
+                              rows={3}
+                              value={drawerCustomDescription}
+                              onChange={(e) => setDrawerCustomDescription(e.target.value)}
+                              className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {isStoreListed && (
+                      <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-900 flex items-center gap-2">
+                        <RefreshCw className="h-3.5 w-3.5 text-amber-700 shrink-0" />
+                        <span>Already listed in this store. Submitting will update the title, photo, price, and stock without creating duplicates.</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-end gap-2.5">
+                      <button
+                        onClick={() => setSelectedProduct(null)}
+                        className="px-4 py-2 text-xs font-medium text-[#767676] hover:text-[#0a0a0a]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => handlePublishToChannel(
+                          selectedProduct,
+                          selectedChannelId,
+                          drawerCustomPrice ? Number(drawerCustomPrice) : Number((Number(selectedProduct.lowest_cost || 0) * 1.15).toFixed(2)),
+                          drawerCustomTitle,
+                          drawerCustomDescription,
+                          selectedImageUrl || undefined,
+                        )}
+                        disabled={publishingId === selectedProduct.id}
+                        className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all disabled:opacity-50"
+                      >
+                        {isStoreListed ? <RefreshCw className="h-3.5 w-3.5" /> : <Store className="h-4 w-4" />}
+                        <span>
+                          {publishingId === selectedProduct.id
+                            ? (isStoreListed ? "Updating..." : "Listing...")
+                            : (isStoreListed ? "Update Listing on Store" : "Start Selling on Store")}
+                        </span>
+                      </button>
                     </div>
                   </div>
                 );
-              }
-              return null;
-            })()}
-
-            {/* Store Selection & Dynamic Update Notice */}
-            {(() => {
-              const liveOn = existingListingsMap[listingModalProduct.id] || [];
-              const isModalStoreListed = liveOn.some(l => l.marketplace_id === selectedModalChannelId);
-              const targetStoreName = marketplaces.find(m => m.id === selectedModalChannelId)?.name || "selected store";
-
-              return (
-                <>
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-[#1a1a1a]">
-                      Choose Target Marketplace:
-                    </label>
-                    <select
-                      value={selectedModalChannelId}
-                      onChange={(e) => {
-                        const mId = Number(e.target.value);
-                        setSelectedModalChannelId(mId);
-                        const existing = liveOn.find(l => l.marketplace_id === mId);
-                        if (existing && existing.selling_price > 0) {
-                          setModalCustomPrice(existing.selling_price.toFixed(2));
-                        } else {
-                          const cost = Number(listingModalProduct.lowest_cost || 0);
-                          setModalCustomPrice((cost * 1.15).toFixed(2));
-                        }
-                      }}
-                      className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
-                    >
-                      {marketplaces.map((m) => {
-                        const existing = liveOn.find(l => l.marketplace_id === m.id);
-                        return (
-                          <option key={m.id} value={m.id}>
-                            {m.name} {existing ? `— Listed ($${existing.selling_price.toFixed(2)})` : ""}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-
-                  {isModalStoreListed ? (
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-center gap-2">
-                      <RefreshCw className="h-4 w-4 text-amber-700 shrink-0" />
-                      <span>Already active on <strong>{targetStoreName}</strong>. Changing the price and submitting will update your existing listing without creating duplicates.</span>
-                    </div>
-                  ) : null}
-                </>
-              );
-            })()}
-
-            {/* Price Selection (Custom or Random) */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-[#1a1a1a]">
-                  Selling Price ($)
-                </label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => randomizeModalPrice(Number(listingModalProduct.lowest_cost || 50))}
-                    className="text-[11px] text-[#A8560A] hover:text-[#0a0a0a] font-medium flex items-center gap-1 bg-[#D9720F]/10 px-2 py-0.5 rounded border border-[#D9720F]/20 transition-colors"
-                    title="Generate a random price with 10%-35% margin"
-                  >
-                    <Sparkles className="h-3 w-3" />
-                    <span>Random Price</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalCustomPrice((Number(listingModalProduct.lowest_cost || 0) * 1.15).toFixed(2))}
-                    className="text-[11px] text-gray-500 hover:text-gray-800 underline font-medium"
-                    title="Reset to rule formula (+15% margin)"
-                  >
-                    Reset Rule
-                  </button>
-                </div>
-              </div>
-
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#767676] font-medium text-sm">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={modalCustomPrice}
-                  onChange={(e) => setModalCustomPrice(e.target.value)}
-                  placeholder="Enter custom selling price..."
-                  className="w-full pl-7 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#0a0a0a] font-bold focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
-                />
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-[#767676]">
-                <span>Wholesale cost: ${Number(listingModalProduct.lowest_cost || 0).toFixed(2)}</span>
-                <span>Rule formula (+15%): ${(Number(listingModalProduct.lowest_cost || 0) * 1.15).toFixed(2)}</span>
-              </div>
+              })()}
             </div>
-
-            {/* Title & Description Customization (Collapsible) */}
-            <div className="border border-gray-200 rounded-lg p-3 bg-gray-50/70 space-y-2">
-              <button
-                type="button"
-                onClick={() => setShowModalContentEdit(!showModalContentEdit)}
-                className="w-full flex items-center justify-between text-xs font-semibold text-[#0a0a0a]"
-              >
-                <span className="flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-[#D9720F]" />
-                  <span>Customize Title & Description</span>
-                  {(modalCustomTitle !== listingModalProduct.title || modalCustomDescription !== (listingModalProduct.description || "")) && (
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium">Modified</span>
-                  )}
-                </span>
-                <span className="text-[11px] text-[#A8560A] font-medium">
-                  {showModalContentEdit ? "Hide fields" : "Edit before listing"}
-                </span>
-              </button>
-
-              {showModalContentEdit && (
-                <div className="space-y-3 pt-2 border-t border-gray-200">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-[#1a1a1a] mb-1">
-                      Store Listing Title
-                    </label>
-                    <input
-                      type="text"
-                      value={modalCustomTitle}
-                      onChange={(e) => setModalCustomTitle(e.target.value)}
-                      placeholder="Enter listing title..."
-                      className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-[#1a1a1a] mb-1">
-                      Store Product Description
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={modalCustomDescription}
-                      onChange={(e) => setModalCustomDescription(e.target.value)}
-                      placeholder="Enter custom product description..."
-                      className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Actions */}
-            {(() => {
-              const liveOn = existingListingsMap[listingModalProduct.id] || [];
-              const isModalStoreListed = liveOn.some(l => l.marketplace_id === selectedModalChannelId);
-
-              return (
-                <div className="pt-3 border-t border-gray-200 flex items-center justify-end gap-2.5">
-                  <button
-                    onClick={() => setListingModalProduct(null)}
-                    className="px-4 py-2 text-xs font-medium text-[#767676] hover:text-[#0a0a0a] transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => handlePublishToChannel(
-                      listingModalProduct, 
-                      selectedModalChannelId, 
-                      modalCustomPrice ? Number(modalCustomPrice) : undefined,
-                      modalCustomTitle,
-                      modalCustomDescription
-                    )}
-                    disabled={publishingId === listingModalProduct.id}
-                    className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    {isModalStoreListed ? <RefreshCw className="h-3.5 w-3.5" /> : <Store className="h-3.5 w-3.5" />}
-                    <span>
-                      {publishingId === listingModalProduct.id 
-                        ? (isModalStoreListed ? "Updating..." : "Listing...") 
-                        : (isModalStoreListed ? "Update Listing on Store" : "Confirm & Start Selling")}
-                    </span>
-                  </button>
-                </div>
-              );
-            })()}
           </div>
         </div>
       )}

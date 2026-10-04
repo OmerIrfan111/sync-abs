@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
@@ -51,9 +52,13 @@ class SupplierSelectionService:
         in_stock = [sp for sp in supplier_products if sp.qty_available > 0]
         candidates = in_stock if in_stock else supplier_products
 
+        def total_landed_cost(sp: SupplierProduct) -> Decimal:
+            shipping = sp.base_shipping_charge if sp.base_shipping_charge is not None else Decimal("0.00")
+            return sp.cost + Decimal(str(shipping))
+
         if rule == "LOWEST_COST":
-            # Minimum cost among available suppliers
-            return min(candidates, key=lambda sp: sp.cost)
+            # Minimum total delivered cost (base cost + shipping charge) among available suppliers
+            return min(candidates, key=total_landed_cost)
 
         elif rule == "HIGHEST_STOCK":
             # Maximum stock available
@@ -66,10 +71,10 @@ class SupplierSelectionService:
             ).all()
             priority_map = {p.supplier_id: p.priority_rank for p in priorities}
 
-            # Sort by rank (lowest integer = highest rank), then cost
+            # Sort by rank (lowest integer = highest rank), then total cost
             return min(
                 candidates,
-                key=lambda sp: (priority_map.get(sp.supplier_id, 999), sp.cost)
+                key=lambda sp: (priority_map.get(sp.supplier_id, 999), total_landed_cost(sp))
             )
 
         elif rule == "SHIPPING_LOCATION":
@@ -81,7 +86,7 @@ class SupplierSelectionService:
             return min(candidates, key=get_lead_time)
 
         # Default fallback
-        return min(candidates, key=lambda sp: sp.cost)
+        return min(candidates, key=total_landed_cost)
 
     def select_best_supplier_for_order_item(
         self,
@@ -110,6 +115,10 @@ class SupplierSelectionService:
             # No single supplier can fully cover the quantity; fall back to best available stock
             return max(supplier_products, key=lambda sp: sp.qty_available)
 
+        def total_landed_cost(sp: SupplierProduct) -> Decimal:
+            shipping = sp.base_shipping_charge if sp.base_shipping_charge is not None else Decimal("0.00")
+            return sp.cost + Decimal(str(shipping))
+
         return self.select_best_supplier(product, selection_rule_override) if len(sufficient_stock) == len(supplier_products) else min(
-            sufficient_stock, key=lambda sp: sp.cost
+            sufficient_stock, key=total_landed_cost
         )

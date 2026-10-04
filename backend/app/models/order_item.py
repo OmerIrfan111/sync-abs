@@ -20,6 +20,11 @@ class OrderItem(Base, TimestampMixin):
     quantity = Column(Integer, default=1, nullable=False)
     unit_price = Column(Numeric(10, 2), nullable=False, default=0)
     supplier_cost = Column(Numeric(10, 2), nullable=True)
+    shipping_cost = Column(Numeric(10, 2), nullable=True)
+    # Currently always null: no third-party rate service is used, and neither
+    # D&H nor Ingram Micro has a confirmed freight-cost integration wired up
+    # yet. Left in place so a real per-order shipping cost source can be
+    # wired up later without a schema change.
     supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="SET NULL"), nullable=True, index=True)
     status = Column(String(50), default="PENDING", nullable=False)
     # Statuses: PENDING, ROUTED, ORDERED, SHIPPED, UNROUTABLE

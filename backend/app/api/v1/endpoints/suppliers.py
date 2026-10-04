@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 import json
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -26,6 +26,7 @@ def get_suppliers(
             name=s.name,
             adapter_class=s.adapter_class,
             is_active=s.is_active,
+            default_shipping_charge=s.default_shipping_charge,
             last_synced_at=s.last_synced_at,
             created_at=s.created_at,
             updated_at=s.updated_at,
@@ -53,7 +54,8 @@ def create_supplier(
         name=payload.name,
         adapter_class=payload.adapter_class,
         credentials_encrypted=encrypted,
-        is_active=payload.is_active
+        is_active=payload.is_active,
+        default_shipping_charge=payload.default_shipping_charge
     )
     db.add(supplier)
     db.commit()
@@ -64,6 +66,7 @@ def create_supplier(
         name=supplier.name,
         adapter_class=supplier.adapter_class,
         is_active=supplier.is_active,
+        default_shipping_charge=supplier.default_shipping_charge,
         last_synced_at=supplier.last_synced_at,
         created_at=supplier.created_at,
         updated_at=supplier.updated_at,
@@ -81,6 +84,7 @@ def get_supplier(supplier_id: int, db: Session = Depends(get_db)):
         name=supplier.name,
         adapter_class=supplier.adapter_class,
         is_active=supplier.is_active,
+        default_shipping_charge=supplier.default_shipping_charge,
         last_synced_at=supplier.last_synced_at,
         created_at=supplier.created_at,
         updated_at=supplier.updated_at,
@@ -101,6 +105,18 @@ def update_supplier(supplier_id: int, payload: SupplierUpdate, db: Session = Dep
         supplier.is_active = payload.is_active
     if payload.credentials is not None:
         supplier.credentials_encrypted = encrypt_credential(json.dumps(payload.credentials))
+    if payload.default_shipping_charge is not None:
+        from datetime import datetime, timezone
+        supplier.default_shipping_charge = payload.default_shipping_charge
+        # Feature: Sets base_shipping_charge for all this supplier's existing products
+        db.query(SupplierProduct).filter(
+            SupplierProduct.supplier_id == supplier.id
+        ).update({
+            SupplierProduct.base_shipping_charge: payload.default_shipping_charge,
+            SupplierProduct.shipping_status: "valid",
+            SupplierProduct.shipping_source: "default",
+            SupplierProduct.shipping_updated_at: datetime.now(timezone.utc)
+        }, synchronize_session=False)
 
     db.commit()
     db.refresh(supplier)
@@ -111,6 +127,7 @@ def update_supplier(supplier_id: int, payload: SupplierUpdate, db: Session = Dep
         name=supplier.name,
         adapter_class=supplier.adapter_class,
         is_active=supplier.is_active,
+        default_shipping_charge=supplier.default_shipping_charge,
         last_synced_at=supplier.last_synced_at,
         created_at=supplier.created_at,
         updated_at=supplier.updated_at,
@@ -150,11 +167,28 @@ def test_supplier_connection(supplier_id: int, db: Session = Depends(get_db)):
 def sync_supplier(
     supplier_id: int,
     sync_async: bool = Query(False, description="Whether to queue via Celery or execute immediately"),
+    limit: Optional[int] = Query(None, description="Max item count to prefetch before processing"),
+    category: Optional[str] = Query(None, description="Category filter to push to fetch layer"),
+    brand: Optional[str] = Query(None, description="Brand filter to push to fetch layer"),
+    supplier_filter: Optional[str] = Query(None, alias="supplier", description="Supplier name filter"),
     db: Session = Depends(get_db)
 ):
     supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
+
+    if limit is not None and limit <= 0:
+        raise HTTPException(status_code=400, detail="Invalid prefetch filter: limit must be a positive integer greater than 0")
+
+    filters = {}
+    if limit is not None:
+        filters["limit"] = limit
+    if category is not None:
+        filters["category"] = category
+    if brand is not None:
+        filters["brand"] = brand
+    if supplier_filter is not None:
+        filters["supplier"] = supplier_filter
 
     if sync_async:
         from app.tasks.sync_tasks import sync_supplier_task
@@ -168,8 +202,10 @@ def sync_supplier(
     # Synchronous execution for instant frontend response / testing
     service = SyncService(db)
     try:
-        result = service.sync_supplier(supplier_id)
+        result = service.sync_supplier(supplier_id, filters=filters)
         return result
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(exc)}")
 

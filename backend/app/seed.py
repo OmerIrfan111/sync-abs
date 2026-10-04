@@ -28,10 +28,11 @@ def seed_database():
             db.commit()
             logger.info(f"Admin user seeded: {admin_email}")
 
-        # 2. Seed Only 2 Real Wholesale Suppliers (Ingram Micro, D&H)
+        # 2. Seed Wholesale Suppliers (Ingram Micro, D&H, TD SYNNEX)
         suppliers_data = [
             {"name": "Ingram Micro", "adapter_class": "IngramMicroAdapter"},
             {"name": "D&H", "adapter_class": "DAndHAdapter"},
+            {"name": "TD SYNNEX", "adapter_class": "TDSynnexAdapter"},
         ]
 
         allowed_supplier_names = [s["name"] for s in suppliers_data]

@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 import pytest
 from app.models.product import Product
@@ -27,8 +28,18 @@ def test_spec_section_29_e2e_scenario(db_session):
     listing_service = ListingService(db_session)
 
     # Setup Suppliers
-    supp_a = Supplier(name="Supplier A (Ingram)", adapter_class="MockSupplierAdapter", is_active=True)
-    supp_b = Supplier(name="Supplier B (D&H)", adapter_class="MockSupplierAdapter", is_active=True)
+    supp_a = Supplier(
+        name="Supplier A (Ingram)",
+        adapter_class="MockSupplierAdapter",
+        is_active=True,
+        credentials_encrypted=json.dumps({"config": {"ground_shipping_charge": "0.00"}})
+    )
+    supp_b = Supplier(
+        name="Supplier B (D&H)",
+        adapter_class="MockSupplierAdapter",
+        is_active=True,
+        credentials_encrypted=json.dumps({"config": {"ground_shipping_charge": "0.00"}})
+    )
     db_session.add_all([supp_a, supp_b])
     db_session.commit()
 
