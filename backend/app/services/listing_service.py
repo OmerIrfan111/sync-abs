@@ -149,6 +149,7 @@ class ListingService:
         custom_title: Optional[str] = None,
         custom_description: Optional[str] = None,
         custom_image_url: Optional[str] = None,
+        custom_weight_lbs: Optional[Decimal] = None,
         allow_upc_override: bool = False,
         actor_email: Optional[str] = None,
     ) -> Listing:
@@ -259,6 +260,21 @@ class ListingService:
 
         target_status = inventory_service.determine_listing_status(quantity, oos_action)
 
+        # A PENDING listing's async feed hasn't resolved yet (Walmart's
+        # MP_ITEM_MATCH can take minutes; reconciliation only catches up
+        # every 10 min). Without this guard, re-clicking "Start Selling"
+        # before that resolves falls into the update-in-place branch below,
+        # 404s (item doesn't exist yet), and falls through to submitting a
+        # SECOND real feed for the same product — a real duplicate-
+        # submission bug, not hypothetical, found 2026-10-08.
+        if listing and listing.status == "PENDING":
+            raise ValueError(
+                f"'{product.sku}' is still being processed on {marketplace.name} from an earlier "
+                "submission. Wait for it to resolve (checked automatically every 10 minutes), or use "
+                "\"Check Real Status\" on the Listings page to see progress now. Submitting again "
+                "would create a duplicate, conflicting request."
+            )
+
         now = datetime.now(timezone.utc)
         if listing and listing.external_listing_id:
             try:
@@ -306,26 +322,116 @@ class ListingService:
             except Exception as e:
                 logger.warning(f"Could not update existing listing in-place on {marketplace.name}: {e}. Proceeding to create/sync.")
 
+        # Defense-in-depth: the frontend already runs this same check before
+        # calling publish, but this guard protects any other caller (direct
+        # API use, future integrations) from firing a real MP_ITEM_MATCH
+        # feed that's already known to be impossible — Walmart only
+        # supports creating an offer by matching an existing catalog item,
+        # and we have a real, confirmed way to check that in advance now.
+        #
+        # Real bug fixed 2026-10-09: this used to fail OPEN in two cases —
+        # a product with no UPC/EAN skipped the check entirely (the `and
+        # (product.upc or product.ean)` condition was False, so nothing ran
+        # at all), and a live-check failure (network blip, Walmart API
+        # error) was caught and logged as a warning while still letting the
+        # publish proceed "anyway". Both let an unverified/unmatchable
+        # product reach a real MP_ITEM_MATCH submission. Walmart publish
+        # must only ever proceed on a genuinely CONFIRMED match — fail
+        # closed, not open, in every other case.
+        if hasattr(adapter, "search_walmart_catalog_by_gtin"):
+            if not (product.upc or product.ean):
+                raise ValueError(
+                    f"'{product.sku}' has no UPC/EAN on file — Walmart item-match requires a real GTIN to "
+                    "check against their catalog, so this can't be verified as matchable. Submission was not sent."
+                )
+            try:
+                matches = adapter.search_walmart_catalog_by_gtin(product.upc or product.ean)
+            except Exception as exc:
+                raise ValueError(
+                    f"Could not verify '{product.sku}' against Walmart's catalog ({exc}). Not proceeding "
+                    "without a confirmed match — try again, or use \"Check Real Status\" once Walmart is reachable."
+                ) from exc
+
+            specs_update = dict(product.specs_json or {})
+            specs_update["walmart_match_status"] = "matchable" if matches else "not_matchable"
+            specs_update["walmart_match_checked_at"] = now.isoformat()
+            product.specs_json = specs_update
+            self.db.commit()
+            if not matches:
+                raise ValueError(
+                    f"'{product.sku}' isn't matchable to anything in Walmart's catalog — Walmart only "
+                    "supports creating an offer by matching an existing catalog item, and this GTIN "
+                    "doesn't have one. Submission was not sent."
+                )
+
         try:
             # Resolve the effective image list: if the user picked a custom image
             # it will already be images[0] after the persist block above; no
             # additional override needed here — just pass the stored images.
             effective_images = product.images or []
-            adapter_result = adapter.create_listing(
-                sku=product.sku,
-                title=custom_title or product.title,
-                description=custom_description or product.description or product.title,
-                price=price,
-                quantity=quantity,
-                image_urls=effective_images
+
+            # Real weight from whichever supplier actually reports one (not
+            # all do — see each adapter's fetch_catalog comments). Used by
+            # marketplaces that require it for new-item creation (currently
+            # Walmart's MP_ITEM_MATCH feed); adapters that don't need it
+            # simply don't declare the kwarg, caught below.
+            real_weight = next(
+                (
+                    float(sp.shipping_info["weight_lbs"])
+                    for sp in product.supplier_products
+                    if sp.shipping_info and sp.shipping_info.get("weight_lbs")
+                ),
+                None,
             )
+
+            # A staff-entered weight (most of the catalog has none — Ingram
+            # and TD SYNNEX don't return physical weight at all) overrides
+            # and is persisted onto the real supplier record, so it doesn't
+            # have to be re-entered on every future publish/reactivate.
+            if custom_weight_lbs is not None and float(custom_weight_lbs) > 0:
+                real_weight = float(custom_weight_lbs)
+                target_sp = best_sp or (product.supplier_products[0] if product.supplier_products else None)
+                if target_sp is not None:
+                    updated_shipping = dict(target_sp.shipping_info or {})
+                    updated_shipping["weight_lbs"] = real_weight
+                    target_sp.shipping_info = updated_shipping
+                    self.db.commit()
+            try:
+                adapter_result = adapter.create_listing(
+                    sku=product.sku,
+                    title=custom_title or product.title,
+                    description=custom_description or product.description or product.title,
+                    price=price,
+                    quantity=quantity,
+                    image_urls=effective_images,
+                    upc=product.upc,
+                    weight_lbs=real_weight,
+                )
+            except TypeError:
+                adapter_result = adapter.create_listing(
+                    sku=product.sku,
+                    title=custom_title or product.title,
+                    description=custom_description or product.description or product.title,
+                    price=price,
+                    quantity=quantity,
+                    image_urls=effective_images
+                )
+
+            # target_status (our own real business decision — e.g. PAUSED
+            # for out-of-stock) normally wins; every adapter's returned
+            # status is just an echoed-back "ACTIVE" formality in the usual
+            # synchronous case. The one real exception is an adapter
+            # reporting "PENDING" (e.g. Walmart's async item-match feed was
+            # accepted but isn't actually live yet) — that must not be
+            # silently overwritten with an assumed ACTIVE/target status.
+            effective_status = "PENDING" if adapter_result.get("status") == "PENDING" else target_status
 
             if not listing:
                 listing = Listing(
                     product_id=product.id,
                     marketplace_id=marketplace.id,
                     external_listing_id=adapter_result["external_listing_id"],
-                    status=target_status,
+                    status=effective_status,
                     selling_price=price,
                     listed_qty=quantity,
                     last_updated_at=now
@@ -333,7 +439,7 @@ class ListingService:
                 self.db.add(listing)
             else:
                 listing.external_listing_id = adapter_result["external_listing_id"]
-                listing.status = target_status
+                listing.status = effective_status
                 listing.selling_price = price
                 listing.listed_qty = quantity
                 listing.last_updated_at = now
@@ -360,6 +466,19 @@ class ListingService:
                 new_value=f"Listing ID: {listing.external_listing_id}, Price: ${price}, Qty: {quantity}"
             )
             self.db.add(sync_log)
+
+            # Walmart's item-match feed is async and returns a real feed_id
+            # that can be polled for actual processing status — without
+            # saving it, a PENDING listing has no way to ever ask Walmart
+            # "did this actually finish?" beyond re-checking for a 404.
+            feed_id = (adapter_result.get("metadata") or {}).get("feed_id")
+            if feed_id:
+                self.db.add(SyncLog(
+                    product_id=product.id,
+                    field_changed=f"{marketplace.name.lower()}_feed_id",
+                    old_value=None,
+                    new_value=str(feed_id)
+                ))
             self.db.commit()
 
             return listing
@@ -423,22 +542,23 @@ class ListingService:
                     listing.selling_price = new_price
 
                 if new_status is not None and new_status != listing.status:
+                    # A failed withdraw/reactivate call must not fall through to
+                    # the status write below — that would record this listing as
+                    # WITHDRAWN/ACTIVE in our own DB while the real marketplace
+                    # state never changed. Let it propagate to the outer except,
+                    # which logs an ErrorLog and re-raises instead of committing.
                     if new_status in ["PAUSED", "WITHDRAWN"] and listing.status == "ACTIVE":
                         if listing.external_listing_id:
                             try:
                                 adapter.withdraw_listing(listing.external_listing_id, listing.product.sku if listing.product else None)
                             except TypeError:
                                 adapter.withdraw_listing(listing.external_listing_id)
-                            except Exception as e:
-                                logger.warning(f"Failed to withdraw on {marketplace.name}: {e}")
                     elif new_status == "ACTIVE" and listing.status in ["PAUSED", "WITHDRAWN"]:
                         if listing.external_listing_id:
                             try:
                                 adapter.reactivate_listing(listing.external_listing_id, listing.product.sku if listing.product else None)
                             except TypeError:
                                 adapter.reactivate_listing(listing.external_listing_id)
-                            except Exception as e:
-                                logger.warning(f"Failed to reactivate on {marketplace.name}: {e}")
 
                     self.db.add(SyncLog(
                         product_id=listing.product_id,
@@ -495,6 +615,32 @@ class ListingService:
             self.db.refresh(listing)
             return listing
 
+    def retire_or_withdraw_listing(self, listing: Listing) -> str:
+        """
+        Best-effort real marketplace cleanup for a listing that's about to be
+        deleted from our own database — retires it for real where the
+        adapter supports that (Walmart), otherwise falls back to a zero-stock
+        withdraw. Never raises: a cleanup failure must not block the local
+        delete, but the caller gets a note explaining what happened so it
+        can be surfaced instead of silently losing track of a still-live
+        marketplace item (real incident, 2026-10-07: product 00TF99 stayed
+        live on Walmart with zero local record after a delete that skipped
+        this).
+        """
+        if not listing.external_listing_id:
+            return "no external listing id on file, nothing to clean up on the marketplace"
+        try:
+            marketplace = listing.marketplace
+            adapter = self.get_adapter_for_marketplace(marketplace) if marketplace else None
+            if adapter is not None and hasattr(adapter, "retire_item"):
+                adapter.retire_item(listing.external_listing_id)
+                return "retired"
+            else:
+                self.withdraw_listing_from_marketplace(listing.id)
+                return "zeroed (no real delete supported by this marketplace)"
+        except Exception as exc:
+            return f"marketplace cleanup failed, removed locally only: {exc}"
+
     def reactivate_listing_on_marketplace(self, listing_id: int) -> Listing:
         """Reactivates / unhides a withdrawn or paused marketplace listing."""
         lock_key = f"sync:lock:listing:{listing_id}"
@@ -539,7 +685,20 @@ class ListingService:
                     adapter.update_inventory(listing.external_listing_id, product.sku, active_qty)
                     adapter.update_price(listing.external_listing_id, product.sku, price)
                 except Exception as e:
-                    logger.warning(f"Error during marketplace reactivation for {product.sku}: {e}")
+                    # A failed marketplace call must not be followed by marking
+                    # this listing ACTIVE in our own DB below — that would be
+                    # the same fake-success drift already fixed for Walmart.
+                    error_log = ErrorLog(
+                        error_type="MARKETPLACE_CONNECTION_ERROR",
+                        product_id=product.id,
+                        marketplace_id=listing.marketplace_id,
+                        message=str(e),
+                        retry_count=0,
+                        status="FAILED"
+                    )
+                    self.db.add(error_log)
+                    self.db.commit()
+                    raise
 
             old_status = listing.status
             listing.status = "ACTIVE"
@@ -620,3 +779,85 @@ class ListingService:
             )
             updated.append(up)
         return updated
+
+    def reconcile_pending_async_listings(self) -> Dict[str, int]:
+        """
+        Polls real processing status for marketplaces whose item creation is
+        asynchronous (currently Walmart's MP_ITEM_MATCH feed) — without this,
+        a PENDING listing stays PENDING forever unless someone manually
+        clicks "Check Real Status"; this is what actually keeps it current.
+        Uses the feed_id saved at publish time (see publish_product_to_marketplace)
+        to ask the real marketplace what happened, same mechanism as the
+        manual /listings/{id}/real-status endpoint.
+        """
+        pending_listings = (
+            self.db.query(Listing)
+            .filter(Listing.status == "PENDING")
+            .all()
+        )
+
+        updated_active = 0
+        updated_failed = 0
+        still_pending = 0
+
+        for listing in pending_listings:
+            marketplace = listing.marketplace
+            if not marketplace:
+                continue
+            adapter = self.get_adapter_for_marketplace(marketplace)
+            if not hasattr(adapter, "get_feed_status"):
+                continue
+
+            feed_log = (
+                self.db.query(SyncLog)
+                .filter(
+                    SyncLog.product_id == listing.product_id,
+                    SyncLog.field_changed == f"{marketplace.name.lower()}_feed_id",
+                )
+                .order_by(desc(SyncLog.synced_at))
+                .first()
+            )
+            if not feed_log:
+                continue
+
+            try:
+                feed_result = adapter.get_feed_status(feed_log.new_value)
+            except Exception as exc:
+                logger.warning(f"Could not poll feed status for listing {listing.id}: {exc}")
+                continue
+
+            item_statuses = (
+                (feed_result.get("itemDetails") or {}).get("itemIngestionStatus") or []
+            )
+            if feed_result.get("feedStatus") == "ERROR":
+                listing.status = "ERROR"
+                updated_failed += 1
+            elif item_statuses and all(
+                s.get("ingestionStatus") not in ("SUCCESS", None) for s in item_statuses
+            ) and all(s.get("ingestionErrors") for s in item_statuses):
+                listing.status = "ERROR"
+                updated_failed += 1
+            elif feed_result.get("feedStatus") == "PROCESSED" and feed_result.get("itemsSucceeded", 0) > 0:
+                listing.status = "ACTIVE"
+                updated_active += 1
+                # MP_ITEM_MATCH has no quantity field at all — Walmart creates
+                # the matched item with 0 stock by default, so it's live but
+                # not actually purchasable until a real inventory push
+                # happens. This is the first moment we know the item exists
+                # on Walmart's side (confirmed via SUCCESS ingestion), so
+                # it's the right time to push the real stock we already
+                # intended to list it with.
+                if hasattr(adapter, "update_inventory") and listing.listed_qty:
+                    try:
+                        adapter.update_inventory(
+                            listing.external_listing_id, listing.external_listing_id, listing.listed_qty
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            f"Listing {listing.id} went ACTIVE but real inventory push failed: {exc}"
+                        )
+            else:
+                still_pending += 1
+
+        self.db.commit()
+        return {"active": updated_active, "failed": updated_failed, "still_pending": still_pending}

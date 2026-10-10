@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.models.listing import Listing
 from app.models.product import Product
 from app.models.marketplace import Marketplace
+from app.models.sync_log import SyncLog
 from app.schemas.listing import (
     ListingPublishRequest,
     ListingUpdate,
@@ -67,6 +68,51 @@ def list_listings(
         total_pages=total_pages
     )
 
+@router.get("/{listing_id}/real-status")
+def get_real_listing_status(listing_id: int, db: Session = Depends(get_db)):
+    """
+    Checks the listing's ACTUAL state against the live marketplace, instead
+    of trusting our own possibly-stale status column. For Walmart items
+    created via the async item-match feed, polls the real feed_id (saved at
+    publish time) via Walmart's own feed-status endpoint so a PENDING listing
+    isn't just a permanent guess — this reports exactly what Walmart says
+    happened to it (still processing / succeeded / the real error).
+    """
+    l = db.query(Listing).filter(Listing.id == listing_id).first()
+    if not l:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    marketplace = l.marketplace
+    if not marketplace:
+        raise HTTPException(status_code=400, detail="Listing has no associated marketplace")
+
+    service = ListingService(db)
+    adapter = service.get_adapter_for_marketplace(marketplace)
+
+    feed_log = (
+        db.query(SyncLog)
+        .filter(
+            SyncLog.product_id == l.product_id,
+            SyncLog.field_changed == f"{marketplace.name.lower()}_feed_id",
+        )
+        .order_by(desc(SyncLog.synced_at))
+        .first()
+    )
+
+    if feed_log and hasattr(adapter, "get_feed_status"):
+        try:
+            feed_result = adapter.get_feed_status(feed_log.new_value)
+            return {"check_method": "feed_status", "feed_id": feed_log.new_value, "result": feed_result}
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Could not reach {marketplace.name} to check feed status: {exc}")
+
+    try:
+        live_result = adapter.get_listing(l.external_listing_id)
+        return {"check_method": "listing_lookup", "result": live_result}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach {marketplace.name} to check listing status: {exc}")
+
+
 @router.get("/{listing_id}", response_model=ListingResponse)
 def get_listing(listing_id: int, db: Session = Depends(get_db)):
     l = db.query(Listing).filter(Listing.id == listing_id).first()
@@ -100,6 +146,7 @@ def publish_listing(payload: ListingPublishRequest, db: Session = Depends(get_db
             custom_title=payload.custom_title,
             custom_description=payload.custom_description,
             custom_image_url=payload.custom_image_url,
+            custom_weight_lbs=payload.custom_weight_lbs,
         )
         return ListingResponse(
             id=listing.id,
@@ -237,14 +284,21 @@ def delete_listing(listing_id: int, db: Session = Depends(get_db)):
     listing = db.query(Listing).filter(Listing.id == listing_id).first()
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
-    try:
-        if listing.status == "ACTIVE" and listing.external_listing_id:
-            service.withdraw_listing_from_marketplace(listing.id)
-    except Exception:
-        pass
+    # Not gated to status == "ACTIVE": a marketplace with async item
+    # creation (Walmart's MP_ITEM_MATCH feed) can go genuinely live
+    # within seconds while our local status still says PENDING, since
+    # that only gets caught up by reconciliation every 10 minutes.
+    # retire_or_withdraw_listing always attempts cleanup whenever we have
+    # a real external_listing_id — it's a harmless no-op if the item was
+    # never actually created (real incident: product 00TF99, 2026-10-07).
+    retirement_note = service.retire_or_withdraw_listing(listing)
     db.delete(listing)
     db.commit()
-    return {"success": True, "message": "Listing removed from store successfully"}
+    return {
+        "success": True,
+        "message": "Listing removed from store successfully",
+        "marketplace_cleanup": retirement_note,
+    }
 
 
 @router.post("/reconcile-store/{marketplace_id}")

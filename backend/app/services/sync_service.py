@@ -97,6 +97,9 @@ class SyncService:
 
         from app.adapters.registry import get_supplier_adapter
         adapter_config = getattr(supplier, "_adapter_config", {})
+        if supplier.default_shipping_charge is not None:
+            adapter_config["default_shipping_charge"] = str(supplier.default_shipping_charge)
+            adapter_config["ground_shipping_charge"] = str(supplier.default_shipping_charge)
         if "config" in credentials and isinstance(credentials["config"], dict):
             adapter_config = {**adapter_config, **credentials["config"]}
         return get_supplier_adapter(

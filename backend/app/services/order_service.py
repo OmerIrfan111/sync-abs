@@ -29,6 +29,17 @@ class SandboxViolationError(RuntimeError):
     pass
 
 
+class SupplierCancelBlockedError(RuntimeError):
+    """
+    Raised when cancellation is requested but a real supplier order is
+    already SUBMITTED/CONFIRMED/SHIPPED. The order is moved to CANCEL_FAILED
+    (not CANCELLED) so the status stays honest — the supplier is still
+    fulfilling it. Callers must surface this as an error/warning, never as
+    a plain success.
+    """
+    pass
+
+
 class OrderService:
     def __init__(self, db: Session):
         self.db = db
@@ -407,11 +418,19 @@ class OrderService:
             )
 
         order = self._get_order(po.order_id)
-        items = [item for item in order.items if item.supplier_id == po.supplier_id and item.status == "ROUTED"]
+        # Real bug found 2026-10-09: create_purchase_orders() sets item.status
+        # = "ORDERED" (not "ROUTED") the moment a PO is created — which
+        # happens *before* this method can ever be called, since Create PO
+        # is the prerequisite step. Filtering on "ROUTED" here meant this
+        # would raise "No routed items" on literally every real order, 100%
+        # of the time — invisible until now because DRY_RUN=True's
+        # simulated path returns before ever reaching this line.
+        items = [item for item in order.items if item.supplier_id == po.supplier_id and item.status == "ORDERED"]
         if not items:
-            raise ValueError(f"No routed items for supplier {supplier.name} on order {order.id}")
+            raise ValueError(f"No ordered items for supplier {supplier.name} on order {order.id}")
 
         line_items = []
+        supplier_products = []
         for item in items:
             sp = (
                 self.db.query(SupplierProduct)
@@ -423,7 +442,15 @@ class OrderService:
                     f"No {supplier.name} catalog entry found for order item {item.id} (product {item.product_id}); "
                     "cannot determine the real supplier item ID to order."
                 )
-            line_items.append({"itemId": sp.supplier_sku, "orderQuantity": item.quantity})
+            # unitPrice is required by TD SYNNEX's real SubmitPO schema
+            # (every line must carry a real price, not be auto-priced) —
+            # harmless extra key for Ingram/D&H, which ignore it.
+            line_items.append({
+                "itemId": sp.supplier_sku,
+                "orderQuantity": item.quantity,
+                "unitPrice": sp.cost,
+            })
+            supplier_products.append((item, sp))
 
         addr = order.shipping_address or {}
         delivery_address = {
@@ -434,15 +461,49 @@ class OrderService:
             "region": addr.get("state", addr.get("region", "")),
             "attention": addr.get("name", ""),
             "deliveryName": addr.get("name", ""),
+            "phone": addr.get("phone", ""),
+            "email": addr.get("email") or (order.buyer_username if order.buyer_username and "@" in order.buyer_username else ""),
         }
 
         from app.services.sync_service import SyncService
         adapter = SyncService(self.db).get_adapter_for_supplier(supplier)
 
+        extra_kwargs = {}
+        if is_dandh:
+            # D&H's real order schema confirms shipments[].branch is
+            # OPTIONAL ("D&H will select the best warehouse if one is not
+            # entered") — so the real fix is not to guess/require a branch
+            # at all, just to stop forcing one ("BR01", unconditionally,
+            # regardless of real stock) when we don't actually have a
+            # confident answer. Only pass a branch when a single real D&H
+            # branch (per WarehouseStock data) genuinely covers every line
+            # on this PO; otherwise omit it and let D&H's own system route
+            # it, which it already does correctly by design.
+            from app.models.warehouse import Warehouse, WarehouseStock
+
+            candidate_codes = None
+            for item, sp in supplier_products:
+                codes = {
+                    code for (code,) in (
+                        self.db.query(Warehouse.code)
+                        .join(WarehouseStock, WarehouseStock.warehouse_id == Warehouse.id)
+                        .filter(
+                            WarehouseStock.supplier_product_id == sp.id,
+                            WarehouseStock.qty_available >= item.quantity,
+                        )
+                        .all()
+                    )
+                }
+                candidate_codes = codes if candidate_codes is None else (candidate_codes & codes)
+
+            if candidate_codes:
+                extra_kwargs["branch"] = sorted(candidate_codes)[0]
+
         result = adapter.submit_order(
             customer_purchase_order=po.po_number,
             line_items=line_items,
             delivery_address=delivery_address,
+            **extra_kwargs,
         )
 
         po.supplier_order_id = str(result.get("id") or result.get("orderNumber") or "")
@@ -628,11 +689,25 @@ class OrderService:
             if marketplace:
                 try:
                     adapter = self._get_adapter(marketplace)
-                    adapter.update_tracking(
-                        order.marketplace_order_id,
-                        tracking_number,
-                        carrier or ""
-                    )
+                    # Real per-line identifiers (Walmart's actual orderLine
+                    # lineNumbers, captured at ingestion) — without these, a
+                    # multi-item order only gets its first line marked
+                    # shipped on the marketplace's side, silently leaving
+                    # the rest stuck even though this call reports success.
+                    real_line_ids = [item.marketplace_item_id for item in order.items if item.marketplace_item_id]
+                    try:
+                        adapter.update_tracking(
+                            order.marketplace_order_id,
+                            tracking_number,
+                            carrier or "",
+                            line_item_ids=real_line_ids or None,
+                        )
+                    except TypeError:
+                        adapter.update_tracking(
+                            order.marketplace_order_id,
+                            tracking_number,
+                            carrier or ""
+                        )
                     logger.info(f"Pushed tracking {tracking_number} to {marketplace.name} for order {order.marketplace_order_id}")
                 except Exception as exc:
                     logger.error(f"Failed to push tracking to {marketplace.name}: {exc}")
@@ -646,8 +721,19 @@ class OrderService:
         return order
 
     def mark_delivered(self, order_id: int) -> Order:
-        """Marks order as delivered."""
+        """
+        Marks order as delivered. Only valid from SHIPPED — an order that
+        was never routed/submitted/shipped has no real delivery to confirm,
+        and allowing any status to jump straight to DELIVERED would corrupt
+        the lifecycle that profitability/analytics reporting keys off of
+        (real bug found 2026-10-09: this had no transition check at all).
+        """
         order = self._get_order(order_id)
+        if order.status != "SHIPPED":
+            raise ValueError(
+                f"Cannot mark Order #{order_id} delivered from status {order.status} — "
+                "it must be SHIPPED first."
+            )
         order.status = "DELIVERED"
         order.delivered_at = datetime.now(timezone.utc)
 
@@ -660,8 +746,13 @@ class OrderService:
         return order
 
     def complete_order(self, order_id: int) -> Order:
-        """Marks order as completed (post-delivery)."""
+        """Marks order as completed (post-delivery). Only valid from DELIVERED."""
         order = self._get_order(order_id)
+        if order.status != "DELIVERED":
+            raise ValueError(
+                f"Cannot complete Order #{order_id} from status {order.status} — "
+                "it must be DELIVERED first."
+            )
         order.status = "COMPLETED"
         self._add_event(order.id, "COMPLETED", {})
         self.db.commit()
@@ -673,31 +764,52 @@ class OrderService:
 
     def cancel_order(self, order_id: int, reason: str = "") -> Order:
         """
-        Cancels an order and its associated POs. Marking a PO CANCELLED here
-        only reflects our own database — if it was already submitted to (or
-        shipped by) a real supplier, that real order is still in flight and
-        this system has no way to cancel it automatically. Staff must be
-        told explicitly, not left assuming the flip of a status handled it.
+        Cancels an order and its associated POs — but only when cancelling
+        is actually true. If any PO is already SUBMITTED/CONFIRMED/SHIPPED
+        with a real supplier, this system has no way to cancel that real
+        order automatically, so marking our own status CANCELLED here would
+        be dishonest (the supplier may still be shipping it). In that case
+        nothing about the order is touched at all — this raises
+        SupplierCancelBlockedError and the caller must surface it as an
+        error, never as a plain success. An ErrorLog row is still written
+        (so it surfaces on the dashboard/Needs Attention), but that's a
+        separate audit record, not a change to the order itself.
         """
         order = self._get_order(order_id)
         if order.status in ("DELIVERED", "COMPLETED"):
             raise ValueError(f"Cannot cancel a {order.status} order")
 
-        order.status = "CANCELLED"
+        blocking_pos = [
+            po for po in order.purchase_orders
+            if po.status in ("SUBMITTED", "CONFIRMED", "SHIPPED")
+        ]
 
-        for po in order.purchase_orders:
-            if po.status in ("SUBMITTED", "CONFIRMED", "SHIPPED"):
+        if blocking_pos:
+            for po in blocking_pos:
                 self.db.add(ErrorLog(
                     error_type="INVENTORY_MISMATCH",
                     supplier_id=po.supplier_id,
                     message=(
-                        f"Order #{order.id} was cancelled, but PO {po.po_number} "
+                        f"Cancellation of Order #{order.id} was requested, but PO {po.po_number} "
                         f"(confirmation #{po.supplier_order_id or 'unknown'}) was already "
                         f"{po.status.lower()} with the real supplier. This system cannot cancel "
-                        f"a real supplier order automatically — contact the supplier directly."
+                        f"a real supplier order automatically — contact the supplier directly, "
+                        f"then resolve this order manually."
                     ),
                     status="PENDING",
                 ))
+            self.db.commit()
+            po_list = ", ".join(po.po_number for po in blocking_pos)
+            raise SupplierCancelBlockedError(
+                f"Order #{order_id} could NOT be cancelled: purchase order(s) {po_list} "
+                f"are already placed with the real supplier. Contact the supplier directly "
+                f"to stop or return the shipment — this system cannot do that automatically. "
+                f"The order's status has not been changed."
+            )
+
+        order.status = "CANCELLED"
+
+        for po in order.purchase_orders:
             if po.status not in ("DELIVERED",):
                 po.status = "CANCELLED"
 
@@ -705,6 +817,41 @@ class OrderService:
             item.status = "PENDING"
 
         self._add_event(order.id, "CANCELLED", {"reason": reason})
+        self.db.commit()
+        return order
+
+    def reopen_order(self, order_id: int) -> Order:
+        """
+        Reverses a CANCELLED order back to its prior working status, for
+        cases where cancellation was a mistake or the marketplace order
+        turned out to still be valid. Only valid from CANCELLED — a
+        CANCEL_FAILED order was never actually cancelled (the real supplier
+        order is still in flight), so there's nothing to reopen there; staff
+        should resolve it through the normal tracking/delivery flow instead.
+
+        Items keep whatever supplier_id they had before cancellation (never
+        cleared by cancel_order), so that's used to tell which items were
+        already routed vs. never routed, and route them back accordingly.
+        Purchase orders are left CANCELLED as an audit trail — use "Create PO"
+        again after reopening to generate fresh ones.
+        """
+        order = self._get_order(order_id)
+        if order.status != "CANCELLED":
+            raise ValueError(
+                f"Order {order_id} is not cancelled (status: {order.status}) — nothing to reopen."
+            )
+
+        any_routed = False
+        for item in order.items:
+            if item.supplier_id:
+                item.status = "ROUTED"
+                any_routed = True
+            else:
+                item.status = "PENDING"
+
+        order.status = "ROUTED" if any_routed else "PENDING_ROUTING"
+
+        self._add_event(order.id, "REOPENED", {})
         self.db.commit()
         return order
 

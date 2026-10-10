@@ -480,9 +480,9 @@ class DAndHAdapter(SupplierAdapter):
         customer_purchase_order: str,
         line_items: List[Dict[str, Any]],
         delivery_address: Dict[str, Any],
-        branch: str = "BR01",
+        branch: Optional[str] = None,
         carrier: str = "FedEx",
-        service_type: str = "Ground",
+        service_type: str = "ground",
     ) -> Dict[str, Any]:
         """
         Places a REAL purchase order with D&H via POST /salesOrders. This
@@ -493,13 +493,22 @@ class DAndHAdapter(SupplierAdapter):
         delivery_address: {"country","city","street","postalCode","region",
                             "attention","deliveryName"}
 
-        Built directly from D&H's Customer Order Management API 2.0.1 OpenAPI
-        spec (POST /customers/{accountNumber}/salesOrders). The published
-        example payload only shows {"orderQuantity": 1} per line with no item
-        reference; "itemId" is inferred from this same API's own response
-        schemas (every other endpoint keys items by "itemId"), not confirmed
-        against a real successful order response, so the first real call
-        should be verified carefully against D&H's actual response.
+        Built from D&H's real Customer Order Management API 2.0.1 OAS 3.0
+        spec (pasted in full 2026-10-09), confirming:
+        - shipments[].lines[] per-line product key really is "item" (exactly
+          one of "item"/"customerItemNumber" required, plus "orderQuantity")
+          — this was previously an inference from the response schema, now
+          directly confirmed from the request schema itself.
+        - shipments[].branch is OPTIONAL: "D&H will select the best
+          warehouse if one is not entered." branch defaults to None here and
+          is only added to the payload when explicitly provided (e.g. the
+          caller already resolved a specific real branch with enough
+          stock) — letting D&H auto-select is the documented, safer default
+          rather than this adapter guessing or refusing to order.
+        - shipping.serviceType's real enum is lowercase ("ground", "pickup",
+          "nextDay", ...) — a prior version of this adapter defaulted to
+          "Ground" (capital G), which doesn't match the enum and would
+          likely have been rejected; fixed to "ground".
 
         Returns D&H's own response: {"id": <int>, "orderNumber": <int>, ...}.
         "id" is what GET .../salesOrders/{id}/tracking expects afterward.
@@ -510,6 +519,15 @@ class DAndHAdapter(SupplierAdapter):
             )
 
         url = f"{self.order_mgmt_base_url}/customers/{self.account_number}/salesOrders"
+        shipment: Dict[str, Any] = {
+            "lines": [
+                {"item": li["itemId"], "orderQuantity": li["orderQuantity"]}
+                for li in line_items
+            ],
+        }
+        if branch:
+            shipment["branch"] = branch
+
         payload = {
             "customerPurchaseOrder": customer_purchase_order,
             "shipping": {
@@ -529,15 +547,7 @@ class DAndHAdapter(SupplierAdapter):
                 "attention": delivery_address.get("attention", ""),
                 "deliveryName": delivery_address.get("deliveryName", ""),
             },
-            "shipments": [
-                {
-                    "branch": branch,
-                    "lines": [
-                        {"itemId": li["itemId"], "orderQuantity": li["orderQuantity"]}
-                        for li in line_items
-                    ],
-                }
-            ],
+            "shipments": [shipment],
         }
 
         headers = self._get_headers()

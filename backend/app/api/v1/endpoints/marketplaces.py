@@ -191,7 +191,7 @@ def test_marketplace_connection(marketplace_id: int, db: Session = Depends(get_d
         raise HTTPException(status_code=400, detail=f"{m.name} Connection Error: {str(exc)}")
 
 
-@router.post("/ebay/exchange-code")
+@router.post("/ebay/exchange-code", dependencies=[Depends(require_role("admin"))])
 def exchange_ebay_code(payload: dict, db: Session = Depends(get_db)):
     """
     Exchanges an eBay OAuth authorization code for an 18-month refresh token and access token,
@@ -309,7 +309,7 @@ def get_fee_schedule(marketplace_id: int, db: Session = Depends(get_db)):
     }
 
 
-@router.put("/{marketplace_id}/fee-schedule")
+@router.put("/{marketplace_id}/fee-schedule", dependencies=[Depends(require_role("admin"))])
 def update_fee_schedule(marketplace_id: int, payload: dict, db: Session = Depends(get_db)):
     """
     Sets this marketplace's default commission % used to pre-fill new

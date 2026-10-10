@@ -10,7 +10,7 @@ from app.models.order_item import OrderItem
 from app.models.purchase_order import PurchaseOrder
 from app.models.order_event import OrderEvent
 from app.models.marketplace import Marketplace
-from app.services.order_service import OrderService
+from app.services.order_service import OrderService, SupplierCancelBlockedError
 from app.schemas.order import (
     OrderResponse,
     OrderDetailResponse,
@@ -362,5 +362,24 @@ def cancel_order(order_id: int, db: Session = Depends(get_db)):
     try:
         order = service.cancel_order(order_id)
         return {"success": True, "status": order.status, "message": f"Order #{order_id} cancelled"}
+    except SupplierCancelBlockedError as e:
+        # 409: the request was understood, but cancellation genuinely did not
+        # happen — the order moved to CANCEL_FAILED instead. Never a plain
+        # success here; the frontend must surface this distinctly.
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# PUT /orders/{id}/reopen  —  Undo a cancellation
+# ──────────────────────────────────────────────
+
+@router.put("/{order_id}/reopen")
+def reopen_order(order_id: int, db: Session = Depends(get_db)):
+    service = OrderService(db)
+    try:
+        order = service.reopen_order(order_id)
+        return {"success": True, "status": order.status, "message": f"Order #{order_id} reopened"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

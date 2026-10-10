@@ -131,31 +131,222 @@ def test_td_synnex_ground_shipping_estimate():
     assert adapter_default.get_ground_shipping_estimate("TD-456") == Decimal("12.50")
 
 
+def test_td_synnex_ground_shipping_estimate_uses_live_quote_when_available():
+    adapter = TDSynnexAdapter(
+        credentials={"client_id": "test_id", "client_secret": "test_sec"},
+        config={"default_shipping_charge": "99.00"},
+    )
+    live_response = {
+        "FreightQuoteResponse": {
+            "Shipment": [
+                {
+                    "AvailableShipMethods": [
+                        {"Code": "UPG", "Freight": 6.79},
+                        {"Code": "UPS2", "Freight": 15.50},
+                    ]
+                }
+            ]
+        }
+    }
+    with patch.object(adapter, "_request", return_value=live_response):
+        ship = adapter.get_ground_shipping_estimate("TD-123", destination_zip="99201")
+    # Picks the cheapest live ship method, not the configured flat-rate fallback
+    assert ship == Decimal("6.79")
+
+
+def test_td_synnex_ground_shipping_estimate_ignores_non_customer_methods():
+    """
+    Real TD SYNNEX response observed in production: alongside real carrier
+    rates, it included a "LABS" (LAB SHIP - PAPER TRAIL ONLY) internal code
+    at $0.00 Freight, which a naive min() would wrongly pick as "the cheapest
+    shipping option" when it isn't a real customer-facing method at all.
+    Also verifies ground service is preferred over cheaper non-ground options.
+    """
+    adapter = TDSynnexAdapter(
+        credentials={"client_id": "test_id", "client_secret": "test_sec"},
+        config={"default_shipping_charge": "99.00"},
+    )
+    live_response = {
+        "FreightQuoteResponse": {
+            "Shipment": [
+                {
+                    "AvailableShipMethods": [
+                        {"Code": "LABS", "ShipMethodDescription": "LAB SHIP - PAPER TRAIL ONLY", "Freight": 0.0},
+                        {"Code": "FG", "ShipMethodDescription": "FedEx Ground", "Freight": 13.10},
+                        {"Code": "UP", "ShipMethodDescription": "UPS Ground", "Freight": 13.25},
+                        {"Code": "F2", "ShipMethodDescription": "FedEx 2 Day", "Freight": 29.38},
+                    ]
+                }
+            ]
+        }
+    }
+    with patch.object(adapter, "_request", return_value=live_response):
+        ship = adapter.get_ground_shipping_estimate("2058146", destination_zip="99201")
+    assert ship == Decimal("13.10")
+
+
+def test_td_synnex_ground_shipping_estimate_falls_back_on_live_error():
+    adapter = TDSynnexAdapter(
+        credentials={"client_id": "test_id", "client_secret": "test_sec"},
+        config={"default_shipping_charge": "12.50"},
+    )
+    with patch.object(adapter, "_request", side_effect=RuntimeError("timeout")):
+        ship = adapter.get_ground_shipping_estimate("TD-123", destination_zip="99201")
+    assert ship == Decimal("12.50")
+
+
+def test_td_synnex_ground_shipping_estimate_falls_back_on_business_error():
+    adapter = TDSynnexAdapter(
+        credentials={"client_id": "test_id", "client_secret": "test_sec"},
+        config={"default_shipping_charge": "12.50"},
+    )
+    business_error_response = {
+        "FreightQuoteResponse": {
+            "ErrorMessage": "InvalidSynnexSKU",
+            "ErrorDetail": "SKU not found"
+        }
+    }
+    with patch.object(adapter, "_request", return_value=business_error_response):
+        ship = adapter.get_ground_shipping_estimate("TD-123", destination_zip="99201")
+    assert ship == Decimal("12.50")
+
+
 def test_td_synnex_submit_order_and_tracking():
+    """
+    Real schema (confirmed against TD SYNNEX's own API reference, 2026-10-09):
+    the order confirmation lives under OrderResponse.Items.Item[], each with
+    its own real OrderNumber — not a flat top-level orderNumber/status as
+    this test originally assumed before that doc was available. See also
+    test_td_synnex_submit_order.py for dedicated payload-shape coverage.
+    """
     adapter = TDSynnexAdapter(credentials={"client_id": "test_id", "client_secret": "test_sec"})
     mock_order_res = {
-        "orderNumber": "TDS-987654",
-        "status": "SUBMITTED",
-        "message": "Order accepted"
+        "OrderResponse": {
+            "PONumber": "PO-1001",
+            "Code": "accepted",
+            "SynnexReferenceNumber": "REF-1001",
+            "Items": {
+                "Item": [
+                    {"lineNumber": 1, "SKU": "TD-SKU-1", "OrderQuantity": 2, "Code": "accepted", "OrderNumber": 987654},
+                ]
+            },
+        },
+        "errorMessage": None,
     }
 
     with patch.object(adapter, "_request", return_value=mock_order_res):
         res = adapter.submit_order(
             customer_purchase_order="PO-1001",
-            line_items=[{"itemId": "TD-SKU-1", "orderQuantity": 2}],
+            line_items=[{"itemId": "TD-SKU-1", "orderQuantity": 2, "unitPrice": "10.00"}],
             delivery_address={"street": "123 Main St", "city": "Dallas", "postalCode": "75001"}
         )
-        assert res["orderNumber"] == "TDS-987654"
-        assert res["status"] == "SUBMITTED"
+        assert res["orderNumber"] == "987654"
+        assert res["status"] == "accepted"
 
-    mock_tracking_res = {
-        "trackingNumber": "1Z9999999999999999",
-        "carrier": "UPS",
-        "shippedDate": "2026-10-04T00:00:00Z"
-    }
+    # Real GetOrderStatus schema (confirmed 2026-10-09): tracking lives at
+    # lines[].subLines[].tracking[], never at the top level.
+    mock_tracking_res = [
+        {
+            "orderNumber": "987654",
+            "lines": [
+                {
+                    "lineNumber": "1",
+                    "subLines": [
+                        {
+                            "shipDate": "10/04/2026 00:00:00",
+                            "tracking": [
+                                {"trackingNumber": "1Z9999999999999999", "shippingMethod": "UPSN"},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    ]
     with patch.object(adapter, "_request", return_value=mock_tracking_res):
         tracking = adapter.check_shipment_status("TDS-987654")
         assert tracking is not None
         assert tracking["tracking_number"] == "1Z9999999999999999"
-        assert tracking["carrier"] == "UPS"
+        assert tracking["carrier"] == "UPSN"
+
+
+def test_td_synnex_tracking_from_lines():
+    """
+    Real schema (confirmed 2026-10-09): tracking numbers are nested at
+    lines[].subLines[].tracking[], not directly on the line — a prior
+    version of this adapter only checked a flat line.trackingNumber field,
+    which doesn't exist in the real response, so it would never have found
+    real tracking data.
+    """
+    adapter = TDSynnexAdapter(credentials={"client_id": "test_id", "client_secret": "test_sec"})
+    mock_order_status_lines = [
+        {
+            "orderNumber": "12345",
+            "lines": [
+                {
+                    "lineNumber": "1",
+                    "subLines": [
+                        {
+                            "shipDate": "10/04/2026 12:00:00",
+                            "tracking": [
+                                {"trackingNumber": "1Z8888888888888888", "shippingMethod": "FDEG"},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    ]
+    with patch.object(adapter, "_request", return_value=mock_order_status_lines):
+        tracking = adapter.check_shipment_status("12345")
+        assert tracking is not None
+        assert tracking["tracking_number"] == "1Z8888888888888888"
+        assert tracking["carrier"] == "FDEG"
+        assert tracking["shipped_at"] == "10/04/2026 12:00:00"
+
+
+def test_td_synnex_tracking_never_fabricates_carrier_when_unknown():
+    """
+    Real incident class fixed 2026-10-09: this adapter used to default the
+    carrier to a fabricated "UPS" when no real carrier/method was found.
+    Never fabricate — if shippingMethod is genuinely absent, surface an
+    empty string, not a guess.
+    """
+    adapter = TDSynnexAdapter(credentials={"client_id": "test_id", "client_secret": "test_sec"})
+    mock_res = [
+        {
+            "orderNumber": "55555",
+            "lines": [
+                {"subLines": [{"tracking": [{"trackingNumber": "TRK-NO-METHOD"}]}]}
+            ],
+        }
+    ]
+    with patch.object(adapter, "_request", return_value=mock_res):
+        tracking = adapter.check_shipment_status("55555")
+    assert tracking["tracking_number"] == "TRK-NO-METHOD"
+    assert tracking["carrier"] == ""
+
+
+def test_td_synnex_tracking_returns_none_on_not_found_error():
+    adapter = TDSynnexAdapter(credentials={"client_id": "test_id", "client_secret": "test_sec"})
+    with patch.object(adapter, "_request", return_value=[{"errorMessage": "not found!"}]):
+        tracking = adapter.check_shipment_status("99999")
+    assert tracking is None
+
+
+def test_td_synnex_fetch_inventory_batch():
+    adapter = TDSynnexAdapter(credentials={"client_id": "test_id", "client_secret": "test_sec"})
+    mock_availability = {
+        "PriceAvailabilityList": [
+            {"synnexSKU": "123456", "mfgPN": "PART-A", "totalQuantity": 42},
+            {"synnexSKU": "789012", "mfgPN": "PART-B", "totalQuantity": 0},
+        ]
+    }
+    with patch.object(adapter, "_request", return_value=mock_availability):
+        inv = adapter.fetch_inventory(["123456", "PART-B"])
+        assert inv["123456"] == 42
+        assert inv["PART-A"] == 42
+        assert inv["789012"] == 0
+        assert inv["PART-B"] == 0
+
 

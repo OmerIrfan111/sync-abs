@@ -501,16 +501,31 @@ class TDSynnexAdapter(SupplierAdapter):
             products = self.fetch_catalog(resume_cursor="1", filters={"limit": 50})
             return {p.supplier_sku: p.quantity for p in products}
 
-        # Query batch availability
+        # Query batch availability via GetPriceAvailability
         try:
-            payload = {"skus": skus, "partNumbers": skus}
-            data = self._request("/resellers/v2/price-availability", method="POST", json_data=payload)
-            items = data.get("items") or data.get("products") or []
+            sku_items = []
+            for s in skus:
+                s_str = str(s).strip()
+                if s_str.isdigit():
+                    sku_items.append({"synnexSKU": s_str})
+                else:
+                    sku_items.append({"mfgPN": s_str})
+
+            payload = {
+                "customerNo": self.account_number or "813367",
+                "skuList": sku_items
+            }
+            url = f"{self.base_url}/api/v1/webservice/json/GetPriceAvailability"
+            data = self._request(url, method="POST", json_data=payload)
+            items = data.get("PriceAvailabilityList") or []
             for it in items:
-                sku = it.get("sku") or it.get("tdSynnexPartNumber")
-                qty = it.get("quantity") or it.get("totalQuantityAvailable") or 0
+                sku = str(it.get("synnexSKU") or "").strip()
+                mpn = str(it.get("mfgPN") or "").strip()
+                qty = it.get("totalQuantity") or 0
                 if sku:
-                    results[str(sku)] = int(qty)
+                    results[sku] = int(qty)
+                if mpn:
+                    results[mpn] = int(qty)
         except Exception as exc:
             logger.warning(f"TD SYNNEX batch inventory fetch failed: {exc}")
 
@@ -533,15 +548,80 @@ class TDSynnexAdapter(SupplierAdapter):
 
         return results
 
-    def get_ground_shipping_estimate(self, supplier_sku: str, destination_zip: str = "90210") -> Optional[Decimal]:
+    def get_ground_shipping_estimate(
+        self, supplier_sku: str, destination_zip: str = "90210", quantity: int = 1
+    ) -> Optional[Decimal]:
         """
-        Returns live standard ground shipping charge for TD SYNNEX product,
-        or falls back to default/configured ground shipping charge.
+        Real TD SYNNEX freight quote via POST /api/v1/webservice/json/GetFreightQuote
+        (Version 2.1: ShipToZipCode required, ShipFromWarehouse omitted so TD SYNNEX
+        auto-selects the origin warehouse by stock availability). Falls back to the
+        admin-configured flat rate (Rules page "default_shipping_charge" /
+        "ground_shipping_charge") only when the live call fails or returns no
+        usable ship method — never silently skips the live call.
         """
         if self.config.get("simulate_shipping_unknown"):
             return None
 
-        # Check configured base shipping charge from Rules page
+        if self.is_live():
+            try:
+                payload = {
+                    "FreightQuoteRequest": {
+                        "Version": "2.1",
+                        "ShipToZipCode": destination_zip,
+                        "Items": [
+                            {
+                                "LineNumber": "1",
+                                "SKU": str(supplier_sku),
+                                "Quantity": int(quantity),
+                            }
+                        ],
+                    }
+                }
+                res = self._request(
+                    f"{self.base_url}/api/v1/webservice/json/GetFreightQuote",
+                    method="POST",
+                    json_data=payload,
+                    timeout=10.0,
+                )
+                fq = res.get("FreightQuoteResponse") or {}
+                if fq.get("ErrorMessage"):
+                    logger.warning(
+                        f"TD SYNNEX GetFreightQuote business error for SKU {supplier_sku}: "
+                        f"{fq['ErrorMessage']} - {fq.get('ErrorDetail')}"
+                    )
+                else:
+                    shipments = fq.get("Shipment") or []
+                    methods = []
+                    for shipment in shipments:
+                        methods.extend(shipment.get("AvailableShipMethods") or [])
+                    if not shipments:
+                        methods = fq.get("AvailableShipMethods") or []
+
+                    # Real customer-facing freight only: TD SYNNEX's response
+                    # includes internal/non-customer codes (observed: "LABS" -
+                    # "LAB SHIP - PAPER TRAIL ONLY" - at $0.00), which isn't a
+                    # real shipping option and must never win a naive min().
+                    # "get_ground_shipping_estimate" specifically means ground
+                    # service, so prefer an actual ground-labeled method over
+                    # the cheapest premium/expedited option when one exists.
+                    real_methods = [m for m in methods if m.get("Freight") and m["Freight"] > 0]
+                    ground_methods = [
+                        m for m in real_methods
+                        if "ground" in (m.get("ShipMethodDescription") or "").lower()
+                    ]
+                    candidates = ground_methods or real_methods
+                    cheapest = min(
+                        (m["Freight"] for m in candidates),
+                        default=None,
+                    )
+                    if cheapest is not None:
+                        return Decimal(str(cheapest))
+            except Exception as exc:
+                logger.warning(
+                    f"TD SYNNEX live freight quote failed for SKU {supplier_sku}, "
+                    f"falling back to configured flat rate: {exc}"
+                )
+
         val = self.config.get("default_shipping_charge")
         if val is None:
             val = self.config.get("ground_shipping_charge")
@@ -561,42 +641,115 @@ class TDSynnexAdapter(SupplierAdapter):
         delivery_address: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Places a real purchase order via TD SYNNEX Order Submission API (POST /resellers/v2/orders).
-        Returns order confirmation details ({id, orderNumber, status}).
+        Places a real purchase order via TD SYNNEX Partner API
+        (POST /api/v1/webservice/json/SubmitPO). Built from TD SYNNEX's own
+        real API reference (pasted 2026-10-09) — PascalCase field names
+        under OrderRequest, items live under "Items": {"Item": [...]}, not a
+        flat "lines" array, and DropShipFlag/UnitPrice are both required
+        (a prior version of this adapter used the wrong casing/nesting
+        entirely and never sent UnitPrice at all — would have failed real
+        submission 100% of the time, never caught because this was never
+        exercised with real credentials).
+
+        line_items: [{"itemId": "<SKU>", "orderQuantity": <int>,
+                       "unitPrice": <Decimal|float|str>}, ...] — unitPrice is
+        required per TD SYNNEX's schema; raises if any line is missing one
+        rather than guessing or omitting it.
+
+        version "3.1" is used deliberately: it's the only version that
+        echoes CustPOLineNo and includes MfgPN in the response, and per-line
+        results always carry their own real OrderNumber (TD SYNNEX can split
+        one PO into multiple sales orders, one per line) — this returns the
+        first accepted line's OrderNumber as the primary id, plus the full
+        per-line results and the header SynnexReferenceNumber for anyone who
+        needs to reconcile every line, not just the first.
         """
         if not self.is_live():
             raise ConnectionError(
                 "TD SYNNEX adapter has no live credentials configured; refusing to submit order."
             )
 
+        items = []
+        for idx, item in enumerate(line_items):
+            unit_price = item.get("unitPrice")
+            if unit_price is None:
+                raise ValueError(
+                    f"TD SYNNEX SubmitPO requires a real UnitPrice on every line (line {idx + 1} has none) — "
+                    "refusing to submit with a missing/fabricated price."
+                )
+            sku = str(item.get("itemId") or item.get("sku") or "")
+            if not sku:
+                raise ValueError(f"TD SYNNEX SubmitPO line {idx + 1} has no SKU/part number.")
+            items.append({
+                "lineNumber": idx + 1,
+                "SKU": sku,
+                "UnitPrice": str(unit_price),
+                "OrderQuantity": str(int(item.get("orderQuantity", 1))),
+            })
+
         payload = {
-            "customerOrderNumber": customer_purchase_order,
-            "accountNumber": self.account_number,
-            "shipTo": {
-                "name": delivery_address.get("deliveryName") or delivery_address.get("attention") or "Customer",
-                "addressLine1": delivery_address.get("street") or "",
-                "city": delivery_address.get("city") or "",
-                "state": delivery_address.get("region") or "",
-                "postalCode": delivery_address.get("postalCode") or "",
-                "countryCode": delivery_address.get("country") or "US",
+            "version": "3.1",
+            "OrderRequest": {
+                "PONumber": customer_purchase_order,
+                "DropShipFlag": "Y",
+                "Shipment": {
+                    "ShipTo": {
+                        "AddressName1": delivery_address.get("deliveryName") or delivery_address.get("attention") or "Customer",
+                        "AddressLine1": delivery_address.get("street") or "",
+                        "City": delivery_address.get("city") or "",
+                        "State": delivery_address.get("region") or "",
+                        "ZipCode": delivery_address.get("postalCode") or "",
+                        "Country": delivery_address.get("country") or "US",
+                    },
+                },
+                "Items": {"Item": items},
             },
-            "lines": [
-                {
-                    "sku": item.get("itemId"),
-                    "quantity": int(item.get("orderQuantity", 1)),
-                }
-                for item in line_items
-            ],
         }
 
+        url = f"{self.base_url}/api/v1/webservice/json/SubmitPO"
         try:
-            res = self._request("/resellers/v2/orders", method="POST", json_data=payload)
-            order_id = str(res.get("orderNumber") or res.get("id") or res.get("confirmationNumber") or f"TDS-{customer_purchase_order}")
+            res = self._request(url, method="POST", json_data=payload)
+            if not res or not isinstance(res, dict):
+                raise RuntimeError("TD SYNNEX SubmitPO returned empty or invalid response.")
+
+            # Top-level service error (auth/version/downstream failure) —
+            # checked first per TD SYNNEX's own error decision table.
+            top_error = res.get("errorMessage")
+            if top_error:
+                raise RuntimeError(f"TD SYNNEX order submission error: {top_error} ({res.get('errorDetail') or ''})".strip())
+
+            order_resp = res.get("OrderResponse") or {}
+
+            # Request validation failure (before the order was even submitted).
+            validation_error = order_resp.get("ErrorMessage")
+            if validation_error:
+                raise RuntimeError(
+                    f"TD SYNNEX rejected the request: {validation_error} ({order_resp.get('ErrorDetail') or ''})".strip()
+                )
+
+            line_results = ((order_resp.get("Items") or {}).get("Item")) or []
+            accepted = [li for li in line_results if li.get("Code") == "accepted"]
+            rejected = [li for li in line_results if li.get("Code") == "rejected"]
+
+            if order_resp.get("Code") == "rejected" or (line_results and not accepted):
+                reasons = order_resp.get("Reason") or "; ".join(
+                    f"line {li.get('lineNumber')}: {li.get('Reason', 'rejected')}" for li in rejected
+                )
+                raise RuntimeError(f"TD SYNNEX rejected the order: {reasons or 'no reason given'}")
+
+            primary_order_number = str(
+                (accepted[0].get("OrderNumber") if accepted else None)
+                or order_resp.get("SynnexReferenceNumber")
+                or ""
+            )
+
             return {
-                "id": order_id,
-                "orderNumber": order_id,
-                "status": res.get("status", "SUBMITTED"),
-                "message": res.get("message", "Order successfully submitted to TD SYNNEX"),
+                "id": primary_order_number,
+                "orderNumber": primary_order_number,
+                "synnexReferenceNumber": order_resp.get("SynnexReferenceNumber"),
+                "status": order_resp.get("Code") or "SUBMITTED",
+                "message": f"TD SYNNEX PO {customer_purchase_order}: {len(accepted)}/{len(line_results) or len(items)} line(s) accepted",
+                "line_results": line_results,
             }
         except Exception as exc:
             logger.error(f"TD SYNNEX order placement failed: {exc}")
@@ -604,21 +757,70 @@ class TDSynnexAdapter(SupplierAdapter):
 
     def check_shipment_status(self, supplier_order_id: str) -> Optional[Dict[str, Any]]:
         """
-        Checks TD SYNNEX order tracking endpoint for carrier tracking details.
+        Checks TD SYNNEX's real order status endpoint
+        (GET /api/v1/webservice/json/GetOrderStatus/orderNo/{orderNo}) for
+        carrier tracking details. Built from TD SYNNEX's own real API
+        reference (pasted 2026-10-09), which corrected several guessed
+        fields from an earlier version of this method:
+
+        - Customer context is resolved from the OAuth bearer token itself —
+          there is no customerNo/credential block on this request. The
+          previous version sent an undocumented customerNo query param.
+        - Real tracking numbers live nested at lines[].subLines[].tracking[]
+          (each with trackingNumber/trackingLink/shippingMethod), never at
+          the top level or directly on a line — the previous version only
+          ever checked order-level and line-level trackingNumber/tracking
+          fields, which don't exist in the real schema, so it would have
+          found tracking on essentially zero real orders.
+        - There is no "carrier" field anywhere in the real schema, only
+          "shippingMethod" (a ship-method code, not a carrier name). The
+          previous version defaulted to a fabricated "UPS" when no real
+          carrier was found — a real violation of never fabricating data,
+          since the actual carrier could be anything. Fixed to surface the
+          real shippingMethod code (or nothing) instead of guessing.
+        - "shippedDate" doesn't exist either; the previous version fell
+          back to orderPlacedDate when no ship date was found, which
+          reports the order's *placement* time as if it were the *ship*
+          time — misleading. Real ship date is subLines[].shipDate
+          (populated only for inputType=PO-v2 lookups per TD SYNNEX's own
+          docs); falls back to subLines[].estimatedToShip, else None.
+        - supplier_order_id here is the real TD SYNNEX orderNumber returned
+          by submit_order() (not the partner PO number), so this uses the
+          default inputType=SO lookup, which resolves it directly.
         """
         if not self.is_live() or not supplier_order_id:
             return None
 
+        clean_order_id = str(supplier_order_id).strip()
+        if clean_order_id.startswith("TDS-"):
+            clean_order_id = clean_order_id.replace("TDS-", "")
+
+        url = f"{self.base_url}/api/v1/webservice/json/GetOrderStatus/orderNo/{clean_order_id}"
         try:
-            res = self._request(f"/resellers/v2/orders/{supplier_order_id}/tracking", method="GET")
-            tracking = res.get("trackingNumber") or res.get("tracking")
-            carrier = res.get("carrier") or res.get("carrierCode") or "UPS"
-            if tracking:
-                return {
-                    "tracking_number": str(tracking),
-                    "carrier": str(carrier),
-                    "shipped_at": res.get("shippedDate"),
-                }
+            res = self._request(url, method="GET")
+            orders = res if isinstance(res, list) else [res] if isinstance(res, dict) else []
+            for order in orders:
+                if not isinstance(order, dict) or order.get("errorMessage"):
+                    continue
+
+                for line in order.get("lines") or []:
+                    if not isinstance(line, dict):
+                        continue
+                    for sub_line in line.get("subLines") or []:
+                        if not isinstance(sub_line, dict):
+                            continue
+                        for entry in sub_line.get("tracking") or []:
+                            if not isinstance(entry, dict):
+                                continue
+                            tracking_number = entry.get("trackingNumber")
+                            if not tracking_number:
+                                continue
+                            shipped_at = sub_line.get("shipDate") or sub_line.get("estimatedToShip") or None
+                            return {
+                                "tracking_number": str(tracking_number),
+                                "carrier": str(entry.get("shippingMethod") or sub_line.get("shippingMethod") or ""),
+                                "shipped_at": shipped_at,
+                            }
         except Exception as exc:
             logger.debug(f"TD SYNNEX tracking check failed for order {supplier_order_id}: {exc}")
 

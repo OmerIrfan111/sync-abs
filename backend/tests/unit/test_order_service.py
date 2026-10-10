@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 import pytest
 
 from app.models.product import Product
@@ -6,6 +7,7 @@ from app.models.supplier import Supplier
 from app.models.supplier_product import SupplierProduct
 from app.models.marketplace import Marketplace
 from app.models.order import Order
+from app.models.order_item import OrderItem
 from app.services.order_service import OrderService
 
 
@@ -161,6 +163,39 @@ def test_update_tracking_marks_order_shipped(db_session):
     assert updated.purchase_orders[0].status == "SHIPPED"
 
 
+def test_update_tracking_passes_real_per_line_ids_to_adapter(db_session):
+    """
+    Real bug found 2026-10-08: OrderService.update_tracking() never passed
+    per-line identifiers to the marketplace adapter at all, so a hardcoded
+    "1" in the Walmart adapter meant a multi-item order only ever got its
+    first line marked shipped there — even though this call reported
+    success. Confirms the real marketplace_item_id values captured at
+    ingestion (OrderItem.marketplace_item_id) actually reach the adapter.
+    """
+    product, supplier, marketplace = _setup_catalog(db_session)
+    service = OrderService(db_session)
+    order = service.ingest_marketplace_orders(marketplace.id)[0]
+    service.route_order(order.id)
+    service.create_purchase_orders(order.id)
+
+    # Simulate a real multi-item order with real Walmart-style line numbers
+    order.items[0].marketplace_item_id = "1"
+    extra_item = OrderItem(
+        order_id=order.id, sku="EXTRA-SKU", title="Extra item",
+        quantity=1, unit_price=Decimal("10.00"), marketplace_item_id="2",
+    )
+    db_session.add(extra_item)
+    db_session.commit()
+
+    mock_adapter = MagicMock(spec=["update_tracking"])
+    with patch.object(service, "_get_adapter", return_value=mock_adapter):
+        service.update_tracking(order.id, "1Z999AA10123456784", "UPS")
+
+    mock_adapter.update_tracking.assert_called_once()
+    _, kwargs = mock_adapter.update_tracking.call_args
+    assert sorted(kwargs["line_item_ids"]) == ["1", "2"]
+
+
 def test_cancel_order_resets_items_and_pos(db_session):
     product, supplier, marketplace = _setup_catalog(db_session)
     service = OrderService(db_session)
@@ -178,8 +213,18 @@ def test_cancel_order_resets_items_and_pos(db_session):
         service.cancel_order(999999)
 
 
-def test_cancel_order_warns_when_po_already_submitted_to_supplier(db_session):
+def test_cancel_order_blocks_and_leaves_status_unchanged_when_po_already_submitted(db_session):
+    """
+    Real incident class (2026-10-09): marking an order CANCELLED locally
+    while its PO is already SUBMITTED with a real supplier was dishonest —
+    the supplier may still be shipping it. Cancellation must now be BLOCKED
+    (raises SupplierCancelBlockedError) and the order's status must be left
+    completely untouched — no new status either, just an error plus an
+    ErrorLog audit row, per explicit user direction not to change anything
+    about the order on a blocked cancel.
+    """
     from app.models.error_log import ErrorLog
+    from app.services.order_service import SupplierCancelBlockedError
 
     product, supplier, marketplace = _setup_catalog(db_session)
     service = OrderService(db_session)
@@ -187,8 +232,15 @@ def test_cancel_order_warns_when_po_already_submitted_to_supplier(db_session):
     service.route_order(order.id)
     pos = service.create_purchase_orders(order.id)
     service.submit_purchase_order(pos[0].id, "DANDH-CONF-999")
+    status_before = order.status
 
-    service.cancel_order(order.id, reason="Buyer changed their mind after we already ordered")
+    with pytest.raises(SupplierCancelBlockedError) as exc:
+        service.cancel_order(order.id, reason="Buyer changed their mind after we already ordered")
+    assert pos[0].po_number in str(exc.value)
+
+    db_session.refresh(order)
+    assert order.status == status_before
+    assert pos[0].status == "SUBMITTED"
 
     warning = db_session.query(ErrorLog).filter(
         ErrorLog.error_type == "INVENTORY_MISMATCH",
@@ -197,6 +249,34 @@ def test_cancel_order_warns_when_po_already_submitted_to_supplier(db_session):
     assert warning is not None
     assert "DANDH-CONF-999" in warning.message
     assert "cannot cancel a real supplier order automatically" in warning.message
+
+
+def test_reopen_order_restores_routed_status(db_session):
+    """
+    Undo for a mistaken cancellation: items keep their supplier_id through
+    cancel_order, so reopen_order can tell they were already routed and put
+    the order back at ROUTED (not all the way back to PENDING_ROUTING).
+    """
+    product, supplier, marketplace = _setup_catalog(db_session)
+    service = OrderService(db_session)
+    order = service.ingest_marketplace_orders(marketplace.id)[0]
+    service.route_order(order.id)
+    service.cancel_order(order.id)
+    assert order.status == "CANCELLED"
+
+    reopened = service.reopen_order(order.id)
+
+    assert reopened.status == "ROUTED"
+    assert all(item.status == "ROUTED" for item in reopened.items)
+
+
+def test_reopen_order_rejects_non_cancelled_order(db_session):
+    product, supplier, marketplace = _setup_catalog(db_session)
+    service = OrderService(db_session)
+    order = service.ingest_marketplace_orders(marketplace.id)[0]
+
+    with pytest.raises(ValueError):
+        service.reopen_order(order.id)
 
 
 def test_get_stats_reports_accurate_counts(db_session):

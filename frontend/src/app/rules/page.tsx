@@ -13,6 +13,7 @@ import {
   Play, 
   ArrowRight, 
   ShieldCheck, 
+  ShieldAlert,
   Sparkles,
   ChevronDown,
   ChevronUp,
@@ -27,7 +28,9 @@ import {
   SupplierPriority, 
   Product, 
   Supplier, 
-  RulePreview 
+  RulePreview,
+  ProductRestriction,
+  Marketplace
 } from "@/lib/api";
 
 export default function RulesPage() {
@@ -57,6 +60,21 @@ export default function RulesPage() {
   const [supplierPriorities, setSupplierPriorities] = useState<SupplierPriority[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [restrictions, setRestrictions] = useState<ProductRestriction[]>([]);
+  const [marketplaces, setMarketplaces] = useState<Marketplace[]>([]);
+
+  // Restrictions state
+  const [showRestrictionModal, setShowRestrictionModal] = useState(false);
+  const [restrictionScope, setRestrictionScope] = useState<"brand" | "category" | "product">("brand");
+  const [restrictionBrand, setRestrictionBrand] = useState("");
+  const [restrictionCategory, setRestrictionCategory] = useState("");
+  const [restrictionProductId, setRestrictionProductId] = useState("");
+  const [restrictionMarketplaceId, setRestrictionMarketplaceId] = useState("7");
+  const [restrictionType, setRestrictionType] = useState<"BLOCKED" | "REQUIRES_APPROVAL">("BLOCKED");
+  const [restrictionReason, setRestrictionReason] = useState("");
+  const [savingRestriction, setSavingRestriction] = useState(false);
+  const [deletingRestrictionId, setDeletingRestrictionId] = useState<number | null>(null);
+  const [approvingRestrictionId, setApprovingRestrictionId] = useState<number | null>(null);
 
   // Simulator states
   const [simProductId, setSimProductId] = useState<number | "">("");
@@ -71,17 +89,21 @@ export default function RulesPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [pricingRes, invRes, priorityRes, prodRes, suppRes] = await Promise.all([
+      const [pricingRes, invRes, priorityRes, prodRes, suppRes, restrRes, mpsRes] = await Promise.all([
         fetchApi<PricingRule[]>("/rules/pricing"),
         fetchApi<InventoryRule[]>("/rules/inventory"),
         fetchApi<SupplierPriority[]>("/rules/supplier-priority"),
         fetchApi<{ items: Product[] }>("/products?page=1&page_size=100"),
         fetchApi<Supplier[]>("/suppliers"),
+        fetchApi<ProductRestriction[]>("/rules/product-restrictions"),
+        fetchApi<Marketplace[]>("/marketplaces"),
       ]);
       setPricingRules(pricingRes);
       setInventoryRules(invRes);
       setSupplierPriorities(priorityRes);
       setProducts(prodRes.items);
+      setRestrictions(restrRes);
+      setMarketplaces(mpsRes);
 
       // Keep supported wholesale suppliers (Ingram Micro, D&H, TD SYNNEX)
       const supportedSuppliers = suppRes.filter(s => 
@@ -215,6 +237,83 @@ export default function RulesPage() {
       loadData();
     } catch (err: any) {
       showFeedback(err.message || "Failed to delete rule", "error");
+    }
+  };
+
+  const handleDeleteRestriction = async (id: number) => {
+    try {
+      setDeletingRestrictionId(id);
+      await fetchApi(`/rules/product-restrictions/${id}`, { method: "DELETE" });
+      showFeedback("Restriction removed successfully.", "success");
+      loadData();
+    } catch (err: any) {
+      showFeedback(err.message || "Failed to remove restriction", "error");
+    } finally {
+      setDeletingRestrictionId(null);
+    }
+  };
+
+  const handleApproveRestriction = async (id: number) => {
+    try {
+      setApprovingRestrictionId(id);
+      await fetchApi(`/rules/product-restrictions/${id}/approve`, { method: "PUT" });
+      showFeedback("Restriction cleared. Brand/product is now approved for publishing.", "success");
+      loadData();
+    } catch (err: any) {
+      showFeedback(err.message || "Failed to approve restriction", "error");
+    } finally {
+      setApprovingRestrictionId(null);
+    }
+  };
+
+  const handleCreateRestriction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!restrictionReason.trim()) {
+      showFeedback("A reason is required for every restriction.", "error");
+      return;
+    }
+    const payload: any = {
+      restriction_type: restrictionType,
+      reason: restrictionReason.trim(),
+      marketplace_id: restrictionMarketplaceId ? parseInt(restrictionMarketplaceId) : null,
+    };
+    if (restrictionScope === "brand") {
+      if (!restrictionBrand.trim()) {
+        showFeedback("Please enter a brand name.", "error");
+        return;
+      }
+      payload.brand = restrictionBrand.trim();
+    } else if (restrictionScope === "category") {
+      if (!restrictionCategory.trim()) {
+        showFeedback("Please enter a category name.", "error");
+        return;
+      }
+      payload.category = restrictionCategory.trim();
+    } else {
+      if (!restrictionProductId) {
+        showFeedback("Please choose a product.", "error");
+        return;
+      }
+      payload.product_id = parseInt(restrictionProductId);
+    }
+
+    setSavingRestriction(true);
+    try {
+      await fetchApi("/rules/product-restrictions", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      showFeedback("Brand / channel restriction added successfully.", "success");
+      setShowRestrictionModal(false);
+      setRestrictionBrand("");
+      setRestrictionCategory("");
+      setRestrictionProductId("");
+      setRestrictionReason("");
+      loadData();
+    } catch (err: any) {
+      showFeedback(err.message || "Failed to create restriction", "error");
+    } finally {
+      setSavingRestriction(false);
     }
   };
 
@@ -566,6 +665,117 @@ export default function RulesPage() {
         </div>
       </form>
 
+      {/* Brand & Policy Restrictions (Brand Gating) */}
+      <div className="bg-white p-6 rounded-lg border border-gray-100 space-y-4 shadow-sm">
+        <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div>
+            <h2 className="text-base font-bold text-[#0a0a0a] flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4 text-[#D9720F]" />
+              <span>Brand & Channel Restrictions (Brand Gating)</span>
+            </h2>
+            <p className="text-xs text-[#767676] mt-0.5 max-w-2xl leading-relaxed">
+              Unlike eBay where most brands can be freely sold, channels like <strong className="text-[#0a0a0a]">Walmart</strong> and <strong className="text-[#0a0a0a]">Amazon</strong> enforce strict Brand Privileges and require manufacturer invoices. Configure brand restrictions here to automatically block or hold restricted products before they reach Walmart, preventing policy strikes and delistings.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setRestrictionMarketplaceId("7"); // Default to Walmart
+              setShowRestrictionModal(true);
+            }}
+            className="px-3.5 py-1.5 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0 transition-all shadow-sm"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>Add Brand Restriction</span>
+          </button>
+        </div>
+
+        {restrictions.length === 0 ? (
+          <div className="text-center py-6 text-xs text-[#767676] bg-gray-50 rounded-lg border border-gray-200">
+            No brand restrictions configured. All brands are currently eligible to be published across channels.
+          </div>
+        ) : (
+          <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+            <table className="w-full text-left text-xs text-[#1a1a1a]">
+              <thead className="bg-gray-50 text-[#767676] uppercase text-[10px] border-b border-gray-200">
+                <tr>
+                  <th className="px-3.5 py-2.5">Scope / Target</th>
+                  <th className="px-3.5 py-2.5">Channel</th>
+                  <th className="px-3.5 py-2.5">Policy Mode</th>
+                  <th className="px-3.5 py-2.5">Reason</th>
+                  <th className="px-3.5 py-2.5 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {restrictions.map((r) => (
+                  <tr key={r.id}>
+                    <td className="px-3.5 py-2.5 font-semibold text-[#0a0a0a]">
+                      {r.brand ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="text-[10px] uppercase font-bold text-[#767676] bg-gray-100 px-1.5 py-0.5 rounded">Brand</span>
+                          <span>{r.brand}</span>
+                        </span>
+                      ) : r.category ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="text-[10px] uppercase font-bold text-[#767676] bg-gray-100 px-1.5 py-0.5 rounded">Category</span>
+                          <span>{r.category}</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="text-[10px] uppercase font-bold text-[#767676] bg-gray-100 px-1.5 py-0.5 rounded">Product</span>
+                          <span className="truncate max-w-[200px]">{r.product_title || `SKU: ${r.product_sku || r.product_id}`}</span>
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3.5 py-2.5">
+                      <span className="font-medium text-[#0a0a0a] px-2 py-0.5 rounded bg-gray-100 text-[11px]">
+                        {r.marketplace_name || "All Channels"}
+                      </span>
+                    </td>
+                    <td className="px-3.5 py-2.5">
+                      {r.restriction_type === "BLOCKED" ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                          Blocked
+                        </span>
+                      ) : r.approved_at ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Approved
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                          Requires Approval
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3.5 py-2.5 text-[#767676] max-w-xs truncate" title={r.reason}>
+                      {r.reason}
+                    </td>
+                    <td className="px-3.5 py-2.5 text-right space-x-2">
+                      {r.restriction_type === "REQUIRES_APPROVAL" && !r.approved_at && (
+                        <button
+                          onClick={() => handleApproveRestriction(r.id)}
+                          disabled={approvingRestrictionId === r.id}
+                          className="text-emerald-700 hover:text-emerald-900 font-semibold"
+                        >
+                          {approvingRestrictionId === r.id ? "Approving..." : "Approve"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDeleteRestriction(r.id)}
+                        disabled={deletingRestrictionId === r.id}
+                        className="text-rose-700 hover:text-rose-900 font-medium"
+                      >
+                        {deletingRestrictionId === r.id ? "Removing..." : "Remove"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Advanced Collapsible Section */}
       <div className="bg-white p-6 rounded-lg border border-gray-100 space-y-4 shadow-sm">
         <button
@@ -786,6 +996,172 @@ export default function RulesPage() {
           </div>
         </div>
       )}
+
+      {/* Add Brand / Policy Restriction Modal */}
+      {showRestrictionModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-start justify-between pb-3 border-b border-gray-200">
+              <div>
+                <h3 className="text-lg font-bold text-[#0a0a0a]">Add Brand or Policy Restriction</h3>
+                <p className="text-xs text-[#767676] mt-0.5">Protect your seller accounts from brand-gating suspensions.</p>
+              </div>
+              <button
+                onClick={() => setShowRestrictionModal(false)}
+                className="p-1.5 rounded-lg text-[#767676] hover:text-[#0a0a0a] hover:bg-gray-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateRestriction} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">Restriction Scope</label>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  {(["brand", "category", "product"] as const).map((scope) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      onClick={() => setRestrictionScope(scope)}
+                      className={`py-1.5 px-2 rounded-lg font-medium capitalize border transition-all ${
+                        restrictionScope === scope
+                          ? "bg-[#0a0a0a] text-white border-[#0a0a0a]"
+                          : "bg-white text-[#767676] border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      {scope}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {restrictionScope === "brand" && (
+                <div>
+                  <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">Brand Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Anker, Apple, Samsung, Sony"
+                    value={restrictionBrand}
+                    onChange={(e) => setRestrictionBrand(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]"
+                  />
+                </div>
+              )}
+
+              {restrictionScope === "category" && (
+                <div>
+                  <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">Category Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Hazardous Materials, Laptops, Mobile Accessories"
+                    value={restrictionCategory}
+                    onChange={(e) => setRestrictionCategory(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]"
+                  />
+                </div>
+              )}
+
+              {restrictionScope === "product" && (
+                <div>
+                  <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">Specific Product</label>
+                  <select
+                    value={restrictionProductId}
+                    onChange={(e) => setRestrictionProductId(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]"
+                  >
+                    <option value="">Select a product...</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title} ({p.sku})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">Target Marketplace Channel</label>
+                <select
+                  value={restrictionMarketplaceId}
+                  onChange={(e) => setRestrictionMarketplaceId(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]"
+                >
+                  <option value="">All Channels (Global)</option>
+                  {marketplaces.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-[#767676] mt-1">
+                  Tip: Target Walmart specifically to keep items available on eBay while blocking on Walmart.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">Policy Action</label>
+                <div className="space-y-1.5 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="restrictionType"
+                      value="BLOCKED"
+                      checked={restrictionType === "BLOCKED"}
+                      onChange={() => setRestrictionType("BLOCKED")}
+                      className="accent-[#0a0a0a]"
+                    />
+                    <span className="font-medium text-[#0a0a0a]">Hard Block (Refuse to publish or push)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="restrictionType"
+                      value="REQUIRES_APPROVAL"
+                      checked={restrictionType === "REQUIRES_APPROVAL"}
+                      onChange={() => setRestrictionType("REQUIRES_APPROVAL")}
+                      className="accent-[#0a0a0a]"
+                    />
+                    <span className="font-medium text-[#0a0a0a]">Requires Review / Reseller Invoices</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">Reason / Policy Note</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Walmart brand privileges require authorized reseller approval for Anker products."
+                  value={restrictionReason}
+                  onChange={(e) => setRestrictionReason(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-gray-200 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowRestrictionModal(false)}
+                  className="px-4 py-2 text-xs font-medium text-[#767676] hover:text-[#0a0a0a]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingRestriction}
+                  className="px-4 py-2 bg-[#0a0a0a] text-white rounded-lg text-xs font-medium hover:bg-[#222222] transition-all disabled:opacity-50"
+                >
+                  {savingRestriction ? "Saving..." : "Save Restriction"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

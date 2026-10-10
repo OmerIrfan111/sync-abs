@@ -32,7 +32,7 @@ def seed_database():
         suppliers_data = [
             {"name": "Ingram Micro", "adapter_class": "IngramMicroAdapter"},
             {"name": "D&H", "adapter_class": "DAndHAdapter"},
-            {"name": "TD SYNNEX", "adapter_class": "TDSynnexAdapter"},
+            {"name": "TD SYNNEX", "adapter_class": "TDSynnexAdapter", "default_shipping_charge": Decimal("9.99")},
         ]
 
         allowed_supplier_names = [s["name"] for s in suppliers_data]
@@ -44,6 +44,7 @@ def seed_database():
                 s = Supplier(
                     name=s_data["name"],
                     adapter_class=s_data["adapter_class"],
+                    default_shipping_charge=s_data.get("default_shipping_charge"),
                     is_active=True
                 )
                 db.add(s)
@@ -52,6 +53,8 @@ def seed_database():
                 logger.info(f"Supplier registered: {s.name}")
             else:
                 s.adapter_class = s_data["adapter_class"]
+                if s_data.get("default_shipping_charge") is not None and s.default_shipping_charge is None:
+                    s.default_shipping_charge = s_data["default_shipping_charge"]
                 db.commit()
             created_suppliers.append(s)
 
@@ -76,15 +79,16 @@ def seed_database():
             db.commit()
             logger.info(f"Removed extra supplier: {old_s.name}")
 
-        # 3. Seed Only 3 Real Online Sales Channels (eBay, Amazon, Shopify)
+        # 3. Seed Online Sales Channels (eBay, Amazon, Shopify, Walmart)
         marketplaces_data = [
             {"name": "eBay", "adapter_class": "LiveEBayAdapter"},
             {"name": "Amazon", "adapter_class": "LiveAmazonAdapter"},
             {"name": "Shopify", "adapter_class": "LiveShopifyAdapter"},
+            {"name": "Walmart", "adapter_class": "LiveWalmartAdapter"},
         ]
         allowed_marketplace_names = [m["name"] for m in marketplaces_data]
 
-        # Clean up any extra marketplaces (Walmart, Newegg)
+        # Clean up any extra unmaintained marketplaces (e.g. Newegg)
         old_marketplaces = db.query(Marketplace).filter(~Marketplace.name.in_(allowed_marketplace_names)).all()
         for old_m in old_marketplaces:
             db.delete(old_m)

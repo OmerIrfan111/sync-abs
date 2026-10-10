@@ -20,6 +20,7 @@ class ListingPublishRequest(BaseModel):
     custom_title: Optional[str] = None
     custom_description: Optional[str] = None
     custom_image_url: Optional[str] = None
+    custom_weight_lbs: Optional[Decimal] = None
 
 class ListingUpdate(BaseModel):
     selling_price: Optional[Decimal] = None

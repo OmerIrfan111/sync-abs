@@ -156,6 +156,7 @@ export interface DashboardStats {
     is_active: boolean;
     status: string;
     listing_count: number;
+    supports_orders: boolean;
     credentials_expires_at?: string | null;
     days_until_credentials_expire?: number | null;
   }[];
@@ -387,5 +388,20 @@ export interface RulePreview {
     marketplace_fee: number;
     desired_margin: number;
   };
+}
+
+export interface ProductRestriction {
+  id: number;
+  product_id?: number | null;
+  product_sku?: string | null;
+  product_title?: string | null;
+  category?: string | null;
+  brand?: string | null;
+  marketplace_id?: number | null;
+  marketplace_name?: string | null;
+  restriction_type: "BLOCKED" | "REQUIRES_APPROVAL";
+  reason: string;
+  approved_at?: string | null;
+  created_at: string;
 }
 

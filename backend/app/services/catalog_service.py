@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional, Tuple, Dict, Any
 from decimal import Decimal
 from datetime import datetime, timezone
@@ -11,6 +12,8 @@ from app.models.warehouse import Warehouse, WarehouseStock
 from app.models.listing import Listing
 from app.schemas.supplier import NormalizedProduct
 from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse, SupplierProductInfo
+
+logger = logging.getLogger(__name__)
 
 # Ingram Micro reports non-physical SKUs (software licenses, support/renewal
 # contracts) with a quantity that's a multiple of this sentinel instead of a
@@ -36,35 +39,85 @@ KNOWN_WAREHOUSE_NAMES: Dict[str, str] = {
 }
 
 class CatalogService:
+    # Caps real image-search+verification calls (network-bound: a Bing scrape
+    # plus a HEAD request per candidate) per CatalogService instance, which
+    # lives for one sync_supplier() run. Without a cap, syncing hundreds of
+    # brand-new products in one run could blow the sync's time budget on
+    # image lookups alone. Real images accumulate incrementally across
+    # successive scheduled runs instead — same pattern as this project's
+    # resumable catalog pagination.
+    IMAGE_MATCH_BUDGET_PER_SYNC = 15
+
     def __init__(self, db: Session):
         self.db = db
+        self._image_match_budget_remaining = self.IMAGE_MATCH_BUDGET_PER_SYNC
 
-    def find_matching_product(self, item: NormalizedProduct) -> Optional[Product]:
+    def find_matching_product(self, item: NormalizedProduct, supplier_id: Optional[int] = None) -> Optional[Product]:
         """
         Product Matching Engine (Spec Section 12):
         Matches incoming items by UPC, EAN, MPN, or SKU against existing products.
+
+        Real incident (2026-10-08): Ingram Micro returns "9999999999999" as a
+        placeholder UPC for tray/OEM CPU parts with no individual barcode —
+        a value that fails real GS1 check-digit validation. Matching on it
+        raw collapsed every such item sharing that same fake value into one
+        Product row. Only a UPC/EAN that actually passes validation is
+        trusted as a match key now; an invalid one is simply ignored, same
+        as if it were absent.
+
+        Also real: MPN describes the chip, not the specific listing — the
+        same MPN (e.g. a Ryzen 7800X3D) legitimately appears across several
+        genuinely distinct real Ingram listings (different tray/bulk/program
+        tiers, different real supplier_sku, different real cost). MPN
+        matching is intended for CROSS-supplier aggregation (the same real
+        product carried by Ingram and D&H, say), not for collapsing several
+        different same-supplier listings into one — that silently discarded
+        real distinct cost/sku data every time it happened. So an MPN match
+        is only trusted when the candidate product has no OTHER supplier_sku
+        already on file for this same supplier; if it does, that's a
+        genuinely different real listing and must not be merged onto it.
         """
+        from app.core.upc_utils import validate_check_digit
+
+        def _is_real_upc(code: Optional[str]) -> bool:
+            if not code or not str(code).isdigit():
+                return False
+            return validate_check_digit(str(code))
+
         match_conditions = []
-        if item.upc:
+        if _is_real_upc(item.upc):
             match_conditions.append(Product.upc == item.upc)
-        if item.ean:
+        if _is_real_upc(item.ean):
             match_conditions.append(Product.ean == item.ean)
-        if item.mpn:
-            match_conditions.append(Product.mpn == item.mpn)
         if item.supplier_sku:
             match_conditions.append(Product.sku == item.supplier_sku)
 
-        if not match_conditions:
+        candidate = self.db.query(Product).filter(or_(*match_conditions)).first() if match_conditions else None
+        if candidate:
+            return candidate
+
+        if item.mpn:
+            mpn_candidates = self.db.query(Product).filter(Product.mpn == item.mpn).all()
+            for cand in mpn_candidates:
+                if supplier_id is None:
+                    return cand
+                existing_sp = (
+                    self.db.query(SupplierProduct)
+                    .filter(SupplierProduct.product_id == cand.id, SupplierProduct.supplier_id == supplier_id)
+                    .first()
+                )
+                if existing_sp is None or existing_sp.supplier_sku == item.supplier_sku:
+                    return cand
             return None
 
-        return self.db.query(Product).filter(or_(*match_conditions)).first()
+        return None
 
     def upsert_supplier_product(self, supplier: Supplier, item: NormalizedProduct) -> Tuple[Product, SupplierProduct, List[SyncLog]]:
         """
         Normalizes and links supplier products to central catalog, performing change detection (Spec Section 19).
         """
         logs: List[SyncLog] = []
-        product = self.find_matching_product(item)
+        product = self.find_matching_product(item, supplier_id=supplier.id)
 
         # 1. If product doesn't exist yet, create canonical product
         if not product:
@@ -90,6 +143,19 @@ class CatalogService:
                 old_value=None,
                 new_value=product.sku
             ))
+
+            # Try to upgrade the generic stock-photo fallback to a real,
+            # title/brand-verified photo (Feature 4 — built but never wired
+            # into sync until now). Bounded and best-effort: any failure
+            # (network, no match, over budget) just leaves the existing
+            # fallback image in place, never blocks or fails the sync.
+            if self._image_match_budget_remaining > 0 and (product.upc or product.ean):
+                self._image_match_budget_remaining -= 1
+                try:
+                    from app.services.image_matching_service import ImageMatchingService
+                    ImageMatchingService(db=self.db).match_product_image_by_upc(product, save_db=True)
+                except Exception as img_exc:
+                    logger.warning(f"Image verification skipped for new product {product.sku}: {img_exc}")
         else:
             if item.images and (not product.images or product.images != item.images):
                 product.images = item.images
@@ -238,6 +304,117 @@ class CatalogService:
                 stock.qty_available = max(0, int(qty or 0))
                 stock.stock_replenish_date = parsed_replenish
 
+    def backfill_product_images(self, limit: int = 30) -> Dict[str, int]:
+        """
+        Upgrades existing products still on a generic/unverified fallback
+        photo to a real, title/brand-verified one (ImageMatchingService —
+        built as "Feature 4" but never wired into any sync path until now,
+        which is why the catalog has been showing repeated generic stock
+        photos instead of real product images).
+
+        Bounded per call (network-bound: a web image search + validation
+        request per product) so this can run as a small, frequent background
+        task and steadily work through the whole catalog over many runs,
+        rather than one slow unbounded pass.
+
+        Returns {"attempted": N, "verified": N} — "verified" is how many
+        actually got a real, similarity-checked photo attached; the rest
+        were attempted but no candidate passed the threshold (left on their
+        existing fallback image, never a fabricated attach).
+        """
+        from app.services.image_matching_service import ImageMatchingService
+
+        candidates = (
+            self.db.query(Product)
+            .filter(
+                Product.is_enabled == True,
+                or_(Product.upc.isnot(None), Product.ean.isnot(None)),
+            )
+            .order_by(Product.updated_at.asc())
+            .limit(limit * 4)  # over-fetch since many will already be verified; filtered below
+            .all()
+        )
+
+        service = ImageMatchingService(db=self.db)
+        attempted = 0
+        verified = 0
+        for product in candidates:
+            if attempted >= limit:
+                break
+            specs = product.specs_json or {}
+            if specs.get("image_status") == "verified":
+                continue
+            attempted += 1
+            try:
+                result = service.match_product_image_by_upc(product, save_db=True)
+                if result.status == "verified":
+                    verified += 1
+            except Exception as exc:
+                logger.warning(f"Image backfill failed for product {product.sku}: {exc}")
+
+        return {"attempted": attempted, "verified": verified}
+
+    def backfill_walmart_match_status(self, limit: int = 20) -> Dict[str, int]:
+        """
+        Bounded background check of which enabled products can actually be
+        listed on Walmart via MP_ITEM_MATCH (real GTIN-exists-in-Walmart's-
+        catalog check via LiveWalmartAdapter.search_walmart_catalog_by_gtin),
+        so the catalog can be filtered by real matchability instead of
+        finding out per-product only when someone tries to list it.
+
+        Bounded per call (one real Walmart API call per product) so this
+        can run as a small frequent background task rather than one slow
+        unbounded sweep — mirrors backfill_product_images' budget pattern.
+        """
+        from app.models.marketplace import Marketplace
+        from app.services.listing_service import ListingService
+        from datetime import datetime, timezone
+
+        wm = self.db.query(Marketplace).filter(Marketplace.name.ilike("%walmart%")).first()
+        if not wm:
+            return {"attempted": 0, "matchable": 0, "not_matchable": 0}
+
+        adapter = ListingService(self.db).get_adapter_for_marketplace(wm)
+        if not hasattr(adapter, "search_walmart_catalog_by_gtin"):
+            return {"attempted": 0, "matchable": 0, "not_matchable": 0}
+
+        candidates = (
+            self.db.query(Product)
+            .filter(
+                Product.is_enabled == True,
+                or_(Product.upc.isnot(None), Product.ean.isnot(None)),
+            )
+            .order_by(Product.updated_at.asc())
+            .limit(limit * 4)
+            .all()
+        )
+
+        attempted = 0
+        matchable = 0
+        not_matchable = 0
+        for product in candidates:
+            if attempted >= limit:
+                break
+            specs = product.specs_json or {}
+            if specs.get("walmart_match_status"):
+                continue
+            attempted += 1
+            try:
+                items = adapter.search_walmart_catalog_by_gtin(product.upc or product.ean)
+                specs = dict(product.specs_json or {})
+                specs["walmart_match_status"] = "matchable" if items else "not_matchable"
+                specs["walmart_match_checked_at"] = datetime.now(timezone.utc).isoformat()
+                product.specs_json = specs
+                if items:
+                    matchable += 1
+                else:
+                    not_matchable += 1
+            except Exception as exc:
+                logger.warning(f"Walmart match check failed for product {product.sku}: {exc}")
+
+        self.db.commit()
+        return {"attempted": attempted, "matchable": matchable, "not_matchable": not_matchable}
+
     def get_products(
         self,
         skip: int = 0,
@@ -250,6 +427,7 @@ class CatalogService:
         min_price: Optional[Decimal] = None,
         max_price: Optional[Decimal] = None,
         marketplace_id: Optional[int] = None,
+        walmart_match_status: Optional[str] = None,
     ) -> Tuple[List[ProductResponse], int]:
         query = self.db.query(Product)
 
@@ -308,6 +486,18 @@ class CatalogService:
                 .subquery()
             )
             query = query.filter(Product.id.in_(listed_subquery))
+
+        if walmart_match_status:
+            # specs_json is a plain JSON column (not JSONB), so the SQLAlchemy
+            # JSON comparator is .as_string(), not JSONB's .astext.
+            if walmart_match_status == "unchecked":
+                query = query.filter(
+                    Product.specs_json["walmart_match_status"].as_string().is_(None)
+                )
+            else:
+                query = query.filter(
+                    Product.specs_json["walmart_match_status"].as_string() == walmart_match_status
+                )
 
         total = query.count()
         products = query.order_by(desc(Product.updated_at)).offset(skip).limit(limit).all()

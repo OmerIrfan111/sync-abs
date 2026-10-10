@@ -14,6 +14,7 @@ from app.adapters.marketplaces.mock_amazon import MockAmazonAdapter
 from app.adapters.marketplaces.live_amazon import LiveAmazonAdapter
 from app.adapters.marketplaces.mock_shopify import MockShopifyAdapter
 from app.adapters.marketplaces.live_shopify import LiveShopifyAdapter
+from app.adapters.marketplaces.live_walmart import LiveWalmartAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ MARKETPLACE_ADAPTERS: Dict[str, Type[MarketplaceAdapter]] = {
     "MockAmazonAdapter": MockAmazonAdapter,
     "LiveShopifyAdapter": LiveShopifyAdapter,
     "MockShopifyAdapter": MockShopifyAdapter,
+    "LiveWalmartAdapter": LiveWalmartAdapter,
     # Explicit test-fixture doubles for out-of-scope marketplaces exercised by
     # the multi-channel test suite. Listed explicitly (not a silent catch-all
     # default) so a typo'd or unrecognized adapter_class on a REAL marketplace
@@ -95,6 +97,9 @@ def get_marketplace_adapter(
 
     if "ebay" in act_lower or creds.get("user_token") or creds.get("cert_id"):
         return LiveEBayAdapter(credentials=credentials, config=config)
+
+    if "walmart" in act_lower or (creds.get("client_id") and creds.get("client_secret")):
+        return LiveWalmartAdapter(credentials=credentials, config=config)
 
     raise ValueError(
         f"Unrecognized marketplace adapter_class '{adapter_class}' and no "

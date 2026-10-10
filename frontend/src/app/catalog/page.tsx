@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Search,
   Filter,
@@ -16,10 +17,14 @@ import {
   RefreshCw,
   Camera,
   ImageIcon,
+  AlertTriangle,
+  ExternalLink,
 } from "lucide-react";
 import { fetchApi, Product, Listing } from "@/lib/api";
 
 export default function CatalogPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -30,6 +35,7 @@ export default function CatalogPage() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [inStockOnly, setInStockOnly] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
+  const [walmartMatchStatus, setWalmartMatchStatus] = useState("");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [suppliers, setSuppliers] = useState<{ id: number; name: string }[]>([]);
@@ -51,7 +57,11 @@ export default function CatalogPage() {
   const [drawerCustomPrice, setDrawerCustomPrice] = useState<string>("");
   const [drawerCustomTitle, setDrawerCustomTitle] = useState<string>("");
   const [drawerCustomDescription, setDrawerCustomDescription] = useState<string>("");
+  const [drawerCustomWeight, setDrawerCustomWeight] = useState<string>("");
+  const [weightLookupLoading, setWeightLookupLoading] = useState(false);
+  const [weightLookupNote, setWeightLookupNote] = useState<string | null>(null);
   const [showDrawerContentEdit, setShowDrawerContentEdit] = useState<boolean>(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   // -- Photo picker --
   const [imageSuggestions, setImageSuggestions] = useState<string[]>([]);
@@ -130,7 +140,8 @@ export default function CatalogPage() {
       setImageSaveSuccess("Photo saved as the permanent product image!");
       setTimeout(() => setImageSaveSuccess(null), 4000);
     } catch (err: any) {
-      alert("Failed to save image: " + err.message);
+      setPublishError("Failed to save image: " + err.message);
+      setTimeout(() => setPublishError(null), 8000);
     } finally {
       setSavingImage(false);
     }
@@ -143,9 +154,11 @@ export default function CatalogPage() {
     customTitle?: string,
     customDescription?: string,
     customImageUrl?: string,
+    customWeightLbs?: number,
   ) => {
     setPublishingId(product.id);
     setPublishSuccess(null);
+    setPublishError(null);
     try {
       const channel = marketplaces.find((m) => m.id === targetMarketplaceId);
       const channelName = channel ? channel.name : "Your Store";
@@ -162,6 +175,7 @@ export default function CatalogPage() {
           custom_title: customTitle?.trim() || undefined,
           custom_description: customDescription?.trim() || undefined,
           custom_image_url: customImageUrl || undefined,
+          custom_weight_lbs: customWeightLbs !== undefined && !isNaN(customWeightLbs) && customWeightLbs > 0 ? customWeightLbs : undefined,
         }),
       });
       const priceText =
@@ -175,7 +189,8 @@ export default function CatalogPage() {
       setSelectedProduct(null);
       await loadListingsMap();
     } catch (err: any) {
-      alert("Action failed: " + err.message);
+      setPublishError(err.message || "Action failed. Please try again.");
+      setTimeout(() => setPublishError(null), 8000);
     } finally {
       setPublishingId(null);
     }
@@ -205,13 +220,24 @@ export default function CatalogPage() {
       setDrawerCustomPrice((cost * 1.15).toFixed(2));
     }
 
-    const defaultQuery = [product.upc, product.brand, product.mpn || product.title?.slice(0, 30)].filter(Boolean).join(" ");
+    const realWeight = product.supplier_products
+      ?.map((sp) => sp.shipping_info?.weight_lbs)
+      .find((w) => w !== null && w !== undefined && Number(w) > 0);
+    setDrawerCustomWeight(realWeight ? String(realWeight) : "");
+
+    // Default search is exact title + brand (what the user actually typed
+    // into their catalog, not a barcode) — more precise for the common case
+    // where the title is specific. The UPC-anchored multi-tier algorithm
+    // (merges UPC-alone/UPC+brand/UPC+brand+MPN, trusted-CDN filtered) is
+    // available as a deliberate secondary action via the "Verified UPC
+    // Search" button below, not the default.
+    const defaultQuery = [product.title, product.brand].filter(Boolean).join(" ");
     setImageSearchQuery(defaultQuery);
     setCustomImageUrlInput("");
     setImageSaveSuccess(null);
     setImageSuggestions([]);
     setSelectedImageUrl(product.images?.[0] || "");
-    fetchImageSuggestions(product.id);
+    fetchImageSuggestions(product.id, defaultQuery);
   };
 
   const toggleNotSelling = async (productId: number) => {
@@ -230,7 +256,8 @@ export default function CatalogPage() {
       setProducts((prev) =>
         prev.map((p) => (p.id === productId ? { ...p, is_enabled: !nextEnabled } : p))
       );
-      alert("Could not save this change: " + err.message);
+      setPublishError("Could not save this change: " + err.message);
+      setTimeout(() => setPublishError(null), 8000);
     }
   };
 
@@ -247,6 +274,7 @@ export default function CatalogPage() {
       if (selectedSupplierId) params.append("supplier_id", selectedSupplierId);
       if (minPrice) params.append("min_price", minPrice);
       if (maxPrice) params.append("max_price", maxPrice);
+      if (walmartMatchStatus) params.append("walmart_match_status", walmartMatchStatus);
 
       const res = await fetchApi<{
         items: Product[];
@@ -287,7 +315,26 @@ export default function CatalogPage() {
 
   useEffect(() => {
     loadProducts();
-  }, [page, selectedBrand, selectedCategory, inStockOnly, selectedSupplierId]);
+  }, [page, selectedBrand, selectedCategory, inStockOnly, selectedSupplierId, walmartMatchStatus]);
+
+  // Opens the same unified drawer when arriving via a deep link, e.g.
+  // /catalog?openProduct=123 from the Listings page's "Edit"/"List a
+  // Product" actions — so there is exactly one product-detail interface in
+  // the whole app, not a second, different one duplicated on another page.
+  useEffect(() => {
+    const openProductId = searchParams.get("openProduct");
+    if (!openProductId || marketplaces.length === 0) return;
+
+    fetchApi<Product>(`/products/${openProductId}`)
+      .then((product) => {
+        handleOpenProductDrawer(product, existingListingsMap, marketplaces, selectedChannelId);
+      })
+      .catch((err) => console.error("Could not open requested product:", err))
+      .finally(() => {
+        router.replace("/catalog");
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, marketplaces]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -303,11 +350,12 @@ export default function CatalogPage() {
     setSelectedSupplierId("");
     setMinPrice("");
     setMaxPrice("");
+    setWalmartMatchStatus("");
     setPage(1);
   };
 
   const hasActiveFilters = Boolean(
-    searchQuery || selectedBrand || selectedCategory || inStockOnly || selectedSupplierId || minPrice || maxPrice
+    searchQuery || selectedBrand || selectedCategory || inStockOnly || selectedSupplierId || minPrice || maxPrice || walmartMatchStatus
   );
 
   return (
@@ -387,6 +435,18 @@ export default function CatalogPage() {
             ))}
           </select>
 
+          <select
+            value={walmartMatchStatus}
+            onChange={(e) => { setWalmartMatchStatus(e.target.value); setPage(1); }}
+            title="Whether each product's UPC has a real match in Walmart's own catalog (required for MP_ITEM_MATCH listing)"
+            className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-[#1a1a1a] font-medium focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
+          >
+            <option value="">Walmart Match: Any</option>
+            <option value="matchable">Walmart: Matchable</option>
+            <option value="not_matchable">Walmart: Not Matchable</option>
+            <option value="unchecked">Walmart: Not Checked Yet</option>
+          </select>
+
           <div className="flex items-center gap-1.5 bg-white border border-gray-300 rounded-lg px-2 py-1">
             <span className="text-[11px] text-[#767676]">$</span>
             <input
@@ -434,6 +494,19 @@ export default function CatalogPage() {
             <span>{publishSuccess} You can view and edit it anytime under &apos;Your Online Stores&apos;.</span>
           </div>
           <button onClick={() => setPublishSuccess(null)} className="text-emerald-800 hover:text-emerald-950">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Error Notification */}
+      {publishError && (
+        <div className="p-3.5 rounded-lg bg-rose-50 border border-rose-300 text-rose-900 flex items-center justify-between text-xs font-semibold">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+            <span>{publishError}</span>
+          </div>
+          <button onClick={() => setPublishError(null)} className="text-rose-800 hover:text-rose-950 shrink-0">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -508,6 +581,16 @@ export default function CatalogPage() {
                                 <><span className="mx-1 opacity-40">&bull;</span>{product.category}</>
                               )}
                             </div>
+                            {product.specs_json?.walmart_match_status === "matchable" && (
+                              <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                Walmart match found
+                              </span>
+                            )}
+                            {product.specs_json?.walmart_match_status === "not_matchable" && (
+                              <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 border border-gray-200">
+                                No Walmart match
+                              </span>
+                            )}
                             <button
                               onClick={() => handleOpenProductDrawer(product, existingListingsMap, marketplaces, selectedChannelId)}
                               className="text-[11px] text-[#A8560A] hover:underline mt-0.5 font-medium block"
@@ -765,13 +848,18 @@ export default function CatalogPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          const upcQ = `${selectedProduct.upc} ${selectedProduct.brand || ""}`.trim();
-                          setImageSearchQuery(upcQ);
-                          fetchImageSuggestions(selectedProduct.id, upcQ);
+                          setImageSearchQuery(`${selectedProduct.upc} ${selectedProduct.brand || ""}`.trim());
+                          // No query override -> backend runs the full verified
+                          // UPC-anchored algorithm (merges UPC-alone / UPC+brand /
+                          // UPC+brand+MPN tiers, trusted-supplier-CDN filtered),
+                          // not a plain text search.
+                          fetchImageSuggestions(selectedProduct.id);
                         }}
-                        className="text-[10px] text-[#A8560A] hover:underline font-medium"
+                        disabled={loadingImages}
+                        className="text-[10px] text-[#A8560A] hover:underline font-medium disabled:opacity-50"
+                        title="Runs the verified multi-tier UPC search algorithm instead of a plain text search"
                       >
-                        Reset to UPC
+                        Verified UPC Search
                       </button>
                     )}
                   </div>
@@ -891,7 +979,8 @@ export default function CatalogPage() {
                           handleSaveProductImage(cleanUrl);
                           setCustomImageUrlInput("");
                         } else {
-                          alert("Please enter a valid URL starting with http:// or https://");
+                          setPublishError("Please enter a valid URL starting with http:// or https://");
+                          setTimeout(() => setPublishError(null), 8000);
                         }
                       }}
                       disabled={!customImageUrlInput.trim() || savingImage}
@@ -1022,6 +1111,80 @@ export default function CatalogPage() {
               {(() => {
                 const liveList = existingListingsMap[selectedProduct.id] || [];
                 const isStoreListed = liveList.some((l) => l.marketplace_id === selectedChannelId);
+                const selectedChannel = marketplaces.find((m) => m.id === selectedChannelId);
+                const isWalmartChannel = (selectedChannel?.name || "").toLowerCase().includes("walmart");
+                const hasRealWeight = (selectedProduct.supplier_products || []).some(
+                  (sp) => sp.shipping_info?.weight_lbs && Number(sp.shipping_info.weight_lbs) > 0
+                );
+
+                const handleStartSelling = async () => {
+                  // Walmart's MP_ITEM_MATCH can only succeed if this GTIN
+                  // already exists somewhere in Walmart's own catalog — real-
+                  // world-confirmed: a known-existing item returns matches
+                  // here, while GTINs that later failed real feed submissions
+                  // returned zero, every time. Checking this first avoids
+                  // firing a real submission we already know will fail.
+                  if (isWalmartChannel && !isStoreListed && selectedProduct.upc) {
+                    setWeightLookupLoading(true);
+                    setWeightLookupNote(null);
+                    try {
+                      const check = await fetchApi<{ matchable: boolean; matches_found: number }>(
+                        `/products/${selectedProduct.id}/walmart-match-check`
+                      );
+                      if (!check.matchable) {
+                        setPublishError(
+                          `This product's UPC isn't matchable to anything in Walmart's catalog, so a listing attempt would fail. Walmart only supports creating an offer by matching an existing catalog item — this GTIN doesn't have one. Submission was not sent.`
+                        );
+                        setTimeout(() => setPublishError(null), 10000);
+                        return;
+                      }
+                    } catch (err: any) {
+                      // Pre-check itself failed (network/API issue) — proceed
+                      // anyway rather than blocking on a diagnostic failure;
+                      // the real publish call will surface any real error.
+                    } finally {
+                      setWeightLookupLoading(false);
+                    }
+                  }
+
+                  let weightToUse = drawerCustomWeight ? Number(drawerCustomWeight) : undefined;
+
+                  // Only worth the rate-limited lookup call when it's actually
+                  // needed: Walmart, no real supplier weight, and staff hasn't
+                  // already typed one in. Every other publish (any other
+                  // marketplace, or weight already known) skips this entirely.
+                  if (isWalmartChannel && !hasRealWeight && !weightToUse) {
+                    setWeightLookupLoading(true);
+                    setWeightLookupNote(null);
+                    try {
+                      const res = await fetchApi<{ weight_lbs: number; confidence: number; source_title: string }>(
+                        `/products/${selectedProduct.id}/lookup-weight`,
+                        { method: "POST" }
+                      );
+                      weightToUse = res.weight_lbs;
+                      setDrawerCustomWeight(String(res.weight_lbs));
+                      setWeightLookupNote(`Third-party database reports ${res.weight_lbs} lbs for a title-matched product ("${res.source_title}") — used for this listing. The title match is verified, but double-check the number against the real product if it looks off.`);
+                    } catch (err: any) {
+                      // No verified weight found — proceed anyway. The publish
+                      // call will surface Walmart's own honest "needs a real
+                      // weight" error if it actually can't create the item,
+                      // same as a manual attempt would.
+                      setWeightLookupNote(err.message || "No verified weight found automatically — enter one manually if listing fails.");
+                    } finally {
+                      setWeightLookupLoading(false);
+                    }
+                  }
+
+                  handlePublishToChannel(
+                    selectedProduct,
+                    selectedChannelId,
+                    drawerCustomPrice ? Number(drawerCustomPrice) : Number((Number(selectedProduct.lowest_cost || 0) * 1.15).toFixed(2)),
+                    drawerCustomTitle,
+                    drawerCustomDescription,
+                    selectedImageUrl || undefined,
+                    weightToUse,
+                  );
+                };
 
                 return (
                   <div className="pt-3.5 border-t border-gray-200 space-y-3">
@@ -1087,6 +1250,77 @@ export default function CatalogPage() {
                       </div>
                     </div>
 
+                    {(() => {
+                      if (!isWalmartChannel || hasRealWeight) return null;
+                      return (
+                        <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-1.5">
+                          <label className="text-xs font-semibold text-amber-900 block">
+                            Shipping Weight (lbs) — required for Walmart to create this item
+                          </label>
+                          <p className="text-[11px] text-amber-800/80">
+                            Your supplier doesn&apos;t report a weight for this product. Walmart needs a real one to create a brand-new catalog listing.
+                          </p>
+                          <div className="flex gap-1.5">
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              placeholder="e.g. 2.5"
+                              value={drawerCustomWeight}
+                              onChange={(e) => {
+                                setDrawerCustomWeight(e.target.value);
+                                setWeightLookupNote(null);
+                              }}
+                              className="flex-1 px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-xs font-semibold text-[#0a0a0a] focus:outline-none focus:border-amber-500"
+                            />
+                            <button
+                              type="button"
+                              disabled={weightLookupLoading || !selectedProduct.upc}
+                              onClick={async () => {
+                                setWeightLookupLoading(true);
+                                setWeightLookupNote(null);
+                                try {
+                                  const res = await fetchApi<{ weight_lbs: number; confidence: number; source_title: string }>(
+                                    `/products/${selectedProduct.id}/lookup-weight`,
+                                    { method: "POST" }
+                                  );
+                                  setDrawerCustomWeight(String(res.weight_lbs));
+                                  setWeightLookupNote(`Third-party database reports ${res.weight_lbs} lbs for a title-matched product ("${res.source_title}"). The title match is verified, but the number itself is seller-entered data — double-check it against the real product before trusting it.`);
+                                } catch (err: any) {
+                                  setWeightLookupNote(err.message || "No verified weight found for this UPC.");
+                                } finally {
+                                  setWeightLookupLoading(false);
+                                }
+                              }}
+                              title={!selectedProduct.upc ? "No UPC on file to look up" : "Look up real weight by UPC from a third-party barcode database"}
+                              className="px-3 py-1.5 bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs font-medium rounded-lg transition-colors shrink-0 disabled:opacity-50 flex items-center gap-1"
+                            >
+                              {weightLookupLoading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                              <span>Auto-Lookup</span>
+                            </button>
+                            <a
+                              href={`https://www.google.com/search?q=${encodeURIComponent(
+                                `${selectedProduct.brand || ""} ${selectedProduct.mpn || selectedProduct.title} weight specifications`.trim()
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Search Google manually for the real spec sheet / weight"
+                              className="px-3 py-1.5 bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs font-medium rounded-lg transition-colors shrink-0 flex items-center gap-1"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              <span>Google</span>
+                            </a>
+                          </div>
+                          {weightLookupNote && (
+                            <p className="text-[11px] text-amber-900 font-medium">{weightLookupNote}</p>
+                          )}
+                          <p className="text-[10px] text-amber-800/70">
+                            Auto-Lookup checks a barcode database automatically. Google opens a manual search in a new tab for when the automatic lookup can&apos;t find it (or you want to verify the number yourself) — enter whatever you find into the field above.
+                          </p>
+                        </div>
+                      );
+                    })()}
+
                     {/* Title & Description customisation */}
                     <div className="border border-gray-200 rounded-lg p-3 bg-gray-50/70 space-y-2">
                       <button
@@ -1145,20 +1379,15 @@ export default function CatalogPage() {
                         Cancel
                       </button>
                       <button
-                        onClick={() => handlePublishToChannel(
-                          selectedProduct,
-                          selectedChannelId,
-                          drawerCustomPrice ? Number(drawerCustomPrice) : Number((Number(selectedProduct.lowest_cost || 0) * 1.15).toFixed(2)),
-                          drawerCustomTitle,
-                          drawerCustomDescription,
-                          selectedImageUrl || undefined,
-                        )}
-                        disabled={publishingId === selectedProduct.id}
+                        onClick={handleStartSelling}
+                        disabled={publishingId === selectedProduct.id || weightLookupLoading}
                         className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all disabled:opacity-50"
                       >
                         {isStoreListed ? <RefreshCw className="h-3.5 w-3.5" /> : <Store className="h-4 w-4" />}
                         <span>
-                          {publishingId === selectedProduct.id
+                          {weightLookupLoading
+                            ? "Checking..."
+                            : publishingId === selectedProduct.id
                             ? (isStoreListed ? "Updating..." : "Listing...")
                             : (isStoreListed ? "Update Listing on Store" : "Start Selling on Store")}
                         </span>

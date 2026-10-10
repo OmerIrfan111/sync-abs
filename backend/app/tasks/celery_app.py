@@ -55,4 +55,16 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.sync_tasks.tracking_sync_task",
         "schedule": crontab(minute="*/10"),
     },
+    "image-backfill-every-5-mins": {
+        "task": "app.tasks.sync_tasks.image_backfill_task",
+        "schedule": crontab(minute="*/5"),
+    },
+    "reconcile-pending-listings-every-10-mins": {
+        "task": "app.tasks.sync_tasks.reconcile_pending_listings_task",
+        "schedule": crontab(minute="*/10"),
+    },
+    "walmart-match-backfill-every-5-mins": {
+        "task": "app.tasks.sync_tasks.walmart_match_backfill_task",
+        "schedule": crontab(minute="*/5"),
+    },
 }

@@ -67,6 +67,13 @@ export default function OrdersPage() {
   const [submitPoModal, setSubmitPoModal] = useState<{ po: PurchaseOrder; orderId: number } | null>(null);
   const [supplierOrderId, setSupplierOrderId] = useState("");
   const [savingSubmitPo, setSavingSubmitPo] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    danger?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
 
   const showFeedback = (type: "success" | "error", message: string) => {
     setFeedback({ type, message });
@@ -158,6 +165,9 @@ export default function OrdersPage() {
       await Promise.all([loadOrders(), loadStats(), refreshDetail(orderId)]);
     } catch (err: any) {
       showFeedback("error", err.message || "Action failed");
+      // The backend may have changed the order's status even on a thrown
+      // error (e.g. CANCEL_FAILED) — refresh so the UI reflects reality.
+      await Promise.all([loadOrders(), loadStats(), refreshDetail(orderId)]);
     } finally {
       setActionLoading((prev) => ({ ...prev, [key]: false }));
     }
@@ -172,8 +182,27 @@ export default function OrdersPage() {
   const handleCreatePO = (orderId: number) =>
     runAction(`po-${orderId}`, orderId, () => fetchApi(`/orders/${orderId}/create-po`, { method: "POST" }), `Purchase order(s) created for Order #${orderId}.`);
 
-  const handleCancel = (orderId: number) =>
-    runAction(`cancel-${orderId}`, orderId, () => fetchApi(`/orders/${orderId}/cancel`, { method: "PUT" }), `Order #${orderId} cancelled.`);
+  const handleCancel = (orderId: number, orderStatus: string) => {
+    const supplierMayBeInvolved = ["PO_SUBMITTED", "SHIPPED"].includes(orderStatus);
+    setConfirmModal({
+      title: `Cancel Order #${orderId}?`,
+      message: (supplierMayBeInvolved
+        ? "This order already has a purchase order placed with a real supplier. Our system cannot cancel a real supplier order — this will be BLOCKED with an error, and the order's status will be left exactly as it is, so you know to contact the supplier directly. "
+        : "") + "Cancelling here never notifies the marketplace (eBay/Walmart/etc.) the order came from — that still has to be done manually in the marketplace's own seller tools. This can be undone with \"Reopen\" afterward.",
+      confirmLabel: "Yes, Cancel Order",
+      danger: true,
+      onConfirm: () => {
+        setConfirmModal(null);
+        runAction(`cancel-${orderId}`, orderId, () => fetchApi(`/orders/${orderId}/cancel`, { method: "PUT" }), `Order #${orderId} cancelled.`);
+      },
+    });
+  };
+
+  const handleReopen = (orderId: number) =>
+    runAction(`reopen-${orderId}`, orderId, () => fetchApi(`/orders/${orderId}/reopen`, { method: "PUT" }), (res) => ({
+      type: "success",
+      message: res.message || `Order #${orderId} reopened.`,
+    }));
 
   const handleDeliver = (orderId: number) =>
     runAction(`deliver-${orderId}`, orderId, () => fetchApi(`/orders/${orderId}/deliver`, { method: "PUT" }), `Order #${orderId} marked delivered.`);
@@ -229,10 +258,20 @@ export default function OrdersPage() {
     }
   };
 
-  const handleSubmitPoLive = async (po: PurchaseOrder, orderId: number) => {
-    if (!window.confirm(
-      `This places a REAL order with ${po.supplier_name || "the supplier"} and spends real money (PO ${po.po_number}). Continue?`
-    )) return;
+  const handleSubmitPoLive = (po: PurchaseOrder, orderId: number) => {
+    setConfirmModal({
+      title: "Place Live Order?",
+      message: `This places a REAL order with ${po.supplier_name || "the supplier"} and spends real money (PO ${po.po_number}, total $${po.total_cost}). This cannot be undone through this app — cancelling afterward will NOT cancel it with the supplier.`,
+      confirmLabel: `Yes, Place Order with ${po.supplier_name || "Supplier"}`,
+      danger: true,
+      onConfirm: () => {
+        setConfirmModal(null);
+        doSubmitPoLive(po, orderId);
+      },
+    });
+  };
+
+  const doSubmitPoLive = async (po: PurchaseOrder, orderId: number) => {
     setActionLoading(prev => ({ ...prev, [`submit-live-${po.id}`]: true }));
     try {
       const res = await fetchApi<{ supplier_order_id: string; message: string }>(
@@ -377,6 +416,7 @@ export default function OrdersPage() {
                   const canDeliver = order.status === "SHIPPED";
                   const canComplete = order.status === "DELIVERED";
                   const canCancel = !["DELIVERED", "COMPLETED", "CANCELLED"].includes(order.status);
+                  const canReopen = order.status === "CANCELLED";
 
                   return (
                     <React.Fragment key={order.id}>
@@ -408,7 +448,9 @@ export default function OrdersPage() {
                                 onClick={() => handleRoute(order.id)}
                                 disabled={actionLoading[`route-${order.id}`]}
                                 className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 transition-colors inline-flex items-center gap-1 disabled:opacity-50"
-                                title="Route order items to best suppliers"
+                                title={order.status === "ROUTED"
+                                  ? "Retry routing for any items still unrouted (already-routed items are left alone)"
+                                  : "Route order items to the best available supplier"}
                               >
                                 <Route className="h-3.5 w-3.5 text-blue-600" />
                                 <span>{actionLoading[`route-${order.id}`] ? "Routing..." : "Route"}</span>
@@ -459,12 +501,23 @@ export default function OrdersPage() {
                             )}
                             {canCancel && (
                               <button
-                                onClick={() => handleCancel(order.id)}
+                                onClick={() => handleCancel(order.id, order.status)}
                                 disabled={actionLoading[`cancel-${order.id}`]}
                                 className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 text-gray-400 text-xs transition-colors inline-flex items-center gap-1 font-medium disabled:opacity-50"
                               >
                                 <Ban className="h-3.5 w-3.5" />
                                 <span>{actionLoading[`cancel-${order.id}`] ? "Cancelling..." : "Cancel"}</span>
+                              </button>
+                            )}
+                            {canReopen && (
+                              <button
+                                onClick={() => handleReopen(order.id)}
+                                disabled={actionLoading[`reopen-${order.id}`]}
+                                title="Undo this cancellation and route it again"
+                                className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 text-gray-500 text-xs transition-colors inline-flex items-center gap-1 font-medium disabled:opacity-50"
+                              >
+                                <RefreshCw className="h-3.5 w-3.5" />
+                                <span>{actionLoading[`reopen-${order.id}`] ? "Reopening..." : "Reopen"}</span>
                               </button>
                             )}
                             <button
@@ -734,6 +787,48 @@ export default function OrdersPage() {
                 className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-medium transition-all disabled:opacity-50"
               >
                 {savingSubmitPo ? "Saving..." : "Confirm Submission"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2.5 text-rose-600">
+                <div className="w-9 h-9 rounded-full bg-rose-50 border border-rose-200 flex items-center justify-center">
+                  <AlertCircle className="h-4 w-4" />
+                </div>
+                <h3 className="text-base font-bold text-gray-900">{confirmModal.title}</h3>
+              </div>
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="p-1 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-700 bg-gray-50 p-3.5 rounded-lg border border-gray-200 leading-relaxed">
+              {confirmModal.message}
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 border border-gray-300 hover:bg-gray-50 rounded-lg text-xs font-medium text-gray-900 transition-colors"
+              >
+                Never Mind
+              </button>
+              <button
+                onClick={confirmModal.onConfirm}
+                className={`px-4 py-2 rounded-lg text-xs font-medium transition-colors text-white ${
+                  confirmModal.danger ? "bg-rose-600 hover:bg-rose-700" : "bg-gray-900 hover:bg-gray-800"
+                }`}
+              >
+                {confirmModal.confirmLabel}
               </button>
             </div>
           </div>

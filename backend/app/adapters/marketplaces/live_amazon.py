@@ -177,7 +177,11 @@ class LiveAmazonAdapter(MarketplaceAdapter):
             with urllib.request.urlopen(req, timeout=15) as resp:
                 resp_data = json.loads(resp.read().decode("utf-8")) if resp.readable() else {}
         except Exception as exc:
-            logger.warning(f"Amazon Listings API call completed with notice: {exc}")
+            # The listing PUT itself failed — returning a fabricated ACTIVE
+            # status here would tell the caller the item is live on Amazon
+            # when the real API call never succeeded.
+            logger.error(f"Amazon create_listing failed for SKU {sku}: {exc}")
+            raise
 
         external_listing_id = f"amzn_{self.marketplace_id}_{sku}"
         return {

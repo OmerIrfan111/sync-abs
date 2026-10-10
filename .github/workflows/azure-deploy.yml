@@ -1,0 +1,84 @@
+name: Deploy to Azure
+
+# This is the real answer to "how do changes get pushed after deployment":
+# every push to main rebuilds both images, pushes them to Azure Container
+# Registry tagged with the real commit SHA, then updates the two backend-
+# image Container Apps and the frontend Container App to that exact new
+# image — Azure then rolls the running containers over to it automatically.
+# Nothing is pushed by hand after the first setup.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+  NAME_PREFIX: ${{ secrets.AZURE_NAME_PREFIX }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: ACR login
+        run: az acr login --name ${{ env.NAME_PREFIX }}acr
+
+      - name: Build and push backend image
+        run: |
+          docker build -t ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-backend:${{ github.sha }} \
+            -t ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-backend:latest \
+            ./backend
+          docker push ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-backend:${{ github.sha }}
+          docker push ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-backend:latest
+
+      - name: Build and push frontend image
+        run: |
+          docker build -f ./frontend/Dockerfile.prod \
+            --build-arg NEXT_PUBLIC_API_URL=${{ secrets.BACKEND_PUBLIC_URL }}/api/v1 \
+            -t ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-frontend:${{ github.sha }} \
+            -t ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-frontend:latest \
+            ./frontend
+          docker push ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-frontend:${{ github.sha }}
+          docker push ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-frontend:latest
+
+      - name: Run DB migrations against the real deployed database
+        run: |
+          az containerapp exec \
+            --name ${{ env.NAME_PREFIX }}-backend \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --command "alembic upgrade head"
+
+      - name: Roll backend API to the new image
+        run: |
+          az containerapp update \
+            --name ${{ env.NAME_PREFIX }}-backend \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-backend:${{ github.sha }}
+
+      - name: Roll celery worker to the new image
+        run: |
+          az containerapp update \
+            --name ${{ env.NAME_PREFIX }}-celery-worker \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-backend:${{ github.sha }}
+
+      - name: Roll celery beat to the new image
+        run: |
+          az containerapp update \
+            --name ${{ env.NAME_PREFIX }}-celery-beat \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-backend:${{ github.sha }}
+
+      - name: Roll frontend to the new image
+        run: |
+          az containerapp update \
+            --name ${{ env.NAME_PREFIX }}-frontend \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-frontend:${{ github.sha }}

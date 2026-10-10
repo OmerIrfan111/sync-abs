@@ -31,6 +31,10 @@ const STORE_DESCRIPTIONS: Record<string, { summary: string; guide: string }> = {
   "Shopify": {
     summary: "Connect your personal branded storefront for seamless inventory management.",
     guide: "In Shopify Admin, go to Settings > Apps > Custom apps, create an app, and copy the Admin API Access Token."
+  },
+  "Walmart": {
+    summary: "Sell directly on Walmart.com Marketplace. We automatically sync inventory quantities, prices, and ingest customer orders.",
+    guide: "Log in to developer.walmart.com > API Keys > My API Key, and copy your Client ID and Client Secret."
   }
 };
 
@@ -73,9 +77,9 @@ export default function MarketplacesPage() {
     setLoading(true);
     try {
       const res = await fetchApi<Marketplace[]>("/marketplaces");
-      // Keep only eBay, Amazon, and Shopify
+      // Keep only eBay, Amazon, Shopify, and Walmart
       const supported = res.filter(m => 
-        ["ebay", "amazon", "shopify"].some(k => m.name.toLowerCase().includes(k))
+        ["ebay", "amazon", "shopify", "walmart"].some(k => m.name.toLowerCase().includes(k))
       );
       setMarketplaces(supported);
     } catch (err: any) {
@@ -158,6 +162,7 @@ export default function MarketplacesPage() {
     LiveEBayAdapter: "eBay",
     LiveAmazonAdapter: "Amazon",
     LiveShopifyAdapter: "Shopify",
+    LiveWalmartAdapter: "Walmart",
   };
 
   const handleCreateAccount = async (e: React.FormEvent) => {
@@ -233,6 +238,16 @@ export default function MarketplacesPage() {
             client_secret: amazonClientSecret.trim(),
             refresh_token: amazonRefreshToken.trim(),
             adapter_class: "LiveAmazonAdapter"
+          };
+        } else if (name.includes("walmart")) {
+          if (!genericClientId.trim() || !genericClientSecret.trim()) {
+            throw new Error("Please provide your Walmart Client ID and Client Secret.");
+          }
+          creds = {
+            client_id: genericClientId.trim(),
+            client_secret: genericClientSecret.trim(),
+            environment: "production",
+            adapter_class: "LiveWalmartAdapter"
           };
         } else {
           creds = {

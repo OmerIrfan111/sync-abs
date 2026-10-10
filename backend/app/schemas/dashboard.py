@@ -18,6 +18,7 @@ class MarketplaceHealthStatus(BaseModel):
     is_active: bool
     status: str
     listing_count: int
+    supports_orders: bool = True
     credentials_expires_at: Optional[datetime] = None
     days_until_credentials_expire: Optional[int] = None
 

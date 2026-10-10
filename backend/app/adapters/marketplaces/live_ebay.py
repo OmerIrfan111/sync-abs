@@ -379,11 +379,10 @@ class LiveEBayAdapter(MarketplaceAdapter):
         except Exception as err:
             logger.warning(f"Notice on eBay offer lookup for withdrawal: {err}")
 
-        # 2. Update stock to 0 on eBay inventory item
-        try:
-            return self.update_inventory(external_listing_id, actual_sku, quantity=0)
-        except Exception:
-            return True
+        # 2. Update stock to 0 on eBay inventory item. Must not swallow a real
+        # failure here into a fabricated True — the caller would record this
+        # listing as WITHDRAWN while eBay still shows it in stock.
+        return self.update_inventory(external_listing_id, actual_sku, quantity=0)
 
     def get_listing(self, external_listing_id: str) -> Dict[str, Any]:
         """Retrieves live item from eBay Inventory API."""

@@ -127,6 +127,49 @@ def catalog_reconcile_task():
         db.close()
 
 @celery_app.task
+def image_backfill_task():
+    """
+    Periodic task: upgrades a bounded batch of existing products still on a
+    generic/unverified fallback photo to a real, title/brand-verified one.
+    CatalogService.backfill_product_images() was built as "Feature 4" but
+    never called from anywhere until this task — the catalog had been
+    showing repeated generic stock photos for every product without a real
+    supplier-provided image URL, which this works through incrementally.
+    """
+    from app.services.catalog_service import CatalogService
+
+    db = SessionLocal()
+    try:
+        service = CatalogService(db)
+        result = service.backfill_product_images(limit=30)
+        logger.info(
+            f"Image backfill complete: {result['attempted']} attempted, "
+            f"{result['verified']} got a real verified photo"
+        )
+        return result
+    finally:
+        db.close()
+
+@celery_app.task
+def walmart_match_backfill_task():
+    """
+    Periodic task: checks a bounded batch of products against Walmart's real
+    catalog (CatalogService.backfill_walmart_match_status) so the catalog's
+    Walmart-matchability filter stays populated without anyone having to
+    trigger the check manually per product.
+    """
+    from app.services.catalog_service import CatalogService
+
+    db = SessionLocal()
+    try:
+        service = CatalogService(db)
+        result = service.backfill_walmart_match_status(limit=20)
+        logger.info(f"Walmart match backfill: {result}")
+        return result
+    finally:
+        db.close()
+
+@celery_app.task
 def order_ingestion_task():
     """
     Periodic task: polls all active marketplaces for new orders and ingests them.
@@ -195,5 +238,23 @@ def tracking_sync_task():
             f"polling, {synced} PO(s) pushed to marketplace, {delivered_count} PO(s) confirmed delivered"
         )
         return {"polled_count": polled_count, "synced_count": synced, "delivered_count": delivered_count}
+    finally:
+        db.close()
+
+
+@celery_app.task
+def reconcile_pending_listings_task():
+    """
+    Polls real marketplace status for PENDING listings (currently Walmart's
+    async MP_ITEM_MATCH feed) so they don't sit at PENDING forever with no
+    automatic path to ACTIVE/ERROR — see ListingService.reconcile_pending_async_listings.
+    """
+    from app.services.listing_service import ListingService
+
+    db = SessionLocal()
+    try:
+        result = ListingService(db).reconcile_pending_async_listings()
+        logger.info(f"Pending listing reconciliation: {result}")
+        return result
     finally:
         db.close()

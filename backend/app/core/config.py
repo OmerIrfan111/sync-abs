@@ -41,6 +41,22 @@ class Settings(BaseSettings):
     INGRAM_MICRO_CUSTOMER_NUMBER: Optional[str] = None
     INGRAM_MICRO_ENVIRONMENT: str = "production"
 
+    # This business's own identity, required by Ingram Micro's real Order
+    # Create v7 API as the "resellerInfo" object on every order (confirmed
+    # against Ingram's official API reference). Never fabricated — if any of
+    # these are missing, IngramMicroAdapter.submit_order() raises rather than
+    # guessing or omitting the field.
+    RESELLER_COMPANY_NAME: Optional[str] = None
+    RESELLER_CONTACT_NAME: Optional[str] = None
+    RESELLER_ADDRESS_LINE1: Optional[str] = None
+    RESELLER_ADDRESS_LINE2: Optional[str] = None
+    RESELLER_CITY: Optional[str] = None
+    RESELLER_STATE: Optional[str] = None
+    RESELLER_POSTAL_CODE: Optional[str] = None
+    RESELLER_COUNTRY_CODE: str = "US"
+    RESELLER_PHONE: Optional[str] = None
+    RESELLER_EMAIL: Optional[str] = None
+
     DANDH_CLIENT_ID: Optional[str] = None
     DANDH_CLIENT_SECRET: Optional[str] = None
     DANDH_ACCOUNT_NUMBER: Optional[str] = "3302610000"
@@ -53,6 +69,10 @@ class Settings(BaseSettings):
     TDSYNNEX_ACCOUNT_NUMBER: Optional[str] = None
     TDSYNNEX_ENVIRONMENT: str = "production"
 
+    WALMART_CLIENT_ID: Optional[str] = None
+    WALMART_CLIENT_SECRET: Optional[str] = None
+    WALMART_ENVIRONMENT: str = "production"
+
     # Global Sandbox / Dry Run Flag (Feature 5)
     # Default is True in development/testing. Production requires explicit DRY_RUN=False.
     DRY_RUN: bool = True
@@ -61,8 +81,20 @@ class Settings(BaseSettings):
     UPC_SIMILARITY_THRESHOLD: float = 0.60
 
     # Image Search Provider Configuration (Feature 4)
-    IMAGE_SEARCH_PROVIDER: str = "bing"  # "bing", "mock", "serper", "google"
+    # "bing" = free scraped Bing HTML, no key needed, but confirmed
+    # (2026-10-10, live-tested: the identical query sent 3 times returned 3
+    # different, unrelated results each time) to serve randomized decoy
+    # content instead of real results for exactly the kind of narrow B2B SKU
+    # query this app needs most — an anti-scraping countermeasure, not
+    # something fixable by better queries. "bing_api" = the real, official
+    # Bing Image Search API (Azure Cognitive Services) — same underlying
+    # Bing index a real browser sees, no scraping, requires a real
+    # subscription key (BING_IMAGE_SEARCH_API_KEY). Prefer "bing_api" once
+    # a key is available.
+    IMAGE_SEARCH_PROVIDER: str = "bing"  # "bing", "bing_api", "mock", "google"
     IMAGE_SEARCH_API_KEY: Optional[str] = None
+    BING_IMAGE_SEARCH_API_KEY: Optional[str] = None
+    BING_IMAGE_SEARCH_ENDPOINT: str = "https://api.bing.microsoft.com/v7.0/images/search"
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),

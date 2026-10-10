@@ -116,7 +116,11 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     marketplaces_health = []
     credential_warnings: List[str] = []
     for m in marketplaces:
-        l_count = db.query(Listing).filter(Listing.marketplace_id == m.id).count()
+        # Must match what the UI label actually claims ("Live in store") —
+        # counting every status including WITHDRAWN/ERROR/PENDING showed a
+        # withdrawn Shopify listing as "1 offers Live in store" when nothing
+        # was actually live (real incident, 2026-10-08).
+        l_count = db.query(Listing).filter(Listing.marketplace_id == m.id, Listing.status == "ACTIVE").count()
         latest_err = db.query(ErrorLog).filter(
             ErrorLog.marketplace_id == m.id,
             ErrorLog.error_type.in_(["MARKETPLACE_CONNECTION_ERROR", "LISTING_ERROR"]),
@@ -142,12 +146,29 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
             elif days_left <= 30:
                 credential_warnings.append(f"{m.name} credentials expire in {days_left} day(s) — reauthorize soon to avoid a sync outage.")
 
+        # "Active & Selling" must mean real order capability, not just valid
+        # credentials — Amazon/Shopify's order methods are intentionally
+        # unimplemented stubs (see base.py), so claiming full selling status
+        # for them is false even when the connection itself is fine (real
+        # incident, 2026-10-08: user correctly called this out as a fake
+        # status after Amazon showed "Active & Selling" with 0 real orders
+        # ever possible). Checks the adapter's OWN class, not the inherited
+        # base default, so this stays correct automatically if a stub is
+        # ever filled in for real.
+        try:
+            from app.adapters.registry import MARKETPLACE_ADAPTERS
+            adapter_cls = MARKETPLACE_ADAPTERS.get(m.adapter_class)
+            supports_orders = "fetch_orders" in adapter_cls.__dict__ if adapter_cls else True
+        except Exception:
+            supports_orders = True
+
         marketplaces_health.append(MarketplaceHealthStatus(
             id=m.id,
             name=m.name,
             is_active=m.is_active,
             status=status_str,
             listing_count=l_count,
+            supports_orders=supports_orders,
             credentials_expires_at=m.credentials_expires_at,
             days_until_credentials_expire=days_left,
         ))

@@ -24,6 +24,7 @@ def list_products(
     min_price: Optional[Decimal] = Query(None, description="Minimum lowest-supplier-cost"),
     max_price: Optional[Decimal] = Query(None, description="Maximum lowest-supplier-cost"),
     marketplace_id: Optional[int] = Query(None, description="Only products currently listed on this marketplace"),
+    walmart_match_status: Optional[str] = Query(None, description="matchable | not_matchable | unchecked"),
     db: Session = Depends(get_db)
 ):
     service = CatalogService(db)
@@ -38,7 +39,8 @@ def list_products(
         in_stock=in_stock,
         min_price=min_price,
         max_price=max_price,
-        marketplace_id=marketplace_id
+        marketplace_id=marketplace_id,
+        walmart_match_status=walmart_match_status,
     )
     total_pages = (total + page_size - 1) // page_size if total > 0 else 1
 
@@ -80,14 +82,8 @@ def get_product_image_suggestions(
         raise HTTPException(status_code=404, detail="Product not found")
 
     from app.adapters.suppliers.image_resolver import resolve_product_imagery, _validate_url
-    from app.adapters.suppliers.image_search_provider import get_image_search_provider
+    from app.adapters.suppliers.image_search_provider import get_image_search_provider, TRUSTED_SUPPLIER_DOMAINS
 
-    TRUSTED_SUPPLIER_DOMAINS = (
-        "officedepot.com", "media.officedepot.com",
-        "static.storeautomator.com", "storeautomator.com",
-        "cdwg.com", "cdn.cdwg.com",
-        "ingram.com", "assets.ingrammicro.com",
-    )
     stored = product.images or []
     supplier_images = [
         img for img in stored
@@ -98,27 +94,48 @@ def get_product_image_suggestions(
     web_candidates = []
     query_used = ""
 
-    if q and q.strip():
-        query_used = q.strip()
-        if hasattr(provider, "search_web_images"):
-            web_candidates = provider.search_web_images(query_used, max_results=12)
+    # A configured Google provider now raises on a transient network failure
+    # (fixed to stop defeating ImageMatchingService's retry wrapper
+    # elsewhere) — but this is an interactive picker request, not a retried
+    # batch job, so here a failed web search should degrade to the category
+    # fallbacks below rather than 500 the whole endpoint.
+    try:
+        if q and q.strip():
+            query_used = q.strip()
+            if hasattr(provider, "search_web_images"):
+                web_candidates = provider.search_web_images(query_used, max_results=35)
+            else:
+                web_candidates = provider.search_by_upc(query_used)
         else:
-            web_candidates = provider.search_by_upc(query_used)
-    else:
-        # Construct intelligent search query for this product
-        norm_upc = product.upc or product.ean
-        if hasattr(provider, "search_by_upc"):
-            web_candidates = provider.search_by_upc(
-                upc=norm_upc or "",
-                title=product.title,
-                brand=product.brand,
-                mpn=product.mpn
-            )
-            query_used = f"{norm_upc or ''} {product.brand or ''} {product.mpn or ''}".strip()
-        elif hasattr(provider, "search_web_images"):
-            fallback_query = f"{product.brand or ''} {product.mpn or product.title[:40]}".strip()
-            query_used = fallback_query
-            web_candidates = provider.search_web_images(fallback_query, max_results=10)
+            # Construct intelligent search query for this product
+            norm_upc = product.upc or product.ean
+            if hasattr(provider, "search_by_upc"):
+                web_candidates = provider.search_by_upc(
+                    upc=norm_upc or "",
+                    title=product.title,
+                    brand=product.brand,
+                    mpn=product.mpn
+                )
+                query_used = f"{norm_upc or ''} {product.brand or ''} {product.mpn or ''}".strip()
+            elif hasattr(provider, "search_web_images"):
+                fallback_query = f"{product.brand or ''} {product.mpn or product.title[:40]}".strip()
+                query_used = fallback_query
+                web_candidates = provider.search_web_images(fallback_query, max_results=35)
+    except Exception:
+        web_candidates = []
+
+    # The manual query box (q) does a single raw Bing scrape of exactly what
+    # was typed — unlike the automatic UPC pipeline, it has no multi-tier
+    # merge to fall back on, so a bare UPC (collision-prone) or a generic
+    # free-text query returns whatever Bing ranks first, unfiltered. Applying
+    # the same trusted-supplier-CDN-first sort here (stable, doesn't reorder
+    # within either group) at least surfaces a real supplier photo above
+    # generic/unrelated web results when one exists, same as the automatic
+    # pipeline already does.
+    web_candidates = sorted(
+        web_candidates,
+        key=lambda c: 0 if any(d in c.image_url.lower() for d in TRUSTED_SUPPLIER_DOMAINS) else 1
+    )
 
     category_fallbacks = resolve_product_imagery(
         brand=product.brand,
@@ -155,10 +172,12 @@ def get_product_image_suggestions(
     for img in category_fallbacks:
         add_url(img)
 
+    # Raised from 15 alongside the max_results caps above (2026-10-10) — no
+    # reason to truncate what was already fetched down to a third of it.
     return {
         "product_id": product_id,
         "query_used": query_used,
-        "suggestions": ordered_urls[:15],
+        "suggestions": ordered_urls[:40],
         "candidates": [
             {
                 "image_url": c.image_url,
@@ -166,7 +185,7 @@ def get_product_image_suggestions(
                 "source": c.source,
                 "snippet": c.snippet
             }
-            for c in web_candidates[:15]
+            for c in web_candidates[:40]
         ]
     }
 
@@ -207,6 +226,168 @@ def set_product_image(
 
     service = CatalogService(db)
     return service.get_product_by_id(product.id)
+
+
+@router.post("/{product_id}/lookup-weight")
+def lookup_product_weight(product_id: int, db: Session = Depends(get_db)):
+    """
+    Best-effort shipping weight lookup by UPC/EAN for products whose supplier
+    doesn't report one (Ingram Micro, TD SYNNEX). Staff-triggered only — see
+    WeightLookupService docstring for why this must not be run in bulk.
+    """
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    from app.services.weight_lookup_service import WeightLookupService
+    result = WeightLookupService().lookup_weight_by_upc(
+        upc=product.upc or product.ean or "",
+        title=product.title,
+        brand=product.brand,
+    )
+    if result.status != "found":
+        raise HTTPException(status_code=404, detail=result.reason or "No verified weight found.")
+
+    return {
+        "weight_lbs": result.weight_lbs,
+        "confidence": result.confidence,
+        "source_title": result.source_title,
+    }
+
+
+@router.get("/{product_id}/walmart-match-check")
+def check_walmart_catalog_match(product_id: int, db: Session = Depends(get_db)):
+    """
+    Real pre-check for whether this product's GTIN exists anywhere in
+    Walmart's catalog, before attempting a real MP_ITEM_MATCH feed
+    submission. See LiveWalmartAdapter.search_walmart_catalog_by_gtin.
+    """
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    upc = product.upc or product.ean
+    if not upc:
+        raise HTTPException(status_code=400, detail="This product has no UPC/EAN on file to check.")
+
+    from app.models.marketplace import Marketplace
+    from app.services.listing_service import ListingService
+
+    wm = db.query(Marketplace).filter(Marketplace.name.ilike("%walmart%")).first()
+    if not wm:
+        raise HTTPException(status_code=400, detail="No Walmart marketplace configured.")
+
+    adapter = ListingService(db).get_adapter_for_marketplace(wm)
+    if not hasattr(adapter, "search_walmart_catalog_by_gtin"):
+        raise HTTPException(status_code=400, detail="This marketplace adapter doesn't support a catalog pre-check.")
+
+    try:
+        items = adapter.search_walmart_catalog_by_gtin(upc)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach Walmart to check: {exc}")
+
+    from datetime import datetime, timezone
+    specs = dict(product.specs_json or {})
+    specs["walmart_match_status"] = "matchable" if items else "not_matchable"
+    specs["walmart_match_checked_at"] = datetime.now(timezone.utc).isoformat()
+    product.specs_json = specs
+    db.commit()
+
+    return {
+        "matchable": len(items) > 0,
+        "matches_found": len(items),
+        "sample": items[0] if items else None,
+    }
+
+
+def _get_walmart_adapter(db: Session):
+    from app.models.marketplace import Marketplace
+    from app.services.listing_service import ListingService
+
+    wm = db.query(Marketplace).filter(Marketplace.name.ilike("%walmart%")).first()
+    if not wm:
+        raise HTTPException(status_code=400, detail="No Walmart marketplace configured.")
+    return ListingService(db).get_adapter_for_marketplace(wm)
+
+
+@router.get("/walmart-item-spec")
+def get_walmart_item_spec(
+    product_type: str = Query(..., description="Real Walmart category name, e.g. 'Network Switches'"),
+    db: Session = Depends(get_db),
+):
+    """
+    Real per-category required-field schema for full MP_ITEM setup (used
+    when a product has no existing Walmart catalog match — see
+    LiveWalmartAdapter.get_item_spec). Throttled by Walmart to 3
+    requests/minute per seller; the frontend should cache this per category,
+    not call it on every keystroke.
+    """
+    adapter = _get_walmart_adapter(db)
+    if not hasattr(adapter, "get_item_spec"):
+        raise HTTPException(status_code=400, detail="This marketplace adapter doesn't support item spec lookup.")
+
+    try:
+        res = adapter.get_item_spec([product_type])
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach Walmart to fetch spec: {exc}")
+
+    try:
+        visible_schema = (
+            res["schema"]["properties"]["MPItem"]["items"]["properties"]["Visible"]["properties"][product_type]
+        )
+    except (KeyError, TypeError):
+        raise HTTPException(status_code=404, detail=f"'{product_type}' is not a real Walmart product type.")
+
+    return {
+        "product_type": product_type,
+        "required": visible_schema.get("required", []),
+        "properties": visible_schema.get("properties", {}),
+    }
+
+
+class WalmartNewItemPayload(BaseModel):
+    product_type: str
+    price: Decimal = Field(gt=0, description="Real selling price; must be positive")
+    weight_lbs: float = Field(gt=0, description="Real shipping weight; must be positive")
+    condition: str = "New"
+    visible_attributes: dict
+
+
+@router.post("/{product_id}/walmart-create-new-item")
+def create_walmart_new_item(product_id: int, payload: WalmartNewItemPayload, db: Session = Depends(get_db)):
+    """
+    Submits a real MP_ITEM feed to create a brand-new Walmart catalog item
+    for a product with no existing catalog match (item-match isn't
+    possible — see /walmart-match-check). visible_attributes must satisfy
+    the real required fields from /walmart-item-spec; nothing here is
+    fabricated or defaulted on the caller's behalf.
+    """
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    if not (product.upc or product.ean):
+        raise HTTPException(status_code=400, detail="Product has no UPC/EAN on file.")
+
+    adapter = _get_walmart_adapter(db)
+    if not hasattr(adapter, "submit_new_item_feed"):
+        raise HTTPException(status_code=400, detail="This marketplace adapter doesn't support full item setup.")
+
+    try:
+        res = adapter.submit_new_item_feed(
+            sku=product.sku,
+            upc=product.upc or product.ean,
+            price=payload.price,
+            weight_lbs=payload.weight_lbs,
+            product_type=payload.product_type,
+            visible_attributes=payload.visible_attributes,
+            condition=payload.condition,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Walmart submission failed: {exc}")
+
+    return {"feed_id": res.get("feedId")}
 
 
 @router.get("/{product_id}", response_model=ProductResponse)
@@ -262,11 +443,34 @@ def update_product(product_id: int, payload: ProductUpdate, db: Session = Depend
     service = CatalogService(db)
     return service.get_product_by_id(product.id)
 
-@router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{product_id}", status_code=status.HTTP_200_OK)
 def delete_product(product_id: int, db: Session = Depends(get_db)):
+    """
+    Deletes a product and, via DB cascade, every Listing row attached to it.
+    Real incident class this must not repeat: deleting a product that still
+    has an ACTIVE/PENDING marketplace listing used to just cascade-delete
+    the Listing locally with no attempt to retire/withdraw it on the real
+    marketplace first — leaving the item live and purchasable with no local
+    record left to manage it (the same bug class fixed for DELETE
+    /listings/{id} after the real 00TF99 incident, 2026-10-07). Every
+    listing is cleaned up on its marketplace (best-effort, never blocks the
+    delete) before the product itself is removed.
+    """
+    from app.services.listing_service import ListingService
+
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+
+    service = ListingService(db)
+    cleanup_results = []
+    for listing in list(product.listings):
+        note = service.retire_or_withdraw_listing(listing)
+        cleanup_results.append({
+            "marketplace": listing.marketplace.name if listing.marketplace else None,
+            "cleanup": note,
+        })
+
     db.delete(product)
     db.commit()
-    return None
+    return {"success": True, "message": "Product deleted", "marketplace_cleanup": cleanup_results}

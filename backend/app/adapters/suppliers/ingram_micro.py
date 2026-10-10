@@ -531,10 +531,37 @@ class IngramMicroAdapter(SupplierAdapter):
         valid — real validation/fulfillment status follows later via
         check_shipment_status() (Search Orders v7) or Ingram's OrderStatus
         webhook (not implemented here).
+
+        resellerInfo/endUserInfo are built from this business's own
+        RESELLER_* config and the real order's delivery_address, per
+        Ingram's official Order Create v7 reference (resellerInfo and
+        endUserInfo are documented top-level request fields, confirmed
+        directly from Ingram's own API docs, not inferred).
         """
         if not self.is_live():
             raise ConnectionError(
                 "Ingram Micro adapter has no live credentials configured; refusing to submit a fabricated order."
+            )
+
+        from app.core.config import settings
+
+        missing_reseller_fields = [
+            name for name, value in [
+                ("RESELLER_COMPANY_NAME", settings.RESELLER_COMPANY_NAME),
+                ("RESELLER_ADDRESS_LINE1", settings.RESELLER_ADDRESS_LINE1),
+                ("RESELLER_CITY", settings.RESELLER_CITY),
+                ("RESELLER_STATE", settings.RESELLER_STATE),
+                ("RESELLER_POSTAL_CODE", settings.RESELLER_POSTAL_CODE),
+                ("RESELLER_PHONE", settings.RESELLER_PHONE),
+                ("RESELLER_EMAIL", settings.RESELLER_EMAIL),
+            ] if not value
+        ]
+        if missing_reseller_fields:
+            raise ValueError(
+                "Cannot submit a real Ingram Micro order: this business's own reseller "
+                f"profile is incomplete in backend/.env (missing {', '.join(missing_reseller_fields)}). "
+                "Ingram Micro's Order Create v7 API requires real resellerInfo on every order — "
+                "refusing to fabricate or omit it."
             )
 
         token = self.get_access_token()
@@ -549,15 +576,44 @@ class IngramMicroAdapter(SupplierAdapter):
             for item in line_items
         ]
 
+        end_user_name = delivery_address.get("attention") or delivery_address.get("deliveryName") or ""
+
         payload = {
             "customerOrderNumber": customer_purchase_order,
-            "shipToInfo": {
-                "contact": delivery_address.get("attention") or delivery_address.get("deliveryName") or "",
+            "resellerInfo": {
+                "resellerId": self.customer_number or "",
+                "companyName": settings.RESELLER_COMPANY_NAME,
+                "contact": settings.RESELLER_CONTACT_NAME or settings.RESELLER_COMPANY_NAME,
+                "addressLine1": settings.RESELLER_ADDRESS_LINE1,
+                "addressLine2": settings.RESELLER_ADDRESS_LINE2 or "",
+                "city": settings.RESELLER_CITY,
+                "state": settings.RESELLER_STATE,
+                "postalCode": settings.RESELLER_POSTAL_CODE,
+                "countryCode": settings.RESELLER_COUNTRY_CODE or "US",
+                "phoneNumber": settings.RESELLER_PHONE,
+                "email": settings.RESELLER_EMAIL,
+            },
+            "endUserInfo": {
+                "contact": end_user_name,
+                "companyName": end_user_name,
                 "addressLine1": delivery_address.get("street", ""),
                 "city": delivery_address.get("city", ""),
                 "state": delivery_address.get("region", ""),
                 "postalCode": delivery_address.get("postalCode", ""),
                 "countryCode": delivery_address.get("country", "US"),
+                "phoneNumber": delivery_address.get("phone", ""),
+                "email": delivery_address.get("email", ""),
+            },
+            "shipToInfo": {
+                "contact": end_user_name,
+                "companyName": end_user_name,
+                "addressLine1": delivery_address.get("street", ""),
+                "city": delivery_address.get("city", ""),
+                "state": delivery_address.get("region", ""),
+                "postalCode": delivery_address.get("postalCode", ""),
+                "countryCode": delivery_address.get("country", "US"),
+                "email": delivery_address.get("email", ""),
+                "phoneNumber": delivery_address.get("phone", ""),
             },
             "lines": lines,
         }

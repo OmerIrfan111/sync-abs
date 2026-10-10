@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.upc_utils import normalize_upc
 from app.core.product_matcher import calculate_product_similarity
 from app.adapters.suppliers.image_search_provider import (
-    ImageSearchProvider, ImageCandidate, get_image_search_provider
+    ImageSearchProvider, ImageCandidate, get_image_search_provider, TRUSTED_SUPPLIER_DOMAINS
 )
 from app.models.product import Product
 
@@ -180,6 +180,14 @@ class ImageMatchingService:
                 brand2=cand.brand,
                 model1=product.mpn
             )
+            # A known supplier's own CDN hosting this UPC's photo is a real,
+            # independent correctness signal — often stronger than the
+            # scraped page title/brand text (which can be blank or generic
+            # for a CDN asset URL), so it shouldn't be penalized for that.
+            # Boosted, not auto-accepted: still has to clear the threshold,
+            # just doesn't get unfairly held back by weak scraped metadata.
+            if any(d in cand.image_url.lower() for d in TRUSTED_SUPPLIER_DOMAINS):
+                score = max(score, 0.75)
             cand_info = {
                 "title": cand.title,
                 "brand": cand.brand,

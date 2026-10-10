@@ -332,8 +332,14 @@ def test_scenario_7_marketplace_failure_and_error_logging(db_session):
 
     # Mock adapter's create_listing to simulate an API exception
     with patch.object(listing_service, "get_adapter_for_marketplace") as mock_get_adapter:
-        mock_adapter = MagicMock()
+        # spec-restricted to what a real non-Walmart adapter actually
+        # exposes — an unconstrained MagicMock() auto-creates every
+        # attribute, so hasattr(adapter, "search_walmart_catalog_by_gtin")
+        # wrongly returned True here and triggered the Walmart-only
+        # matchability gate on this unrelated "Flaky Marketplace" scenario.
+        mock_adapter = MagicMock(spec=["create_listing", "get_listing", "update_price", "update_inventory"])
         mock_adapter.create_listing.side_effect = Exception("500 Internal Server Error from Marketplace API")
+        mock_adapter.get_listing.side_effect = Exception("not found")
         mock_get_adapter.return_value = mock_adapter
 
         with pytest.raises(Exception) as exc_info:

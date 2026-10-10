@@ -30,6 +30,7 @@ export default function DashboardPage() {
       task_id: string;
     }>;
   } | null>(null);
+  const [reconcileError, setReconcileError] = useState<string | null>(null);
 
   const loadStats = async () => {
     try {
@@ -59,6 +60,7 @@ export default function DashboardPage() {
   const handleReconcileAll = async () => {
     setReconciling(true);
     setReconcileResult(null);
+    setReconcileError(null);
     try {
       const result = await fetchApi<any>("/dashboard/reconcile-all", {
         method: "POST",
@@ -66,7 +68,7 @@ export default function DashboardPage() {
       setReconcileResult(result);
       await loadStats();
     } catch (err: any) {
-      alert("System update failed: " + err.message);
+      setReconcileError("System update failed: " + err.message);
     } finally {
       setReconciling(false);
     }
@@ -173,6 +175,22 @@ export default function DashboardPage() {
               </Link>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Reconcile Failure Notice — replaces a raw alert() so errors stay in-app like elsewhere */}
+      {reconcileError && (
+        <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-900 flex items-center justify-between">
+          <div className="flex items-center gap-2 font-semibold text-xs">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <span>{reconcileError}</span>
+          </div>
+          <button
+            onClick={() => setReconcileError(null)}
+            className="text-xs text-red-700 hover:text-red-900 px-2 py-0.5 bg-white rounded-lg border border-red-200"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -376,14 +394,18 @@ export default function DashboardPage() {
               >
                 <div className="flex items-center gap-2.5">
                   <div className={`h-2 w-2 rounded-full ${
-                    mkt.status === "HEALTHY" ? "bg-emerald-500" : mkt.status === "IDLE" ? "bg-gray-400" : "bg-rose-500"
+                    mkt.status !== "HEALTHY" ? (mkt.status === "IDLE" ? "bg-gray-400" : "bg-rose-500") : (mkt.supports_orders ? "bg-emerald-500" : "bg-amber-500")
                   }`} />
                   <div>
                     <div className="text-xs font-semibold text-[#1C201B]">{mkt.name}</div>
                     <div className={`text-[11px] font-medium ${
-                      mkt.status === "HEALTHY" ? "text-emerald-700" : mkt.status === "IDLE" ? "text-gray-500" : "text-rose-700"
-                    }`}>
-                      {mkt.status === "HEALTHY" ? "Active & Selling" : mkt.status === "IDLE" ? "Not active" : "Needs Attention"}
+                      mkt.status !== "HEALTHY" ? (mkt.status === "IDLE" ? "text-gray-500" : "text-rose-700") : (mkt.supports_orders ? "text-emerald-700" : "text-amber-700")
+                    }`}
+                      title={mkt.status === "HEALTHY" && !mkt.supports_orders ? "Listings/inventory sync works, but this marketplace's real order processing isn't built yet — orders placed here won't be picked up." : undefined}
+                    >
+                      {mkt.status === "HEALTHY"
+                        ? (mkt.supports_orders ? "Active & Selling" : "Listing Only — Orders Not Supported")
+                        : mkt.status === "IDLE" ? "Not active" : "Needs Attention"}
                     </div>
                   </div>
                 </div>
@@ -426,12 +448,13 @@ export default function DashboardPage() {
                     <span className="text-[11px] text-[#767676]" suppressHydrationWarning>{new Date(err.created_at).toLocaleTimeString()}</span>
                   </div>
                   <p className="text-[#1C201B] font-semibold mt-1">
-                    {err.marketplace_name
-                      ? `Temporary connection notice for ${err.marketplace_name}.`
-                      : err.supplier_name
-                        ? `Could not reach ${err.supplier_name} during check.`
-                        : "A temporary update was delayed."}
+                    {err.message || "A temporary update was delayed."}
                   </p>
+                  {(err.supplier_name || err.marketplace_name || err.product_sku) && (
+                    <p className="text-[11px] text-[#767676] mt-0.5">
+                      {[err.supplier_name, err.marketplace_name, err.product_sku].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
                   <p className="text-[11px] text-[#767676] mt-0.5">
                     Why it matters: Stock or price updates for affected items may be delayed until re-checked.
                   </p>

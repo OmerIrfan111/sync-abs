@@ -1,47 +1,35 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { 
-  ShoppingBag, 
-  RefreshCw, 
-  Store, 
-  Check, 
-  Plus, 
-  Edit3, 
-  X, 
-  Eye, 
-  EyeOff, 
-  HelpCircle, 
-  AlertCircle,
+import { useRouter } from "next/navigation";
+import {
+  RefreshCw,
+  Store,
+  Plus,
+  Edit3,
+  X,
+  Eye,
+  EyeOff,
   CheckCircle2,
-  Sparkles,
+  AlertTriangle,
   Trash2
 } from "lucide-react";
-import { fetchApi, Listing, Product } from "@/lib/api";
+import { fetchApi, Listing } from "@/lib/api";
 
 
 const STATIC_ALL_TAB = { id: "ALL", name: "All Stores" };
 
 export default function ListingsPage() {
+  const router = useRouter();
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState("ALL");
-  const [editingListing, setEditingListing] = useState<Listing | null>(null);
-  const [editPrice, setEditPrice] = useState("");
-  const [editQty, setEditQty] = useState("");
-  const [savingEdit, setSavingEdit] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [deleteConfirmListing, setDeleteConfirmListing] = useState<Listing | null>(null);
   const [deletingListingId, setDeletingListingId] = useState<number | null>(null);
-
-  // Add Product to Store state
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState<number | "">("");
-  const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<number | "">("");
+  const [checkingStatusId, setCheckingStatusId] = useState<number | null>(null);
   const [marketplaces, setMarketplaces] = useState<any[]>([]);
-  const [addingListing, setAddingListing] = useState(false);
-  const [addCustomPrice, setAddCustomPrice] = useState("");
   const [reconciling, setReconciling] = useState(false);
 
   // Dynamic marketplace tabs: "All Stores" + one tab per connected marketplace
@@ -79,83 +67,19 @@ export default function ListingsPage() {
     }
   };
 
-  const loadCatalogAndChannels = async () => {
+  const loadMarketplaces = async () => {
     try {
-      const [prodRes, mktRes] = await Promise.all([
-        fetchApi<{ items: Product[] }>("/products?page=1&page_size=100"),
-        fetchApi<any[]>("/marketplaces")
-      ]);
-      setCatalogProducts(prodRes.items);
+      const mktRes = await fetchApi<any[]>("/marketplaces");
       setMarketplaces(mktRes);
-      if (prodRes.items.length > 0) setSelectedProductId(prodRes.items[0].id);
-      if (mktRes.length > 0) setSelectedMarketplaceId(mktRes[0].id);
     } catch (err) {
-      console.error("Failed to load catalog or channels:", err);
+      console.error("Failed to load marketplaces:", err);
     }
   };
 
   useEffect(() => {
     loadListings();
-    loadCatalogAndChannels();
+    loadMarketplaces();
   }, []);
-
-  const updateAddPrice = (pId: number, mId: number | "") => {
-    if (typeof mId !== "number") return;
-    const existing = listings.find(
-      l => l.product_id === pId && 
-           (l.marketplace_id === mId || 
-            (l.marketplace_name || '').toLowerCase() === marketplaces.find(m => m.id === mId)?.name.toLowerCase())
-    );
-    if (existing && Number(existing.selling_price) > 0) {
-      setAddCustomPrice(Number(existing.selling_price).toFixed(2));
-    } else {
-      const prod = catalogProducts.find(p => p.id === pId);
-      if (prod) {
-        const cost = Number(prod.lowest_cost || 0);
-        setAddCustomPrice((cost * 1.15).toFixed(2));
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (selectedProductId && selectedMarketplaceId !== "") {
-      updateAddPrice(Number(selectedProductId), Number(selectedMarketplaceId));
-    }
-  }, [selectedProductId, selectedMarketplaceId, catalogProducts, listings, marketplaces]);
-
-  const randomizeAddPrice = (cost: number) => {
-    const mult = 1 + (Math.floor(Math.random() * 25) + 10) / 100; // 10% to 35% margin
-    const p = Math.floor(cost * mult) + 0.99;
-    setAddCustomPrice(p.toFixed(2));
-  };
-
-  const openEditModal = (listing: Listing) => {
-    setEditingListing(listing);
-    setEditPrice(Number(listing.selling_price).toFixed(2));
-    setEditQty(String(listing.listed_qty));
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingListing) return;
-    setSavingEdit(true);
-    try {
-      await fetchApi(`/listings/${editingListing.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          selling_price: Number(editPrice),
-          listed_qty: Number(editQty),
-        }),
-      });
-      setFeedback("Price & stock updated successfully on your store!");
-      setTimeout(() => setFeedback(null), 3500);
-      setEditingListing(null);
-      await loadListings();
-    } catch (err: any) {
-      alert("Update failed: " + err.message);
-    } finally {
-      setSavingEdit(false);
-    }
-  };
 
   const handleToggleHide = async (listing: Listing) => {
     const shouldHide = listing.status === "ACTIVE";
@@ -164,12 +88,34 @@ export default function ListingsPage() {
       await fetchApi(actionEndpoint, { method: "POST" });
       setFeedback(shouldHide ? "Product is now hidden from buyers." : "Product is now live on your store!");
       setTimeout(() => setFeedback(null), 3500);
-      if (editingListing && editingListing.id === listing.id) {
-        setEditingListing(null);
-      }
       await loadListings();
     } catch (err: any) {
-      alert("Action failed: " + err.message);
+      setFeedbackError("Action failed: " + err.message);
+      setTimeout(() => setFeedbackError(null), 8000);
+    }
+  };
+
+  const handleCheckRealStatus = async (listing: Listing) => {
+    setCheckingStatusId(listing.id);
+    try {
+      const res = await fetchApi<{ check_method: string; result: any; feed_id?: string }>(
+        `/listings/${listing.id}/real-status`
+      );
+      const r = res.result || {};
+      if (res.check_method === "feed_status") {
+        const feedStatus = r.FeedStatus || r.status || JSON.stringify(r).slice(0, 200);
+        setFeedback(`Real status from Walmart's feed (${res.feed_id}): ${feedStatus}`);
+      } else if (r.error) {
+        setFeedbackError(`Still not live on ${listing.marketplace_name || "the store"}: ${r.error}`);
+      } else {
+        setFeedback(`Live on ${listing.marketplace_name || "the store"}: ${r.status || "confirmed present"}.`);
+      }
+      setTimeout(() => { setFeedback(null); setFeedbackError(null); }, 8000);
+    } catch (err: any) {
+      setFeedbackError("Could not check real status: " + err.message);
+      setTimeout(() => setFeedbackError(null), 8000);
+    } finally {
+      setCheckingStatusId(null);
     }
   };
 
@@ -180,47 +126,12 @@ export default function ListingsPage() {
       setFeedback(`Product removed from ${listing.marketplace_name || "store"}. You can re-add it anytime.`);
       setTimeout(() => setFeedback(null), 3500);
       setDeleteConfirmListing(null);
-      if (editingListing && editingListing.id === listing.id) {
-        setEditingListing(null);
-      }
       await loadListings();
     } catch (err: any) {
-      alert("Failed to remove product: " + err.message);
+      setFeedbackError("Failed to remove product: " + err.message);
+      setTimeout(() => setFeedbackError(null), 8000);
     } finally {
       setDeletingListingId(null);
-    }
-  };
-
-  const handleAddSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedProductId) return;
-
-    setAddingListing(true);
-    try {
-      const targetStore = marketplaces.find(m => m.id === selectedMarketplaceId);
-      const isAlreadyListed = listings.some(
-        l => l.product_id === Number(selectedProductId) && 
-             (l.marketplace_id === selectedMarketplaceId || 
-              (l.marketplace_name || '').toLowerCase() === (targetStore?.name || '').toLowerCase())
-      );
-
-      await fetchApi("/listings/publish", {
-        method: "POST",
-        body: JSON.stringify({
-          product_id: Number(selectedProductId),
-          marketplace_id: selectedMarketplaceId,
-          custom_price: addCustomPrice ? Number(addCustomPrice) : undefined,
-        }),
-      });
-      setShowAddModal(false);
-      const mName = targetStore?.name || "store";
-      setFeedback(isAlreadyListed ? `Price & stock updated on ${mName}!` : `Product added to ${mName} successfully!`);
-      setTimeout(() => setFeedback(null), 3500);
-      loadListings();
-    } catch (err: any) {
-      alert("Could not save listing: " + err.message);
-    } finally {
-      setAddingListing(false);
     }
   };
 
@@ -243,8 +154,9 @@ export default function ListingsPage() {
 
         <div className="flex items-center gap-2.5">
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => router.push("/catalog")}
             className="inline-flex items-center gap-2 px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all"
+            title="Browse the catalog and list a product using the same product details view everywhere in the app"
           >
             <Plus className="h-4 w-4" />
             <span>List a Product</span>
@@ -273,6 +185,12 @@ export default function ListingsPage() {
         <div className="p-3.5 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-900 flex items-center gap-2 text-xs font-semibold">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
           <span>{feedback}</span>
+        </div>
+      )}
+      {feedbackError && (
+        <div className="p-3.5 rounded-lg bg-rose-50 border border-rose-300 text-rose-900 flex items-center gap-2 text-xs font-semibold">
+          <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+          <span>{feedbackError}</span>
         </div>
       )}
 
@@ -344,12 +262,19 @@ export default function ListingsPage() {
                     <tr key={listing.id} className="hover:bg-gray-50/60 transition-colors">
                       {/* Product Name */}
                       <td className="px-6 py-3.5 font-medium text-[#0a0a0a]">
-                        <div className="max-w-md">
-                          <div className="line-clamp-1 font-semibold">{listing.product_title || "Unnamed Product"}</div>
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/catalog?openProduct=${listing.product_id}`)}
+                          className="max-w-md text-left group"
+                          title="Opens the same product details view used everywhere in the app"
+                        >
+                          <div className="line-clamp-1 font-semibold group-hover:underline group-hover:text-[#A8560A] transition-colors">
+                            {listing.product_title || "Unnamed Product"}
+                          </div>
                           <div className="text-[11px] text-[#767676] font-normal mt-0.5">
                             Code: <span className="font-mono text-[#A8560A] font-medium">{listing.product_sku || "N/A"}</span>
                           </div>
-                        </div>
+                        </button>
                       </td>
 
                       {/* Store Channel */}
@@ -411,9 +336,22 @@ export default function ListingsPage() {
                             <span>{isLive ? "Hide" : "Unhide"}</span>
                           </button>
 
+                          {!isLive && !isPaused && (
+                            <button
+                              onClick={() => handleCheckRealStatus(listing)}
+                              disabled={checkingStatusId === listing.id}
+                              className="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs transition-colors inline-flex items-center gap-1 font-medium disabled:opacity-50"
+                              title="Ask the real marketplace what actually happened, instead of trusting our stored status"
+                            >
+                              <RefreshCw className={`h-3.5 w-3.5 ${checkingStatusId === listing.id ? "animate-spin" : ""}`} />
+                              <span>{checkingStatusId === listing.id ? "Checking..." : "Check Real Status"}</span>
+                            </button>
+                          )}
+
                           <button
-                            onClick={() => openEditModal(listing)}
+                            onClick={() => router.push(`/catalog?openProduct=${listing.product_id}`)}
                             className="px-3 py-1.5 rounded-lg bg-white hover:bg-gray-50 text-[#0a0a0a] font-medium text-xs transition-colors inline-flex items-center gap-1.5 border border-gray-300"
+                            title="Opens the same product details view used everywhere in the app"
                           >
                             <Edit3 className="h-3.5 w-3.5 text-[#767676]" />
                             <span>Edit</span>
@@ -437,277 +375,6 @@ export default function ListingsPage() {
           </table>
         </div>
       </div>
-
-      {/* Edit Listing Modal */}
-      {editingListing && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-lg w-full p-6 shadow-xl space-y-5">
-            <div className="flex items-start justify-between pb-3 border-b border-gray-200">
-              <div>
-                <h3 className="text-lg font-bold text-[#0a0a0a]">Edit Store Listing</h3>
-                <p className="text-xs text-[#767676] mt-0.5">{editingListing.product_title}</p>
-              </div>
-              <button
-                onClick={() => setEditingListing(null)}
-                className="p-1.5 rounded-lg text-[#767676] hover:text-[#0a0a0a] hover:bg-gray-100"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
-                  Customer Selling Price ($)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#767676] font-medium text-sm">$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editPrice}
-                    onChange={(e) => setEditPrice(e.target.value)}
-                    className="w-full pl-7 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#0a0a0a] font-semibold focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
-                  />
-                </div>
-                <p className="text-[11px] text-[#767676] mt-1">What buyers will pay on {editingListing.marketplace_name}.</p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
-                  Stock Shown to Buyers (Quantity)
-                </label>
-                <input
-                  type="number"
-                  value={editQty}
-                  onChange={(e) => setEditQty(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#0a0a0a] font-semibold focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
-                />
-                <p className="text-[11px] text-[#767676] mt-1">How many units the marketplace shows as available.</p>
-              </div>
-
-              {/* Visibility / Hide Toggle */}
-              <div className="p-3.5 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-semibold text-[#0a0a0a]">Visibility on Store</div>
-                  <div className="text-[11px] text-[#767676] mt-0.5">
-                    {editingListing.status === "ACTIVE" 
-                      ? "Currently visible to online buyers" 
-                      : "Currently hidden from online buyers"}
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handleToggleHide(editingListing)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    editingListing.status === "ACTIVE"
-                      ? "bg-rose-50 text-rose-800 hover:bg-rose-100 border border-rose-200"
-                      : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
-                  }`}
-                >
-                  {editingListing.status === "ACTIVE" ? "Hide from Buyers" : "Make Live Again"}
-                </button>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-gray-200 flex items-center justify-end gap-2.5">
-              <button
-                onClick={() => setEditingListing(null)}
-                className="px-4 py-2 text-xs font-medium text-[#767676] hover:text-[#0a0a0a]"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveEdit}
-                disabled={savingEdit}
-                className="px-4 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all disabled:opacity-50"
-              >
-                {savingEdit ? "Saving..." : "Save Changes"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* List a Product Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-[#FAFAF8] border border-gray-200 rounded-lg max-w-lg w-full p-6 shadow-xl space-y-4">
-            <div className="flex items-start justify-between pb-3 border-b border-gray-200">
-              <div>
-                <h3 className="text-lg font-bold text-[#0a0a0a]">List a Product in Your Store</h3>
-                <p className="text-xs text-[#767676] mt-0.5">Select an item from your wholesale catalog to sell.</p>
-              </div>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="p-1.5 rounded-lg text-[#767676] hover:text-[#0a0a0a] hover:bg-gray-100"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
-                  1. Choose Product to Sell
-                </label>
-                <select
-                  value={selectedProductId}
-                  onChange={(e) => {
-                    const pId = Number(e.target.value);
-                    setSelectedProductId(pId);
-                    updateAddPrice(pId, selectedMarketplaceId);
-                  }}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
-                >
-                  {catalogProducts.map((p) => {
-                    const listedCount = listings.filter(l => l.product_id === p.id).length;
-                    return (
-                      <option key={p.id} value={p.id}>
-                        {p.title} (Cost: ${Number(p.lowest_cost || 0).toFixed(2)}) {listedCount > 0 ? `[In ${listedCount} Store${listedCount > 1 ? "s" : ""}]` : ""}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#1a1a1a] mb-1">
-                  2. Choose Store to Sell On
-                </label>
-                <select
-                  value={selectedMarketplaceId}
-                  onChange={(e) => {
-                    const mId = Number(e.target.value);
-                    setSelectedMarketplaceId(mId);
-                    updateAddPrice(Number(selectedProductId), mId);
-                  }}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-[#0a0a0a] font-medium focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
-                >
-                  {marketplaces.map((m) => {
-                    const existing = listings.find(
-                      l => l.product_id === Number(selectedProductId) && (l.marketplace_id === m.id || (l.marketplace_name || '').toLowerCase() === m.name.toLowerCase())
-                    );
-                    return (
-                      <option key={m.id} value={m.id}>
-                        {m.name} {existing ? `— Listed ($${Number(existing.selling_price).toFixed(2)})` : ""}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              {/* 3. Selling Price (Custom or Random) */}
-              {(() => {
-                const prod = catalogProducts.find(p => p.id === Number(selectedProductId));
-                const cost = Number(prod?.lowest_cost || 0);
-                const formulaPrice = (cost * 1.15).toFixed(2);
-                return (
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-semibold text-[#1a1a1a]">
-                        3. Selling Price ($)
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => randomizeAddPrice(cost || 50)}
-                          className="text-[11px] text-[#A8560A] hover:text-[#0a0a0a] font-medium flex items-center gap-1 bg-[#D9720F]/10 px-2 py-0.5 rounded border border-[#D9720F]/20 transition-colors"
-                          title="Generate a random price with 10%-35% margin"
-                        >
-                          <Sparkles className="h-3 w-3" />
-                          <span>Random Price</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAddCustomPrice(formulaPrice)}
-                          className="text-[11px] text-gray-500 hover:text-gray-800 underline font-medium"
-                          title="Reset to rule formula (+15% margin)"
-                        >
-                          Reset Rule
-                        </button>
-                      </div>
-                    </div>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#767676] font-medium text-sm">$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={addCustomPrice}
-                        onChange={(e) => setAddCustomPrice(e.target.value)}
-                        placeholder="Enter custom selling price..."
-                        className="w-full pl-7 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#0a0a0a] font-semibold focus:outline-none focus:border-[#0a0a0a] focus:ring-2 focus:ring-[#0a0a0a]/[0.06]"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-[#767676] mt-1">
-                      <span>Wholesale cost: ${cost.toFixed(2)}</span>
-                      <span>Formula (+15%): ${formulaPrice}</span>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {(() => {
-                const targetStore = marketplaces.find(m => m.id === selectedMarketplaceId);
-                const isAlreadyListed = listings.some(
-                  l => l.product_id === Number(selectedProductId) && (l.marketplace_id === selectedMarketplaceId || (l.marketplace_name || '').toLowerCase() === (targetStore?.name || '').toLowerCase())
-                );
-
-                return isAlreadyListed ? (
-                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-900 space-y-1">
-                    <div className="font-semibold flex items-center gap-1.5 text-amber-800">
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      <span>Already Listed on {targetStore?.name || "this store"}</span>
-                    </div>
-                    <p className="text-[11px] text-amber-800/80">
-                      Submitting will update the price and stock for this existing listing without creating a duplicate.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-[#D9720F]/[0.06] rounded-lg border border-[#D9720F]/20 text-xs text-[#A8560A]">
-                    <div className="font-semibold mb-0.5 flex items-center gap-1.5">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      Automated Price & Stock Sync:
-                    </div>
-                    <span className="text-[11px] text-[#767676]">Your selling price will be published and maintained across sales channels.</span>
-                  </div>
-                );
-              })()}
-
-              <div className="pt-3 flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 text-xs font-medium text-[#767676] hover:text-[#0a0a0a]"
-                >
-                  Cancel
-                </button>
-                {(() => {
-                  const targetStore = marketplaces.find(m => m.id === selectedMarketplaceId);
-                  const isAlreadyListed = listings.some(
-                    l => l.product_id === Number(selectedProductId) && (l.marketplace_id === selectedMarketplaceId || (l.marketplace_name || '').toLowerCase() === (targetStore?.name || '').toLowerCase())
-                  );
-
-                  return (
-                    <button
-                      type="submit"
-                      disabled={addingListing}
-                      className="px-5 py-2 bg-[#0a0a0a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all disabled:opacity-50 flex items-center gap-1.5"
-                    >
-                      {isAlreadyListed ? <RefreshCw className="h-3.5 w-3.5" /> : <Store className="h-3.5 w-3.5" />}
-                      <span>
-                        {addingListing 
-                          ? (isAlreadyListed ? "Updating..." : "Publishing...") 
-                          : (isAlreadyListed ? "Update Price on Store" : "Start Selling")}
-                      </span>
-                    </button>
-                  );
-                })()}
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Remove Listing Confirmation Modal */}
       {deleteConfirmListing && (
@@ -736,7 +403,13 @@ export default function ListingsPage() {
                 Are you sure you want to remove <span className="font-bold">"{deleteConfirmListing.product_title}"</span>?
               </p>
               <ul className="list-disc list-inside space-y-1 text-[#666666]">
-                <li>It will be delisted and withdrawn from {deleteConfirmListing.marketplace_name || "the store"}.</li>
+                {(deleteConfirmListing.marketplace_name || "").toLowerCase().includes("walmart") ? (
+                  <li className="text-rose-700 font-medium">
+                    This permanently retires the item from Walmart's own catalog (not just a stock pause) — to sell it there again later, it would need to be listed from scratch.
+                  </li>
+                ) : (
+                  <li>It will be delisted and withdrawn from {deleteConfirmListing.marketplace_name || "the store"}.</li>
+                )}
                 <li>It will be removed from your Active Stores table.</li>
                 <li>You can add it again from the Wholesale Catalog at any time.</li>
               </ul>
