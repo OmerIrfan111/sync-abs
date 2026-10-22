@@ -73,6 +73,14 @@ class Settings(BaseSettings):
     WALMART_CLIENT_SECRET: Optional[str] = None
     WALMART_ENVIRONMENT: str = "production"
 
+    # Ma Labs Web Service (MWS) — HTTP Basic Auth (account email + password),
+    # confirmed from Ma Labs' own MWS reference and a real captured catalog
+    # response. Catalog/stock/pricing only, no order-submission endpoint
+    # documented. MALABS_PASSWORD not set yet — needs the real account
+    # password from the user before MaLabsAdapter.is_live() returns True.
+    MALABS_USERNAME: Optional[str] = None
+    MALABS_PASSWORD: Optional[str] = None
+
     # Global Sandbox / Dry Run Flag (Feature 5)
     # Default is True in development/testing. Production requires explicit DRY_RUN=False.
     DRY_RUN: bool = True
