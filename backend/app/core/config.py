@@ -1,4 +1,5 @@
 import os
+from decimal import Decimal
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -86,6 +87,15 @@ class Settings(BaseSettings):
     # Global Sandbox / Dry Run Flag (Feature 5)
     # Default is True in development/testing. Production requires explicit DRY_RUN=False.
     DRY_RUN: bool = True
+
+    # Automatic fulfillment: route -> purchase order -> place with the supplier,
+    # with no clicks, for new marketplace orders. Off by default in code so a
+    # developer machine holding real credentials can never spend real money by
+    # accident; production turns it on explicitly. Orders failing any check
+    # are held for a person, never ordered.
+    AUTO_ORDER_ENABLED: bool = False
+    AUTO_ORDER_MAX_ORDER_VALUE: Decimal = Decimal("1000.00")   # supplier cost cap per order
+    AUTO_ORDER_MIN_PROFIT: Decimal = Decimal("0.00")           # revenue - fees - supplier cost - shipping
 
     # UPC & Product Matching Configuration (Features 3 & 4)
     UPC_SIMILARITY_THRESHOLD: float = 0.60

@@ -1,5 +1,6 @@
 import logging
 from app.tasks.celery_app import celery_app
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.supplier import Supplier
 from app.services.sync_service import SyncService
@@ -210,6 +211,19 @@ def order_ingestion_task():
                 total_ingested += len(new_orders)
             except Exception as exc:
                 logger.error(f"Order ingestion failed for marketplace {mp.name}: {exc}")
+                continue
+
+            # Only orders created by THIS run are auto-fulfilled, never old
+            # ones, and only when AUTO_ORDER_ENABLED is on (see the service
+            # for the margin / spending-cap / live-stock checks).
+            if settings.AUTO_ORDER_ENABLED and new_orders:
+                from app.services.auto_fulfillment_service import AutoFulfillmentService
+                fulfiller = AutoFulfillmentService(db)
+                for new_order in new_orders:
+                    try:
+                        fulfiller.fulfill_new_order(new_order.id)
+                    except Exception as exc:
+                        logger.error(f"Auto-fulfillment error for order {new_order.id}: {exc}")
         logger.info(f"Order ingestion task complete: {total_ingested} new order(s) ingested")
         return {"total_new_orders": total_ingested}
     finally:

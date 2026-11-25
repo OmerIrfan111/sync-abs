@@ -273,6 +273,8 @@ export interface Order {
   delivered_at?: string | null;
   notes?: string | null;
   items_count: number;
+  auto_order_status?: string | null;
+  auto_order_note?: string | null;
   created_at?: string | null;
 }
 

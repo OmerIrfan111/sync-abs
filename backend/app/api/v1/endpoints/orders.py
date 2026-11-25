@@ -44,6 +44,8 @@ def _order_to_response(order: Order) -> OrderResponse:
         shipped_at=order.shipped_at,
         delivered_at=order.delivered_at,
         notes=order.notes,
+        auto_order_status=order.auto_order_status,
+        auto_order_note=order.auto_order_note,
         items_count=len(order.items) if order.items else 0,
         created_at=order.created_at,
     )

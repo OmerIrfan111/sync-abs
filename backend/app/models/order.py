@@ -26,6 +26,10 @@ class Order(Base, TimestampMixin):
     shipped_at = Column(DateTime, nullable=True)
     delivered_at = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
+    # Automatic fulfillment outcome (see AutoFulfillmentService): NULL = not handled
+    # automatically; PROCESSING, COMPLETED, HELD, MANUAL_NEEDED, FAILED.
+    auto_order_status = Column(String(30), nullable=True, index=True)
+    auto_order_note = Column(Text, nullable=True)
 
     # Relationships
     marketplace = relationship("Marketplace")

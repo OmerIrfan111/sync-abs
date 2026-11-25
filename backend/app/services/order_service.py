@@ -43,6 +43,19 @@ class OrderService:
     def __init__(self, db: Session):
         self.db = db
 
+    @staticmethod
+    def supports_live_submission(supplier: Supplier) -> bool:
+        """True for the suppliers with a real order-submission API wired up
+        (D&H, Ingram Micro, TD SYNNEX). Anything else, e.g. Ma Labs, has no
+        order API and must be ordered by a person."""
+        name_lower = (supplier.name or "").lower()
+        adapter_lower = (supplier.adapter_class or "").lower()
+        return (
+            "d&h" in name_lower or "dandh" in adapter_lower
+            or "ingram" in name_lower or "ingram" in adapter_lower
+            or "synnex" in name_lower or "synnex" in adapter_lower
+        )
+
     # ──────────────────────────────────────────────
     # 1. ORDER INGESTION
     # ──────────────────────────────────────────────
@@ -372,11 +385,10 @@ class OrderService:
         number back in. Implemented for D&H and Ingram Micro — the only two
         suppliers whose real order-submission API spec is wired up here.
 
-        This still requires an explicit, human-triggered call — placing a
-        real order spends real money, so this is never invoked from a
-        schedule or automatically after routing. The human confirmation is
-        the button click that calls this endpoint, not a second manual step
-        on the supplier's own site.
+        Placing a real order spends real money. It is triggered either by a
+        person (the Orders page button) or, when AUTO_ORDER_ENABLED is on, by
+        AutoFulfillmentService after its margin, spending-cap and live-stock
+        checks pass. Nothing else calls this.
         """
         po = self.db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
         if not po:

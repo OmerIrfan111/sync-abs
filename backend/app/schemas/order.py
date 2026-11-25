@@ -79,6 +79,8 @@ class OrderResponse(BaseModel):
     shipped_at: Optional[datetime] = None
     delivered_at: Optional[datetime] = None
     notes: Optional[str] = None
+    auto_order_status: Optional[str] = None
+    auto_order_note: Optional[str] = None
     items_count: int = 0
     created_at: Optional[datetime] = None
 

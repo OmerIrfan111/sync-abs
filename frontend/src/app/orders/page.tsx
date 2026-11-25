@@ -50,6 +50,27 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+const AUTO_ORDER_BADGE: Record<string, { label: string; cls: string }> = {
+  COMPLETED: { label: "Auto-ordered", cls: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+  PROCESSING: { label: "Auto-ordering...", cls: "bg-sky-50 text-sky-800 border-sky-200" },
+  HELD: { label: "Held for review", cls: "bg-amber-50 text-amber-800 border-amber-300" },
+  MANUAL_NEEDED: { label: "Order manually", cls: "bg-amber-50 text-amber-800 border-amber-300" },
+  FAILED: { label: "Auto-order failed", cls: "bg-rose-50 text-rose-800 border-rose-300" },
+};
+
+// Why automatic ordering did or did not happen. Held / failed orders are the
+// ones a person has to act on, so the reason is shown right under the badge.
+function AutoOrderNote({ status, note }: { status?: string | null; note?: string | null }) {
+  if (!status || !AUTO_ORDER_BADGE[status]) return null;
+  const { label, cls } = AUTO_ORDER_BADGE[status];
+  return (
+    <div className="mt-1.5 max-w-[240px]">
+      <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-semibold border ${cls}`}>{label}</span>
+      {note && status !== "COMPLETED" && <div className="text-[10px] text-gray-600 mt-1 leading-snug">{note}</div>}
+    </div>
+  );
+}
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<OrderStats | null>(null);
@@ -440,6 +461,7 @@ export default function OrdersPage() {
                         <td className="px-4 py-3.5 text-xs text-gray-600">{order.items_count} item(s)</td>
                         <td className="px-4 py-3.5">
                           <StatusBadge status={order.status} />
+                          <AutoOrderNote status={order.auto_order_status} note={order.auto_order_note} />
                         </td>
                         <td className="px-6 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5 flex-wrap">
@@ -514,7 +536,7 @@ export default function OrdersPage() {
                                 onClick={() => handleReopen(order.id)}
                                 disabled={actionLoading[`reopen-${order.id}`]}
                                 title="Undo this cancellation and route it again"
-                                className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 text-gray-500 text-xs transition-colors inline-flex items-center gap-1 font-medium disabled:opacity-50"
+                                className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 text-gray-700 text-xs transition-colors inline-flex items-center gap-1 font-medium disabled:opacity-50"
                               >
                                 <RefreshCw className="h-3.5 w-3.5" />
                                 <span>{actionLoading[`reopen-${order.id}`] ? "Reopening..." : "Reopen"}</span>
