@@ -17,7 +17,6 @@ from app.models.listing import Listing
 from app.models.marketplace import Marketplace
 from app.models.supplier import Supplier
 from app.models.supplier_product import SupplierProduct
-from app.services.supplier_selection_service import SupplierSelectionService
 from app.core.security import decrypt_credential
 from app.core.config import settings
 
@@ -146,14 +145,15 @@ class OrderService:
 
     def route_order(self, order_id: int) -> Order:
         """
-        Routes each item in the order to the best available supplier
-        using the existing SupplierSelectionService.
+        Routes each item in the order to the best available supplier:
+        sorts active, in-stock supplier offers by real delivered cost
+        (base cost + shipping), tests connectivity, and picks the
+        cheapest healthy one.
         """
         order = self._get_order(order_id)
         if order.status not in ("PENDING_ROUTING", "ROUTED"):
             raise ValueError(f"Order {order_id} cannot be routed (status: {order.status})")
 
-        selector = SupplierSelectionService(self.db)
         routed_items = 0
         unroutable_items = 0
 

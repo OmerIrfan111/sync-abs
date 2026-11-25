@@ -22,6 +22,20 @@ import {
 } from "lucide-react";
 import { fetchApi, Product, Listing } from "@/lib/api";
 
+// Lists and previews use the small (~500px) rendition when one is stored;
+// the full-size original (often ~1 MB) is kept for marketplace uploads.
+const thumbFor = (product: { specs_json?: Record<string, any> } | null | undefined, url?: string) =>
+  (url && product?.specs_json?.image_thumbs?.[url]) || url || "";
+
+// Neutral stand-in when a photo link is broken. Never a stock picture of a
+// different product.
+const NO_PHOTO_SRC =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><rect width='200' height='200' fill='#f3f4f6'/><text x='100' y='106' font-family='sans-serif' font-size='16' fill='#767676' text-anchor='middle'>No photo</text></svg>"
+  );
+
+
 export default function CatalogPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -68,6 +82,7 @@ export default function CatalogPage() {
   const [selectedImageUrl, setSelectedImageUrl] = useState<string>("");
   const [loadingImages, setLoadingImages] = useState(false);
   const [imageSearchQuery, setImageSearchQuery] = useState<string>("");
+  const [imageSearchRan, setImageSearchRan] = useState(false);
   const [customImageUrlInput, setCustomImageUrlInput] = useState<string>("");
   const [savingImage, setSavingImage] = useState(false);
   const [imageSaveSuccess, setImageSaveSuccess] = useState<string | null>(null);
@@ -100,6 +115,7 @@ export default function CatalogPage() {
 
   const fetchImageSuggestions = async (productId: number, queryOverride?: string) => {
     setLoadingImages(true);
+    setImageSearchRan(true);
     try {
       const qParam = queryOverride ? `?q=${encodeURIComponent(queryOverride)}` : "";
       const res = await fetchApi<{ product_id: number; suggestions: string[]; query_used?: string }>(
@@ -236,8 +252,10 @@ export default function CatalogPage() {
     setCustomImageUrlInput("");
     setImageSaveSuccess(null);
     setImageSuggestions([]);
+    setImageSearchRan(false);
     setSelectedImageUrl(product.images?.[0] || "");
-    fetchImageSuggestions(product.id, defaultQuery);
+    // Web photo search is deliberately NOT run on open: every search spends
+    // image-search quota, so it only runs when the user clicks a button.
   };
 
   const toggleNotSelling = async (productId: number) => {
@@ -553,12 +571,14 @@ export default function CatalogPage() {
                         <div className="flex items-center gap-3">
                           {product.images && product.images[0] ? (
                             <img
-                              src={product.images[0]}
+                              src={thumbFor(product, product.images[0])}
                               alt={product.title}
+                              loading="lazy"
+                              decoding="async"
                               referrerPolicy="no-referrer"
                               onError={(e) => {
                                 e.currentTarget.onerror = null;
-                                e.currentTarget.src = "https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?w=800&auto=format&fit=crop&q=80";
+                                e.currentTarget.src = NO_PHOTO_SRC;
                               }}
                               className="h-12 w-12 rounded-lg object-cover bg-white border border-gray-200 shrink-0"
                             />
@@ -784,18 +804,19 @@ export default function CatalogPage() {
                 <div className="relative">
                   {selectedImageUrl ? (
                     <img
-                      src={selectedImageUrl}
+                      src={thumbFor(selectedProduct, selectedImageUrl)}
                       alt={selectedProduct.title}
                       referrerPolicy="no-referrer"
                       onError={(e) => {
                         e.currentTarget.onerror = null;
-                        e.currentTarget.src = "https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?w=800&auto=format&fit=crop&q=80";
+                        e.currentTarget.src = NO_PHOTO_SRC;
                       }}
                       className="w-full aspect-square object-cover rounded-lg bg-gray-50 border border-gray-100"
                     />
                   ) : (
-                    <div className="w-full aspect-square rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center text-[#767676]">
+                    <div className="w-full aspect-square rounded-lg bg-gray-50 border border-gray-100 flex flex-col items-center justify-center gap-2 text-[#767676]">
                       <Layers className="h-10 w-10" />
+                      <span className="text-xs font-medium">No verified product photo yet</span>
                     </div>
                   )}
 
@@ -929,7 +950,7 @@ export default function CatalogPage() {
                             referrerPolicy="no-referrer"
                             onError={(e) => {
                               e.currentTarget.onerror = null;
-                              e.currentTarget.src = "https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?w=200&auto=format&fit=crop&q=60";
+                              e.currentTarget.src = NO_PHOTO_SRC;
                             }}
                             className="h-full w-full object-cover"
                           />
@@ -946,6 +967,15 @@ export default function CatalogPage() {
                         </button>
                       ))}
                     </div>
+                  ) : !imageSearchRan ? (
+                    <button
+                      type="button"
+                      onClick={() => fetchImageSuggestions(selectedProduct.id, imageSearchQuery)}
+                      className="w-full flex items-center justify-center gap-2 text-[11px] font-medium text-[#A8560A] bg-gray-50 hover:bg-gray-100 border border-dashed border-gray-300 rounded-lg p-2.5 transition-colors"
+                    >
+                      <ImageIcon className="h-4 w-4 shrink-0" />
+                      <span>Show suggested web photos (runs one search)</span>
+                    </button>
                   ) : (
                     <div className="flex items-center gap-2 text-[11px] text-[#767676] bg-gray-50 border border-gray-200 rounded-lg p-2.5">
                       <ImageIcon className="h-4 w-4 shrink-0" />

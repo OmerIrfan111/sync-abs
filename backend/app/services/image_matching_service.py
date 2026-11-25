@@ -3,11 +3,13 @@ import time
 import urllib.request
 import urllib.error
 from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.image_status import REAL_IMAGE_STATUSES, IMAGE_RECHECK_DAYS, has_real_image, real_images
+from app.adapters.suppliers.icecat_provider import IcecatContentProvider, IcecatContentError
 from app.core.upc_utils import normalize_upc
 from app.core.product_matcher import calculate_product_similarity
 from app.adapters.suppliers.image_search_provider import (
@@ -258,6 +260,82 @@ class ImageMatchingService:
             self._update_product_review_status(product, res, save_db)
             _IMAGE_CACHE[norm_upc] = {"timestamp": now_ts, "result": res}
             return res
+
+    # ── Manufacturer content (Icecat) tier ────────────────────────────────
+    # Exact GTIN / Brand+MPN lookup. Tried before any web image search: a hit
+    # is the right product by construction and costs no search quota.
+
+    @staticmethod
+    def needs_content_check(product: Product, now: Optional[datetime] = None) -> bool:
+        specs = product.specs_json or {}
+        if has_real_image(product) and specs.get("image_status") in REAL_IMAGE_STATUSES:
+            return False
+        if (
+            specs.get("image_content_status") == "requires_full_icecat"
+            and getattr(settings, "ICECAT_APP_KEY", None)
+            and not specs.get("image_content_key_used")
+        ):
+            return True  # a Full Icecat key was added after this was refused
+        checked = specs.get("image_content_checked_at")
+        if checked:
+            try:
+                age = (now or datetime.now(timezone.utc)) - datetime.fromisoformat(checked)
+                if age < timedelta(days=IMAGE_RECHECK_DAYS):
+                    return False
+            except ValueError:
+                pass
+        return bool(product.upc or product.ean or product.mpn)
+
+    def apply_content_match(self, product: Product, match, save_db: bool = True) -> None:
+        keep = [u for u in real_images(product.images) if u not in match.images]
+        product.images = list(match.images) + keep
+        specs = dict(product.specs_json or {})
+        specs["image_status"] = "icecat"
+        specs["image_match_info"] = {
+            "source": "icecat",
+            "matched_by": match.matched_by,
+            "brand_used": match.brand_used,
+            "icecat_id": match.icecat_id,
+            "icecat_title": match.title,
+            "verified_at": datetime.now(timezone.utc).isoformat(),
+        }
+        specs["image_thumbs"] = dict(match.thumbs or {})
+        specs["image_content_checked_at"] = datetime.now(timezone.utc).isoformat()
+        specs["image_content_status"] = "matched"
+        specs["image_content_key_used"] = bool(getattr(settings, "ICECAT_APP_KEY", None))
+        for stale in ("image_review_reason", "image_candidates"):
+            specs.pop(stale, None)
+        product.specs_json = specs
+        if save_db and self.db:
+            self.db.commit()
+
+    def record_content_miss(self, product: Product, restricted: bool = False, save_db: bool = True) -> None:
+        specs = dict(product.specs_json or {})
+        specs["image_content_checked_at"] = datetime.now(timezone.utc).isoformat()
+        specs["image_content_status"] = "requires_full_icecat" if restricted else "not_found"
+        specs["image_content_key_used"] = bool(getattr(settings, "ICECAT_APP_KEY", None))
+        if specs.get("image_status") not in REAL_IMAGE_STATUSES:
+            specs["image_status"] = "placeholder"
+        product.specs_json = specs
+        if save_db and self.db:
+            self.db.commit()
+
+    def resolve_from_content(self, product: Product, save_db: bool = True, provider: Optional[IcecatContentProvider] = None) -> str:
+        """Returns 'icecat', 'no_match', 'skipped' or 'error'. 'error' leaves
+        the product untouched so a network blip is never cached as a miss."""
+        if not self.needs_content_check(product):
+            return "skipped"
+        provider = provider or IcecatContentProvider()
+        try:
+            match, restricted = provider.lookup_with_status(product.brand, product.mpn, product.upc or product.ean)
+        except IcecatContentError as exc:
+            logger.warning(f"Icecat lookup failed for {product.sku}: {exc}")
+            return "error"
+        if match:
+            self.apply_content_match(product, match, save_db=save_db)
+            return "icecat"
+        self.record_content_miss(product, restricted=restricted, save_db=save_db)
+        return "no_match"
 
     def _update_product_review_status(self, product: Product, result: ImageVerificationResult, save_db: bool):
         specs = dict(product.specs_json or {})

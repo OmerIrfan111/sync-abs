@@ -1,11 +1,10 @@
 name: Deploy to Azure
 
-# This is the real answer to "how do changes get pushed after deployment":
-# every push to main rebuilds both images, pushes them to Azure Container
-# Registry tagged with the real commit SHA, then updates the two backend-
-# image Container Apps and the frontend Container App to that exact new
-# image — Azure then rolls the running containers over to it automatically.
-# Nothing is pushed by hand after the first setup.
+# Every push to main builds both images inside Azure Container Registry, tagged
+# with the commit SHA, runs the database migrations as a one-off Container Apps
+# job (the same job used for first-time setup), then rolls the four running
+# apps to the new images. Needs one GitHub secret: AZURE_CREDENTIALS (a service
+# principal with Contributor on rg-abs, in the azure/login JSON format).
 
 on:
   push:
@@ -13,11 +12,12 @@ on:
   workflow_dispatch: {}
 
 env:
-  RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
-  NAME_PREFIX: ${{ secrets.AZURE_NAME_PREFIX }}
+  RG: rg-abs
+  ACR: crabsrhwqzc
+  BACKEND_URL: https://ca-abs-backend.calmpond-e17ccde3.westus3.azurecontainerapps.io
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,58 +27,39 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: ACR login
-        run: az acr login --name ${{ env.NAME_PREFIX }}acr
+      - name: Allow the containerapp CLI extension
+        run: az config set extension.use_dynamic_install=yes_without_prompt extension.dynamic_install_allow_preview=true
 
-      - name: Build and push backend image
-        run: |
-          docker build -t ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-backend:${{ github.sha }} \
-            -t ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-backend:latest \
-            ./backend
-          docker push ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-backend:${{ github.sha }}
-          docker push ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-backend:latest
+      - name: Build backend image in ACR
+        run: az acr build --registry $ACR --image syncabs-backend:${{ github.sha }} --file backend/Dockerfile ./backend
 
-      - name: Build and push frontend image
+      - name: Build frontend image in ACR
         run: |
-          docker build -f ./frontend/Dockerfile.prod \
-            --build-arg NEXT_PUBLIC_API_URL=${{ secrets.BACKEND_PUBLIC_URL }}/api/v1 \
-            -t ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-frontend:${{ github.sha }} \
-            -t ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-frontend:latest \
-            ./frontend
-          docker push ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-frontend:${{ github.sha }}
-          docker push ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-frontend:latest
+          az acr build --registry $ACR --image syncabs-frontend:${{ github.sha }} \
+            --file frontend/Dockerfile.prod \
+            --build-arg NEXT_PUBLIC_API_URL=$BACKEND_URL/api/v1 ./frontend
 
-      - name: Run DB migrations against the real deployed database
+      - name: Run database migrations
         run: |
-          az containerapp exec \
-            --name ${{ env.NAME_PREFIX }}-backend \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --command "alembic upgrade head"
+          IMAGE=$ACR.azurecr.io/syncabs-backend:${{ github.sha }}
+          az containerapp job update -n job-abs-ops -g $RG --image $IMAGE --command alembic --args upgrade head
+          EXEC=$(az containerapp job start -n job-abs-ops -g $RG --query name -o tsv)
+          echo "migration execution: $EXEC"
+          for i in $(seq 1 60); do
+            STATUS=$(az containerapp job execution list -n job-abs-ops -g $RG --query "[?name=='$EXEC'].properties.status | [0]" -o tsv)
+            echo "status: $STATUS"
+            if [ "$STATUS" = "Succeeded" ]; then exit 0; fi
+            if [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Stopped" ]; then echo "migration failed"; exit 1; fi
+            sleep 10
+          done
+          echo "migration timed out"; exit 1
 
-      - name: Roll backend API to the new image
+      - name: Roll the backend, worker and scheduler to the new image
         run: |
-          az containerapp update \
-            --name ${{ env.NAME_PREFIX }}-backend \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-backend:${{ github.sha }}
+          IMAGE=$ACR.azurecr.io/syncabs-backend:${{ github.sha }}
+          for APP in ca-abs-backend ca-abs-worker ca-abs-beat; do
+            az containerapp update -n $APP -g $RG --image $IMAGE
+          done
 
-      - name: Roll celery worker to the new image
-        run: |
-          az containerapp update \
-            --name ${{ env.NAME_PREFIX }}-celery-worker \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-backend:${{ github.sha }}
-
-      - name: Roll celery beat to the new image
-        run: |
-          az containerapp update \
-            --name ${{ env.NAME_PREFIX }}-celery-beat \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-backend:${{ github.sha }}
-
-      - name: Roll frontend to the new image
-        run: |
-          az containerapp update \
-            --name ${{ env.NAME_PREFIX }}-frontend \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.NAME_PREFIX }}acr.azurecr.io/syncabs-frontend:${{ github.sha }}
+      - name: Roll the frontend to the new image
+        run: az containerapp update -n ca-abs-frontend -g $RG --image $ACR.azurecr.io/syncabs-frontend:${{ github.sha }}

@@ -5,3 +5,7 @@ build
 .git
 .gitignore
 *.log
+
+.env
+.env.*
+*.env

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
 from app.core.config import settings
+from app.core.image_status import has_real_image, real_images
 from app.models.listing import Listing
 from app.models.product import Product
 from app.models.marketplace import Marketplace
@@ -180,10 +181,12 @@ class ListingService:
         if custom_description and custom_description.strip():
             product.description = custom_description.strip()
         if custom_image_url and custom_image_url.strip():
-            existing = list(product.images or [])
+            existing = real_images(product.images)
             new_url = custom_image_url.strip()
-            updated = [new_url] + [u for u in existing if u != new_url]
-            product.images = updated
+            product.images = [new_url] + [u for u in existing if u != new_url]
+            specs = dict(product.specs_json or {})
+            specs["image_status"] = "manual"
+            product.specs_json = specs
         if (
             (custom_title and custom_title.strip())
             or (custom_description and custom_description.strip())
@@ -321,6 +324,21 @@ class ListingService:
                 return listing
             except Exception as e:
                 logger.warning(f"Could not update existing listing in-place on {marketplace.name}: {e}. Proceeding to create/sync.")
+
+        # Never send a generic stock placeholder to a real marketplace as if
+        # it were this product's photo (a laptop picture on a RAM module).
+        # Real photos come from manufacturer content (Icecat) or a staff-
+        # chosen custom image; try the content lookup once right now, and
+        # refuse to publish if there is still nothing real to show.
+        if adapter.__class__.__name__.startswith("Live") and not has_real_image(product):
+            from app.services.image_matching_service import ImageMatchingService
+            ImageMatchingService(db=self.db).resolve_from_content(product, save_db=True)
+            if not has_real_image(product):
+                raise ValueError(
+                    f"'{product.sku}' has no verified product photo, only a generic stock placeholder, "
+                    f"so it was not published to {marketplace.name}. Add a real photo (custom image URL / "
+                    "Search Web for Photos) and publish again."
+                )
 
         # Defense-in-depth: the frontend already runs this same check before
         # calling publish, but this guard protects any other caller (direct
@@ -590,6 +608,9 @@ class ListingService:
         """Withdraws/pauses an active marketplace listing."""
         lock_key = f"sync:lock:listing:{listing_id}"
         with distributed_lock(lock_key) as acquired:
+            if not acquired:
+                raise RuntimeError(f"Could not acquire distributed lock for listing {listing_id}")
+
             listing = self.db.query(Listing).filter(Listing.id == listing_id).first()
             if not listing:
                 raise ValueError(f"Listing {listing_id} not found")
@@ -645,6 +666,9 @@ class ListingService:
         """Reactivates / unhides a withdrawn or paused marketplace listing."""
         lock_key = f"sync:lock:listing:{listing_id}"
         with distributed_lock(lock_key) as acquired:
+            if not acquired:
+                raise RuntimeError(f"Could not acquire distributed lock for listing {listing_id}")
+
             listing = self.db.query(Listing).filter(Listing.id == listing_id).first()
             if not listing:
                 raise ValueError(f"Listing {listing_id} not found")

@@ -11,6 +11,18 @@ def sync_supplier_task(self, supplier_id: int):
     """
     Celery task to sync a single supplier asynchronously.
     """
+    # Two overlapping syncs of one supplier read the same cursor and race to
+    # insert the same new products (unique-key violations on products.sku).
+    # Skip instead of racing; the lock expires on its own if a worker dies.
+    from app.services.listing_service import get_redis_client
+    redis_client = get_redis_client()
+    lock = None
+    if redis_client:
+        lock = redis_client.lock(f"sync:lock:supplier:{supplier_id}", timeout=1800)
+        if not lock.acquire(blocking=False):
+            logger.info(f"Supplier {supplier_id} sync already running, skipping this run.")
+            return {"status": "SKIPPED_ALREADY_RUNNING", "supplier_id": supplier_id}
+
     db = SessionLocal()
     try:
         service = SyncService(db)
@@ -23,6 +35,11 @@ def sync_supplier_task(self, supplier_id: int):
         raise self.retry(exc=exc, countdown=2 ** self.request.retries * 30)
     finally:
         db.close()
+        if lock:
+            try:
+                lock.release()
+            except Exception:
+                pass
 
 @celery_app.task
 def sync_all_suppliers_task():
@@ -141,10 +158,11 @@ def image_backfill_task():
     db = SessionLocal()
     try:
         service = CatalogService(db)
-        result = service.backfill_product_images(limit=30)
+        result = service.backfill_product_images(limit=300)
         logger.info(
             f"Image backfill complete: {result['attempted']} attempted, "
-            f"{result['verified']} got a real verified photo"
+            f"{result['matched']} got a real manufacturer photo, "
+            f"{result['no_match']} have none available, {result['errors']} to retry"
         )
         return result
     finally:
@@ -183,6 +201,10 @@ def order_ingestion_task():
         marketplaces = db.query(Marketplace).filter(Marketplace.is_active == True).all()
         total_ingested = 0
         for mp in marketplaces:
+            # A live store with no credentials isn't connected yet; polling it
+            # can only fail, and logged an ERROR every 2 minutes for each one.
+            if mp.adapter_class.startswith("Live") and not mp.credentials_encrypted:
+                continue
             try:
                 new_orders = service.ingest_marketplace_orders(mp.id)
                 total_ingested += len(new_orders)

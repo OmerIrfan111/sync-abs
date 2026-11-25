@@ -17,8 +17,11 @@ RUN apt-get update \
         netcat-traditional \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+COPY requirements.txt constraints.txt ./
+# constraints.txt pins every library to the versions tested locally; open
+# ranges in requirements.txt let a fresh build pull a newer SQLAlchemy that
+# defaults to a different Postgres driver and fails at startup.
+RUN pip install --upgrade pip && pip install -r requirements.txt -c constraints.txt
 
 COPY . .
 

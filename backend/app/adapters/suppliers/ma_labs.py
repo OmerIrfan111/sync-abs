@@ -48,6 +48,8 @@ class MaLabsAdapter(SupplierAdapter):
     """
 
     BASE_URL = "https://online.malabs.com/mws"
+    DEFAULT_PAGE_SIZE = 1000
+    MAX_PAGE_SIZE = 2000
 
     def __init__(self, credentials: Optional[Dict[str, Any]] = None, config: Optional[Dict[str, Any]] = None):
         super().__init__(credentials=credentials, config=config)
@@ -129,7 +131,10 @@ class MaLabsAdapter(SupplierAdapter):
         if resume_cursor and resume_cursor.startswith("http"):
             url = resume_cursor
         else:
-            limit = int(filters.get("limit") or 50)
+            # Live-tested 2026-11-10: pages of 1000-2000 work (7000 returns a
+            # 502). 1000 pulls the full ~6800-item catalog in ~7 sync runs
+            # instead of ~136 at 50 per run.
+            limit = min(int(filters.get("limit") or self.DEFAULT_PAGE_SIZE), self.MAX_PAGE_SIZE)
             params: Dict[str, str] = {"limit": str(limit), "offset": "0"}
             if filters.get("upc"):
                 params["upc"] = str(filters["upc"])

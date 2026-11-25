@@ -7,6 +7,11 @@ from app.api.v1.api import api_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.core.config import find_insecure_production_settings
+    problems = find_insecure_production_settings(settings)
+    if problems:
+        raise RuntimeError("Insecure production configuration: " + "; ".join(problems))
+
     # Initialize database tables gracefully on startup
     try:
         Base.metadata.create_all(bind=engine)
@@ -25,7 +30,7 @@ app = FastAPI(
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -33,6 +33,8 @@ class Settings(BaseSettings):
 
     CREDENTIAL_ENCRYPTION_KEY: str = "dGhpcy1pcy1hLTMyLWJ5dGUtc2VjcmV0LWtleS1mb3ItZGV2IQ=="
 
+    FRONTEND_URL: Optional[str] = None
+
     FIRST_SUPERUSER_EMAIL: str = "admin@syncplatform.io"
     FIRST_SUPERUSER_PASSWORD: str = "adminpassword123"
 
@@ -88,6 +90,17 @@ class Settings(BaseSettings):
     # UPC & Product Matching Configuration (Features 3 & 4)
     UPC_SIMILARITY_THRESHOLD: float = 0.60
 
+    # Icecat manufacturer-verified product photos, looked up by exact GTIN or
+    # Brand+MPN (no search quota). Free Open Icecat works with the shared
+    # username below and covers sponsor brands; a full Icecat account
+    # (set both values) widens coverage without any code change.
+    ICECAT_USERNAME: Optional[str] = None
+    ICECAT_PASSWORD: Optional[str] = None
+    # Full Icecat "app_key" (My Profile page). Open Icecat refuses brands that
+    # are not sponsors with HTTP 403 "an app_key is required"; those products
+    # are recorded as requires_full_icecat and re-checked once this is set.
+    ICECAT_APP_KEY: Optional[str] = None
+
     # Image Search Provider Configuration (Feature 4)
     # "bing" = free scraped Bing HTML, no key needed, but confirmed
     # (2026-10-10, live-tested: the identical query sent 3 times returned 3
@@ -121,9 +134,39 @@ class Settings(BaseSettings):
             return self.REDIS_URL
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
+    def get_cors_origins(self) -> list:
+        """Production only accepts browser calls from its own frontend; any
+        other environment stays open so local development keeps working."""
+        if (self.ENVIRONMENT or "").lower() == "production" and self.FRONTEND_URL:
+            return [self.FRONTEND_URL.rstrip("/")]
+        return ["*"]
+
     def get_rabbitmq_url(self) -> str:
+        # The Celery broker. Azure Container Apps run Celery on Redis and
+        # supply it as CELERY_BROKER_URL, which this used to ignore, leaving
+        # worker/beat pointed at a non-existent amqp://rabbitmq host.
+        if self.CELERY_BROKER_URL:
+            return self.CELERY_BROKER_URL
         if self.RABBITMQ_URL:
             return self.RABBITMQ_URL
         return f"amqp://{self.RABBITMQ_USER}:{self.RABBITMQ_PASSWORD}@{self.RABBITMQ_HOST}:{self.RABBITMQ_PORT}//"
+
+_DEV_SECRET_KEY = "dev_secret_key_change_in_production_9f834a81b2c"
+_DEV_ADMIN_PASSWORD = "adminpassword123"
+
+
+def find_insecure_production_settings(s: "Settings") -> list:
+    """Problems that must block a production (ENVIRONMENT=production) start:
+    the repo-default token-signing key lets anyone forge a login, and the
+    default admin password is public."""
+    if (s.ENVIRONMENT or "").lower() != "production":
+        return []
+    problems = []
+    if s.SECRET_KEY == _DEV_SECRET_KEY or len(s.SECRET_KEY) < 32:
+        problems.append("SECRET_KEY is the dev default or too short (need 32+ random characters)")
+    if s.FIRST_SUPERUSER_PASSWORD == _DEV_ADMIN_PASSWORD:
+        problems.append("FIRST_SUPERUSER_PASSWORD is the public default")
+    return problems
+
 
 settings = Settings()

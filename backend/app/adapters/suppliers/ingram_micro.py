@@ -157,7 +157,7 @@ class IngramMicroAdapter(SupplierAdapter):
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:
                 if resp.status in (200, 204):
-                    logger.info("Ingram Micro Sandbox connection test passed successfully.")
+                    logger.info(f"Ingram Micro {self.environment} connection test passed successfully.")
                     return True
         except urllib.error.HTTPError as err:
             err_body = err.read().decode("utf-8", errors="replace")

@@ -12,3 +12,9 @@ node_modules
 venv
 .venv
 *.log
+
+# Never bake secrets or local state into an image: config comes from env vars.
+.env
+.env.*
+*.env
+celerybeat-schedule*

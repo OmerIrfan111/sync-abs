@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 from app.core.database import SessionLocal, Base, engine
 from app.core.security import get_password_hash
 from app.models.user import User
@@ -14,12 +15,18 @@ def seed_database():
     db = SessionLocal()
     try:
         # 1. Seed Admin User
-        admin_email = "admin@syncplatform.io"
+        # Uses FIRST_SUPERUSER_EMAIL / FIRST_SUPERUSER_PASSWORD so a real
+        # deployment never ships with the publicly known default login.
+        from app.core.config import settings, find_insecure_production_settings
+        problems = find_insecure_production_settings(settings)
+        if problems:
+            raise RuntimeError("Refusing to seed a production database: " + "; ".join(problems))
+        admin_email = settings.FIRST_SUPERUSER_EMAIL
         admin = db.query(User).filter(User.email == admin_email).first()
         if not admin:
             admin = User(
                 email=admin_email,
-                hashed_password=get_password_hash("adminpassword123"),
+                hashed_password=get_password_hash(settings.FIRST_SUPERUSER_PASSWORD),
                 full_name="Platform Administrator",
                 is_active=True,
                 is_superuser=True
@@ -33,6 +40,7 @@ def seed_database():
             {"name": "Ingram Micro", "adapter_class": "IngramMicroAdapter"},
             {"name": "D&H", "adapter_class": "DAndHAdapter"},
             {"name": "TD SYNNEX", "adapter_class": "TDSynnexAdapter", "default_shipping_charge": Decimal("9.99")},
+            {"name": "Ma Labs", "adapter_class": "MaLabsAdapter"},
         ]
 
         allowed_supplier_names = [s["name"] for s in suppliers_data]
@@ -60,7 +68,7 @@ def seed_database():
 
         primary_supplier = created_suppliers[0] if created_suppliers else None
 
-        # Clean up any removed suppliers (TD SYNNEX, Ma Labs, VoiceComm) while preserving products
+        # Clean up any removed suppliers (e.g. VoiceComm) while preserving products
         old_suppliers = db.query(Supplier).filter(~Supplier.name.in_(allowed_supplier_names)).all()
         for old_s in old_suppliers:
             logger.info(f"Migrating products from removed supplier '{old_s.name}' to '{primary_supplier.name}'...")

@@ -3,7 +3,7 @@ from typing import List, Optional, Tuple, Dict, Any
 from decimal import Decimal
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, desc, func
+from sqlalchemy import or_, and_, false, desc, func
 from app.models.product import Product
 from app.models.supplier_product import SupplierProduct
 from app.models.supplier import Supplier
@@ -13,7 +13,18 @@ from app.models.listing import Listing
 from app.schemas.supplier import NormalizedProduct
 from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse, SupplierProductInfo
 
+from app.core.image_status import real_images
+
 logger = logging.getLogger(__name__)
+
+
+def _safe_lookup(provider, brand, mpn, gtin):
+    """Returns ((match, restricted), error). error is set only for transient failures."""
+    from app.adapters.suppliers.icecat_provider import IcecatContentError
+    try:
+        return provider.lookup_with_status(brand, mpn, gtin), None
+    except IcecatContentError as exc:
+        return (None, False), exc
 
 # Ingram Micro reports non-physical SKUs (software licenses, support/renewal
 # contracts) with a quantity that's a multiple of this sentinel instead of a
@@ -130,7 +141,11 @@ class CatalogService:
                 brand=item.brand,
                 description=item.description,
                 category=item.category,
-                images=item.images,
+                # Only real photos are ever stored. Adapters pad item.images
+                # with generic stock photos for display; persisting those made
+                # unrelated pictures (a graphics card on a wall mount) look
+                # like the product's real photo.
+                images=real_images(item.images),
                 specs_json=item.specs,
                 is_enabled=True
             )
@@ -144,21 +159,38 @@ class CatalogService:
                 new_value=product.sku
             ))
 
-            # Try to upgrade the generic stock-photo fallback to a real,
-            # title/brand-verified photo (Feature 4 — built but never wired
-            # into sync until now). Bounded and best-effort: any failure
-            # (network, no match, over budget) just leaves the existing
-            # fallback image in place, never blocks or fails the sync.
-            if self._image_match_budget_remaining > 0 and (product.upc or product.ean):
+            # Real photo: a supplier-provided image is already trusted as-is;
+            # otherwise try manufacturer content (exact GTIN / Brand+MPN, no
+            # search quota). Bounded and best-effort: anything not resolved
+            # here is picked up by image_backfill_task, so a slow or failing
+            # lookup never blocks or fails the sync.
+            if real_images(item.images):
+                specs = dict(product.specs_json or {})
+                specs["image_status"] = "supplier"
+                product.specs_json = specs
+            elif self._image_match_budget_remaining > 0:
                 self._image_match_budget_remaining -= 1
                 try:
                     from app.services.image_matching_service import ImageMatchingService
-                    ImageMatchingService(db=self.db).match_product_image_by_upc(product, save_db=True)
+                    ImageMatchingService(db=self.db).resolve_from_content(product, save_db=False)
                 except Exception as img_exc:
-                    logger.warning(f"Image verification skipped for new product {product.sku}: {img_exc}")
+                    logger.warning(f"Content image lookup skipped for new product {product.sku}: {img_exc}")
         else:
-            if item.images and (not product.images or product.images != item.images):
-                product.images = item.images
+            # Root cause of "wrong photo everywhere" (found 2026-11-18): this
+            # used to run `product.images = item.images` on EVERY sync, and
+            # D&H/Ingram's item.images are always three generic stock photos,
+            # so each 5-minute sync overwrote whatever real photo the product
+            # had (manufacturer, verified, or staff-chosen). Now: never write
+            # a placeholder, never replace or reorder an existing real photo,
+            # and only append a genuinely new supplier-provided photo.
+            current = real_images(product.images)
+            incoming = [u for u in real_images(item.images) if u not in current]
+            if incoming or len(current) != len(product.images or []):
+                product.images = current + incoming
+                if incoming and not current:
+                    specs = dict(product.specs_json or {})
+                    specs["image_status"] = "supplier"
+                    product.specs_json = specs
 
         # 2. Check existing supplier product link
         supplier_prod = self.db.query(SupplierProduct).filter(
@@ -304,55 +336,88 @@ class CatalogService:
                 stock.qty_available = max(0, int(qty or 0))
                 stock.stock_replenish_date = parsed_replenish
 
-    def backfill_product_images(self, limit: int = 30) -> Dict[str, int]:
+    def backfill_product_images(self, limit: int = 300, workers: int = 6) -> Dict[str, int]:
         """
-        Upgrades existing products still on a generic/unverified fallback
-        photo to a real, title/brand-verified one (ImageMatchingService —
-        built as "Feature 4" but never wired into any sync path until now,
-        which is why the catalog has been showing repeated generic stock
-        photos instead of real product images).
+        Replaces generic stock-photo placeholders with the manufacturer's real
+        photo (Icecat, exact GTIN / Brand+MPN lookup, no search quota).
 
-        Bounded per call (network-bound: a web image search + validation
-        request per product) so this can run as a small, frequent background
-        task and steadily work through the whole catalog over many runs,
-        rather than one slow unbounded pass.
-
-        Returns {"attempted": N, "verified": N} — "verified" is how many
-        actually got a real, similarity-checked photo attached; the rest
-        were attempted but no candidate passed the threshold (left on their
-        existing fallback image, never a fabricated attach).
+        Selection fixes two real defects of the previous version, which
+        scraped Bing for the 30 oldest-updated products each run:
+        - Verified products kept the oldest updated_at, so they piled up at
+          the front of the "oldest 120" window, which was then filtered to
+          nothing: the backfill eventually stopped making any progress.
+        - Failures were never remembered, so the same products were
+          re-queried forever, burning the search quota.
+        Now the database itself excludes products that already have a real
+        photo or were definitively checked within IMAGE_RECHECK_DAYS, and
+        in-stock products are served first. A transient error (network, rate
+        limit) is not recorded as a miss, so it is simply retried next run.
         """
+        from concurrent.futures import ThreadPoolExecutor
+        from datetime import timedelta
+        from sqlalchemy import case, exists
+        from app.adapters.suppliers.icecat_provider import IcecatContentProvider
+        from app.core.image_status import REAL_IMAGE_STATUSES, IMAGE_RECHECK_DAYS
         from app.services.image_matching_service import ImageMatchingService
+
+        status_col = Product.specs_json["image_status"].as_string()
+        checked_col = Product.specs_json["image_content_checked_at"].as_string()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=IMAGE_RECHECK_DAYS)).isoformat()
+        content_status_col = Product.specs_json["image_content_status"].as_string()
+        key_used_col = Product.specs_json["image_content_key_used"].as_string()
+        from app.core.config import settings as _settings
+        retry_now_with_key = (
+            and_(content_status_col == "requires_full_icecat", or_(key_used_col.is_(None), key_used_col != "true"))
+            if _settings.ICECAT_APP_KEY else false()
+        )
+        in_stock = exists().where(
+            SupplierProduct.product_id == Product.id,
+            SupplierProduct.qty_available > 0,
+            SupplierProduct.availability_status == "ACTIVE",
+        )
 
         candidates = (
             self.db.query(Product)
             .filter(
                 Product.is_enabled == True,
-                or_(Product.upc.isnot(None), Product.ean.isnot(None)),
+                or_(Product.upc.isnot(None), Product.ean.isnot(None), Product.mpn.isnot(None)),
+                or_(status_col.is_(None), status_col.notin_(REAL_IMAGE_STATUSES)),
+                or_(checked_col.is_(None), checked_col < cutoff, retry_now_with_key),
             )
-            .order_by(Product.updated_at.asc())
-            .limit(limit * 4)  # over-fetch since many will already be verified; filtered below
+            .order_by(case((in_stock, 0), else_=1), Product.id)
+            .limit(limit)
             .all()
         )
 
-        service = ImageMatchingService(db=self.db)
-        attempted = 0
-        verified = 0
-        for product in candidates:
-            if attempted >= limit:
-                break
-            specs = product.specs_json or {}
-            if specs.get("image_status") == "verified":
-                continue
-            attempted += 1
-            try:
-                result = service.match_product_image_by_upc(product, save_db=True)
-                if result.status == "verified":
-                    verified += 1
-            except Exception as exc:
-                logger.warning(f"Image backfill failed for product {product.sku}: {exc}")
+        provider = IcecatContentProvider()
 
-        return {"attempted": attempted, "verified": verified}
+        # Network lookups run in parallel from plain values; ORM writes stay
+        # on this thread/session.
+        snapshot = [(p, p.brand, p.mpn, p.upc or p.ean) for p in candidates]
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            outcomes = list(pool.map(
+                lambda t: _safe_lookup(provider, t[1], t[2], t[3]), snapshot
+            ))
+
+        service = ImageMatchingService(db=self.db)
+        matched = no_match = errors = 0
+        restricted_count = 0
+        for (product, *_), ((match, restricted), err) in zip(snapshot, outcomes):
+            if err is not None:
+                errors += 1
+            elif match:
+                service.apply_content_match(product, match, save_db=False)
+                matched += 1
+            else:
+                service.record_content_miss(product, restricted=restricted, save_db=False)
+                no_match += 1
+                restricted_count += 1 if restricted else 0
+        self.db.commit()
+
+        return {
+            "attempted": len(candidates), "matched": matched, "no_match": no_match,
+            "needs_full_icecat": restricted_count, "errors": errors,
+        }
 
     def backfill_walmart_match_status(self, limit: int = 20) -> Dict[str, int]:
         """

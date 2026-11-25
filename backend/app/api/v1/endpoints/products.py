@@ -81,7 +81,7 @@ def get_product_image_suggestions(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    from app.adapters.suppliers.image_resolver import resolve_product_imagery, _validate_url
+    from app.adapters.suppliers.image_resolver import _validate_url
     from app.adapters.suppliers.image_search_provider import get_image_search_provider, TRUSTED_SUPPLIER_DOMAINS
 
     stored = product.images or []
@@ -137,16 +137,6 @@ def get_product_image_suggestions(
         key=lambda c: 0 if any(d in c.image_url.lower() for d in TRUSTED_SUPPLIER_DOMAINS) else 1
     )
 
-    category_fallbacks = resolve_product_imagery(
-        brand=product.brand,
-        category=product.category,
-        subcategory=None,
-        title=product.title,
-        sku=product.sku,
-        upc=None,
-        supplier_image_url=supplier_images[0] if supplier_images else None,
-    )
-
     ordered_urls = []
     seen = set()
 
@@ -163,14 +153,13 @@ def get_product_image_suggestions(
     for c in web_candidates:
         add_url(c.image_url)
 
-    # 3. If any existing stored images were not generic fallbacks, include them
+    # 3. Photos already stored on the product (real ones only)
     for img in stored:
         if img and not any(f in img for f in ("unsplash.com", "placeholder", "noimage")):
             add_url(img)
 
-    # 4. Fallback images
-    for img in category_fallbacks:
-        add_url(img)
+    # No stock-photo fallback: a generic picture of a different kind of
+    # product must never be offered as a candidate for this one.
 
     # Raised from 15 alongside the max_results caps above (2026-10-10) — no
     # reason to truncate what was already fetched down to a third of it.
@@ -209,7 +198,8 @@ def set_product_image(
         raise HTTPException(status_code=400, detail="Invalid image URL; must start with http:// or https://")
 
     # Put this image at position 0
-    existing = list(product.images or [])
+    from app.core.image_status import real_images
+    existing = real_images(product.images)
     updated = [new_url] + [u for u in existing if u != new_url]
     product.images = updated
 

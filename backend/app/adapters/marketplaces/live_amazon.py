@@ -226,8 +226,14 @@ class LiveAmazonAdapter(MarketplaceAdapter):
             with urllib.request.urlopen(req, timeout=12) as resp:
                 return resp.status in (200, 204)
         except Exception as e:
+            # Every caller in listing_service.py relies on this raising, not
+            # returning False, to stop a listing from being marked
+            # ACTIVE/synced in our own DB after a real Amazon call actually
+            # failed — matching eBay/Walmart/Shopify's update_price, which
+            # all raise. Swallowing this into a silent False would have let
+            # a failed price push look like a success everywhere upstream.
             logger.error(f"Failed to update price on Amazon for SKU {sku}: {e}")
-            return False
+            raise
 
     def update_inventory(self, external_listing_id: str, sku: str, quantity: int) -> bool:
         """
@@ -258,8 +264,11 @@ class LiveAmazonAdapter(MarketplaceAdapter):
             with urllib.request.urlopen(req, timeout=12) as resp:
                 return resp.status in (200, 204)
         except Exception as e:
+            # Same contract as update_price() above: raise, don't swallow —
+            # callers depend on the exception to avoid marking a listing
+            # ACTIVE/synced after a real Amazon inventory push failed.
             logger.error(f"Failed to update inventory on Amazon for SKU {sku}: {e}")
-            return False
+            raise
 
     def withdraw_listing(self, external_listing_id: str, sku: Optional[str] = None) -> bool:
         """
