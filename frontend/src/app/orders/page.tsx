@@ -19,6 +19,14 @@ import {
 } from "lucide-react";
 import { fetchApi, Order, OrderDetail, OrderStats, PurchaseOrder } from "@/lib/api";
 
+interface AutoOrderState {
+  enabled: boolean;
+  max_order_value: string;
+  min_profit: string;
+  simulated_orders_only: boolean;
+  counts: { COMPLETED: number; HELD: number; MANUAL_NEEDED: number; FAILED: number; PROCESSING: number };
+}
+
 const STATUS_TABS = [
   { id: "ALL", name: "All Orders" },
   { id: "PENDING_ROUTING", name: "Pending Routing" },
@@ -129,6 +137,67 @@ export default function OrdersPage() {
   useEffect(() => {
     loadStats();
   }, []);
+
+  // -- Automatic ordering switch --
+  const [autoOrder, setAutoOrder] = useState<AutoOrderState | null>(null);
+  const [autoMax, setAutoMax] = useState("");
+  const [autoMinProfit, setAutoMinProfit] = useState("");
+  const [autoSaving, setAutoSaving] = useState(false);
+
+  const loadAutoOrder = async (syncInputs = false) => {
+    try {
+      const res = await fetchApi<AutoOrderState>("/orders/auto-order");
+      setAutoOrder(res);
+      if (syncInputs) {
+        setAutoMax(res.max_order_value);
+        setAutoMinProfit(res.min_profit);
+      }
+    } catch (err) {
+      console.error("Failed to load automatic ordering state:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadAutoOrder(true);
+    const timer = setInterval(() => loadAutoOrder(false), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const saveAutoOrder = async (body: { enabled?: boolean; max_order_value?: string; min_profit?: string }, done: string) => {
+    setAutoSaving(true);
+    try {
+      const res = await fetchApi<AutoOrderState>("/orders/auto-order", { method: "PUT", body: JSON.stringify(body) });
+      setAutoOrder(res);
+      setAutoMax(res.max_order_value);
+      setAutoMinProfit(res.min_profit);
+      showFeedback("success", done);
+    } catch (err: any) {
+      showFeedback("error", err?.message || "Could not change automatic ordering. Only admins can change it.");
+    } finally {
+      setAutoSaving(false);
+    }
+  };
+
+  const handleToggleAutoOrder = () => {
+    if (!autoOrder) return;
+    if (autoOrder.enabled) {
+      saveAutoOrder({ enabled: false }, "Automatic ordering is OFF. New orders will wait for you.");
+      return;
+    }
+    setConfirmModal({
+      title: "Turn on automatic ordering?",
+      message:
+        "From now on, new eBay and Walmart orders will be routed and placed with D&H, Ingram Micro and TD SYNNEX " +
+        "without anyone clicking, and that spends real money. Orders that fail the margin, spending-limit or live-stock " +
+        "checks are held for you instead. Ma Labs orders still need manual ordering.",
+      confirmLabel: "Turn on",
+      danger: true,
+      onConfirm: () => {
+        setConfirmModal(null);
+        saveAutoOrder({ enabled: true }, "Automatic ordering is ON.");
+      },
+    });
+  };
 
   const handleSyncOrders = async () => {
     setSyncing(true);
@@ -356,6 +425,85 @@ export default function OrdersPage() {
             <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
           )}
           <span>{feedback.message}</span>
+        </div>
+      )}
+
+      {/* Automatic ordering */}
+      {autoOrder && (
+        <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-base font-bold text-gray-900">Automatic ordering</h2>
+                <span
+                  className={`inline-flex px-2.5 py-0.5 rounded text-xs font-semibold border ${
+                    autoOrder.enabled
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                      : "bg-gray-100 text-gray-700 border-gray-300"
+                  }`}
+                >
+                  {autoOrder.enabled ? "ON" : "OFF"}
+                </span>
+              </div>
+              <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                When on, each new eBay or Walmart order is routed and placed with D&amp;H, Ingram Micro or TD SYNNEX
+                automatically. Anything that fails a check below is held here for you and nothing is ordered. Ma Labs
+                has no order system, so those orders always wait for you.
+              </p>
+              {autoOrder.enabled && autoOrder.simulated_orders_only && (
+                <p className="text-xs font-semibold text-amber-900 bg-amber-50 border border-amber-300 rounded px-2.5 py-1.5 mt-2">
+                  Test mode: orders are simulated and no supplier is contacted.
+                </p>
+              )}
+            </div>
+            <button
+              onClick={handleToggleAutoOrder}
+              disabled={autoSaving}
+              className={`shrink-0 inline-flex items-center justify-center px-4 py-2 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+                autoOrder.enabled ? "bg-white border border-gray-300 text-gray-800 hover:bg-gray-50" : "bg-gray-900 text-white hover:bg-gray-800"
+              }`}
+            >
+              {autoSaving ? "Saving..." : autoOrder.enabled ? "Turn off" : "Turn on"}
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-4 pt-3 border-t border-gray-100">
+            <label className="text-xs font-medium text-gray-700">
+              Most to spend on one order
+              <div className="relative mt-1">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs font-bold">$</span>
+                <input
+                  type="number" min="1" step="50" value={autoMax}
+                  onChange={(e) => setAutoMax(e.target.value)}
+                  className="w-32 pl-5 pr-2 py-1.5 bg-white border border-gray-300 rounded-md text-xs font-bold text-gray-900 focus:outline-none focus:border-gray-900"
+                />
+              </div>
+            </label>
+            <label className="text-xs font-medium text-gray-700">
+              Least profit to accept
+              <div className="relative mt-1">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs font-bold">$</span>
+                <input
+                  type="number" min="0" step="1" value={autoMinProfit}
+                  onChange={(e) => setAutoMinProfit(e.target.value)}
+                  className="w-32 pl-5 pr-2 py-1.5 bg-white border border-gray-300 rounded-md text-xs font-bold text-gray-900 focus:outline-none focus:border-gray-900"
+                />
+              </div>
+            </label>
+            <button
+              onClick={() => saveAutoOrder({ max_order_value: autoMax, min_profit: autoMinProfit }, "Limits saved.")}
+              disabled={autoSaving || (autoMax === autoOrder.max_order_value && autoMinProfit === autoOrder.min_profit)}
+              className="px-3.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-800 disabled:opacity-40"
+            >
+              Save limits
+            </button>
+            <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-700 sm:ml-auto">
+              <span><strong>{autoOrder.counts.COMPLETED}</strong> auto-ordered</span>
+              <span><strong>{autoOrder.counts.HELD}</strong> held for review</span>
+              <span><strong>{autoOrder.counts.MANUAL_NEEDED}</strong> to order manually</span>
+              <span><strong>{autoOrder.counts.FAILED}</strong> failed</span>
+            </div>
+          </div>
         </div>
       )}
 

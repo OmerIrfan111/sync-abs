@@ -5,7 +5,7 @@ from typing import List, Optional
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.services.app_settings_service import get_auto_order_config
 from app.models.order import Order
 from app.models.purchase_order import PurchaseOrder
 from app.models.supplier import Supplier
@@ -43,7 +43,8 @@ class AutoFulfillmentService:
         self.orders = OrderService(db)
 
     def fulfill_new_order(self, order_id: int) -> str:
-        if not settings.AUTO_ORDER_ENABLED:
+        config = get_auto_order_config(self.db)
+        if not config.enabled:
             return "disabled"
 
         claimed = (
@@ -56,7 +57,7 @@ class AutoFulfillmentService:
             return "skipped"
 
         try:
-            return self._run(order_id)
+            return self._run(order_id, config)
         except Exception as exc:
             logger.exception(f"Automatic fulfillment crashed for order {order_id}")
             self.db.rollback()
@@ -65,7 +66,7 @@ class AutoFulfillmentService:
                 f"Unexpected error; nothing further was ordered automatically: {exc}",
             )
 
-    def _run(self, order_id: int) -> str:
+    def _run(self, order_id: int, config) -> str:
         order = self.orders.route_order(order_id)
         items = list(order.items)
 
@@ -80,19 +81,19 @@ class AutoFulfillmentService:
         cost = sum(
             ((i.supplier_cost or ZERO) * i.quantity) + (i.shipping_cost or ZERO) for i in items
         )
-        if cost > settings.AUTO_ORDER_MAX_ORDER_VALUE:
+        if cost > config.max_order_value:
             return self._finish(
                 order_id, "HELD",
-                f"Supplier cost ${cost:.2f} is over the ${settings.AUTO_ORDER_MAX_ORDER_VALUE:.2f} automatic-order limit.",
+                f"Supplier cost ${cost:.2f} is over the ${config.max_order_value:.2f} automatic-order limit.",
             )
 
         revenue = (order.order_total or ZERO) - (order.marketplace_fees or ZERO)
         profit = revenue - cost
-        if profit < settings.AUTO_ORDER_MIN_PROFIT:
+        if profit < config.min_profit:
             return self._finish(
                 order_id, "HELD",
                 f"Profit would be ${profit:.2f} (revenue ${revenue:.2f} - supplier cost and shipping ${cost:.2f}), "
-                f"below the ${settings.AUTO_ORDER_MIN_PROFIT:.2f} minimum.",
+                f"below the ${config.min_profit:.2f} minimum.",
             )
 
         for item in items:

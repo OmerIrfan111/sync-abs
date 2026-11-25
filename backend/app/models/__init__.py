@@ -19,8 +19,10 @@ from app.models.marketplace_fee_schedule import MarketplaceFeeSchedule
 from app.models.product_restriction import ProductRestriction
 from app.models.shipping_history import ProductShippingHistory
 from app.models.listing_registry import ListingRegistry
+from app.models.app_setting import AppSetting
 
 __all__ = [
+    "AppSetting",
     "TimestampMixin",
     "User",
     "Supplier",

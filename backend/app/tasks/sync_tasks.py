@@ -1,7 +1,7 @@
 import logging
 from app.tasks.celery_app import celery_app
-from app.core.config import settings
 from app.core.database import SessionLocal
+from app.services.app_settings_service import get_auto_order_config
 from app.models.supplier import Supplier
 from app.services.sync_service import SyncService
 
@@ -216,7 +216,7 @@ def order_ingestion_task():
             # Only orders created by THIS run are auto-fulfilled, never old
             # ones, and only when AUTO_ORDER_ENABLED is on (see the service
             # for the margin / spending-cap / live-stock checks).
-            if settings.AUTO_ORDER_ENABLED and new_orders:
+            if new_orders and get_auto_order_config(db).enabled:
                 from app.services.auto_fulfillment_service import AutoFulfillmentService
                 fulfiller = AutoFulfillmentService(db)
                 for new_order in new_orders:

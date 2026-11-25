@@ -1,10 +1,15 @@
 import logging
+from decimal import Decimal
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 
+from app.api.deps import require_role
+from app.core.config import settings
 from app.core.database import get_db
+from app.services.app_settings_service import get_auto_order_config, set_auto_order_config
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.purchase_order import PurchaseOrder
@@ -113,6 +118,47 @@ def _order_to_detail(order: Order) -> OrderDetailResponse:
 # ──────────────────────────────────────────────
 # GET /orders  —  List all orders
 # ──────────────────────────────────────────────
+
+# ──────────────────────────────────────────────
+# Automatic ordering: status + on/off switch (defined before /{order_id})
+# ──────────────────────────────────────────────
+
+class AutoOrderSettingsUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    max_order_value: Optional[Decimal] = Field(default=None, gt=0, le=1000000)
+    min_profit: Optional[Decimal] = Field(default=None, ge=0, le=1000000)
+
+
+def _auto_order_state(db: Session) -> dict:
+    config = get_auto_order_config(db)
+    counts = dict(
+        db.query(Order.auto_order_status, func.count(Order.id))
+        .filter(Order.auto_order_status.isnot(None))
+        .group_by(Order.auto_order_status)
+        .all()
+    )
+    return {
+        "enabled": config.enabled,
+        "max_order_value": str(config.max_order_value),
+        "min_profit": str(config.min_profit),
+        # While DRY_RUN is on, "placing" an order only simulates it.
+        "simulated_orders_only": bool(settings.DRY_RUN),
+        "counts": {k: int(counts.get(k, 0)) for k in ("COMPLETED", "HELD", "MANUAL_NEEDED", "FAILED", "PROCESSING")},
+    }
+
+
+@router.get("/auto-order")
+def get_auto_order_state(db: Session = Depends(get_db)):
+    return _auto_order_state(db)
+
+
+@router.put("/auto-order", dependencies=[Depends(require_role("admin"))])
+def update_auto_order_settings(payload: AutoOrderSettingsUpdate, db: Session = Depends(get_db)):
+    set_auto_order_config(db, payload.enabled, payload.max_order_value, payload.min_profit)
+    if payload.enabled is not None:
+        logger.warning(f"Automatic ordering turned {'ON' if payload.enabled else 'OFF'} by an admin")
+    return _auto_order_state(db)
+
 
 @router.get("")
 def list_orders(
