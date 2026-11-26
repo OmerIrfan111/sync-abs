@@ -17,12 +17,9 @@ def get_alert_summary(db: Session = Depends(get_db)):
     """Counts for the in-app alert bell, plus when the last database backup ran."""
     from sqlalchemy import func
     from app.services.app_settings_service import get_backup_status
-    pending = db.query(func.count(ErrorLog.id)).filter(ErrorLog.status != "RESOLVED").scalar() or 0
-    orders = (
-        db.query(func.count(ErrorLog.id))
-        .filter(ErrorLog.status != "RESOLVED", ErrorLog.error_type == "ORDER_ATTENTION")
-        .scalar() or 0
-    )
+    from app.services.alerts_service import actionable_alerts
+    pending = actionable_alerts(db).count()
+    orders = actionable_alerts(db).filter(ErrorLog.error_type == "ORDER_ATTENTION").count()
     return {"pending_total": pending, "orders_attention": orders, "backup": get_backup_status(db)}
 
 
@@ -43,7 +40,8 @@ def get_errors(
     if status:
         query = query.filter(ErrorLog.status == status)
     if unresolved:
-        query = query.filter(ErrorLog.status != "RESOLVED")
+        from app.services.alerts_service import actionable_alerts
+        query = query.filter(ErrorLog.id.in_(actionable_alerts(db).with_entities(ErrorLog.id)))
     if supplier_id:
         query = query.filter(ErrorLog.supplier_id == supplier_id)
     if marketplace_id:

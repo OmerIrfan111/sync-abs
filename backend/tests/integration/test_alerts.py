@@ -47,3 +47,22 @@ def test_resolving_an_alert_removes_it_from_the_dashboard_list(client, db_sessio
     assert any(e["id"] == alert.id for e in client.get("/api/v1/dashboard/summary").json()["recent_errors"])
     client.post(f"/api/v1/errors/{alert.id}/resolve")
     assert not any(e["id"] == alert.id for e in client.get("/api/v1/dashboard/summary").json()["recent_errors"])
+
+
+def test_routine_data_gaps_and_old_supplier_blips_do_not_flood_the_alerts(client, db_session):
+    """Live finding 2026-11-26: 4,262 'supplier returned no price' notices made the bell read 99+."""
+    from datetime import datetime, timedelta, timezone
+    for i in range(5):
+        db_session.add(ErrorLog(error_type="MISSING_DATA", message=f"SKU {i}: no price", status="PENDING"))
+    db_session.add(ErrorLog(error_type="SUPPLIER_CONNECTION_ERROR", message="old D&H blip", status="PENDING",
+                            created_at=datetime.now(timezone.utc) - timedelta(days=3)))
+    db_session.add(ErrorLog(error_type="SUPPLIER_CONNECTION_ERROR", message="D&H is down right now", status="PENDING"))
+    db_session.commit()
+    raise_alert(db_session, ORDER_ATTENTION, "Order #9 was held")
+
+    body = client.get("/api/v1/errors/summary").json()
+    assert body["pending_total"] == 2          # the fresh outage + the held order
+    listed = client.get("/api/v1/errors?unresolved=true&page_size=50").json()["items"]
+    assert {e["message"] for e in listed} == {"D&H is down right now", "Order #9 was held"}
+    # the Logs page can still see everything
+    assert client.get("/api/v1/errors?page_size=50").json()["total"] >= 8

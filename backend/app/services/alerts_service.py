@@ -8,6 +8,23 @@ ORDER_ATTENTION = "ORDER_ATTENTION"
 BACKUP_PROBLEM = "BACKUP_PROBLEM"
 
 
+INFORMATIONAL_TYPES = {"MISSING_DATA"}  # per-product data gaps: thousands, nobody can act on them
+TRANSIENT_HOURS = 24  # supplier outages fade from the alerts after a day
+
+
+def actionable_alerts(db: Session):
+    """Query of the unresolved alerts a person should actually see (bell and
+    dashboard). The Logs page still lists everything."""
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import or_
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=TRANSIENT_HOURS)
+    return db.query(ErrorLog).filter(
+        ErrorLog.status != "RESOLVED",
+        ~ErrorLog.error_type.in_(INFORMATIONAL_TYPES),
+        or_(ErrorLog.error_type != "SUPPLIER_CONNECTION_ERROR", ErrorLog.created_at >= cutoff),
+    )
+
+
 def raise_alert(db: Session, error_type: str, message: str, order_id: Optional[int] = None) -> ErrorLog:
     """Create an in-app alert (shown in the bell and on the dashboard until a
     person marks it handled). Never duplicates an unresolved alert for the same

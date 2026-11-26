@@ -11,6 +11,7 @@ from app.models.supplier import Supplier
 from app.models.marketplace import Marketplace
 from app.models.listing import Listing
 from app.models.error_log import ErrorLog
+from app.services.alerts_service import actionable_alerts
 from app.models.order import Order
 from app.models.sync_log import SyncLog
 from app.schemas.dashboard import DashboardStats, SupplierHealthStatus, MarketplaceHealthStatus, PriceChangeEntry
@@ -174,7 +175,7 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         ))
 
     # 7. Recent errors
-    recent_errors_raw = db.query(ErrorLog).filter(ErrorLog.status != "RESOLVED").order_by(desc(ErrorLog.created_at)).limit(5).all()
+    recent_errors_raw = actionable_alerts(db).order_by(desc(ErrorLog.created_at)).limit(5).all()
     recent_errors = []
     for log in recent_errors_raw:
         prod = db.query(Product).filter(Product.id == log.product_id).first() if log.product_id else None
