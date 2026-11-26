@@ -294,3 +294,33 @@ def reconcile_pending_listings_task():
         return result
     finally:
         db.close()
+
+
+@celery_app.task
+def backup_health_check_task():
+    """Daily: raise an in-app alert if no database backup has completed in 36
+    hours (including a backup job that never started), and clear it once one has."""
+    from datetime import datetime, timedelta, timezone
+    from app.services.alerts_service import BACKUP_PROBLEM, raise_alert, resolve_alerts
+    from app.services.app_settings_service import get_backup_status
+
+    db = SessionLocal()
+    try:
+        status = get_backup_status(db)
+        last = status.get("last_backup_at")
+        fresh = False
+        if last and status.get("status") == "ok":
+            try:
+                stamp = datetime.fromisoformat(last)
+                if stamp.tzinfo is None:
+                    stamp = stamp.replace(tzinfo=timezone.utc)
+                fresh = datetime.now(timezone.utc) - stamp < timedelta(hours=36)
+            except ValueError:
+                fresh = False
+        if fresh:
+            resolve_alerts(db, BACKUP_PROBLEM)
+            return {"backup": "ok"}
+        raise_alert(db, BACKUP_PROBLEM, "No database backup has completed in the last 36 hours. Check the backup job in Azure.")
+        return {"backup": "overdue"}
+    finally:
+        db.close()

@@ -59,3 +59,25 @@ def set_auto_order_config(
         _put(db, KEY_MIN_PROFIT, str(min_profit))
     db.commit()
     return get_auto_order_config(db)
+
+
+KEY_BACKUP_AT = "last_backup_at"
+KEY_BACKUP_STATUS = "last_backup_status"
+KEY_BACKUP_DETAIL = "last_backup_detail"
+
+
+def record_backup(db: Session, status: str, detail: str, at: Optional[str] = None) -> None:
+    """Called by the backup job so the app can show when it last ran."""
+    from datetime import datetime, timezone
+    _put(db, KEY_BACKUP_AT, at or datetime.now(timezone.utc).isoformat())
+    _put(db, KEY_BACKUP_STATUS, status)
+    _put(db, KEY_BACKUP_DETAIL, detail[:500])
+    db.commit()
+
+
+def get_backup_status(db: Session) -> dict:
+    return {
+        "last_backup_at": _get(db, KEY_BACKUP_AT),
+        "status": _get(db, KEY_BACKUP_STATUS),
+        "detail": _get(db, KEY_BACKUP_DETAIL),
+    }

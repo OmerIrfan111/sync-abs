@@ -138,6 +138,13 @@ export default function OrdersPage() {
     loadStats();
   }, []);
 
+  // Alerts link here as /orders?order=ID: open that order straight away.
+  useEffect(() => {
+    const wanted = Number(new URLSearchParams(window.location.search).get("order"));
+    if (wanted > 0) toggleExpand(wanted);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // -- Automatic ordering switch --
   const [autoOrder, setAutoOrder] = useState<AutoOrderState | null>(null);
   const [autoMax, setAutoMax] = useState("");

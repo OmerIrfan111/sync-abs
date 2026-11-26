@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel, EmailStr, ConfigDict, Field
 
 class Token(BaseModel):
     access_token: str
@@ -26,3 +26,9 @@ class UserCreate(UserBase):
 class UserResponse(UserBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    # Longer than 8 characters isn't kept past bcrypt's 72-byte limit.
+    new_password: str = Field(min_length=8, max_length=72)

@@ -5,6 +5,7 @@ from typing import List, Optional
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.services.alerts_service import ORDER_ATTENTION, raise_alert
 from app.services.app_settings_service import get_auto_order_config
 from app.models.order import Order
 from app.models.purchase_order import PurchaseOrder
@@ -15,6 +16,11 @@ from app.services.order_service import OrderService
 logger = logging.getLogger(__name__)
 
 ZERO = Decimal("0")
+ATTENTION_LABELS = {
+    "HELD": "was held for your review",
+    "FAILED": "failed to order automatically",
+    "MANUAL_NEEDED": "needs to be ordered manually",
+}
 
 
 class AutoFulfillmentService:
@@ -168,5 +174,7 @@ class AutoFulfillmentService:
             order.auto_order_note = note
             self.orders._add_event(order_id, f"AUTO_ORDER_{status}", {"note": note})
             self.db.commit()
+            if status in ATTENTION_LABELS:
+                raise_alert(self.db, ORDER_ATTENTION, f"Order #{order_id} {ATTENTION_LABELS[status]}: {note}", order_id=order_id)
         logger.info(f"Automatic fulfillment for order {order_id}: {status}. {note}")
         return status

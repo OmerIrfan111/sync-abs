@@ -61,5 +61,14 @@ jobs:
             az containerapp update -n $APP -g $RG --image $IMAGE
           done
 
+      - name: Keep the nightly backup job on the new image (once it exists)
+        run: |
+          IMAGE=$ACR.azurecr.io/syncabs-backend:${{ github.sha }}
+          if az containerapp job show -n job-abs-backup -g $RG > /dev/null 2>&1; then
+            az containerapp job update -n job-abs-backup -g $RG --image $IMAGE
+          else
+            echo "job-abs-backup does not exist yet, skipping"
+          fi
+
       - name: Roll the frontend to the new image
         run: az containerapp update -n ca-abs-frontend -g $RG --image $ACR.azurecr.io/syncabs-frontend:${{ github.sha }}

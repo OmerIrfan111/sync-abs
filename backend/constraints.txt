@@ -3,6 +3,8 @@ amqp==5.4.0
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
+azure-core==1.41.0
+azure-storage-blob==12.31.1
 bcrypt==4.0.1
 billiard==4.3.0
 celery==5.6.3
@@ -26,6 +28,7 @@ httptools==0.8.0
 httpx==0.28.1
 idna==3.20
 iniconfig==2.3.0
+isodate==0.7.2
 kombu==5.6.2
 Mako==1.4.1
 MarkupSafe==3.0.3

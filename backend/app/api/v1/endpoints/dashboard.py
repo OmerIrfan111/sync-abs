@@ -174,7 +174,7 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         ))
 
     # 7. Recent errors
-    recent_errors_raw = db.query(ErrorLog).order_by(desc(ErrorLog.created_at)).limit(5).all()
+    recent_errors_raw = db.query(ErrorLog).filter(ErrorLog.status != "RESOLVED").order_by(desc(ErrorLog.created_at)).limit(5).all()
     recent_errors = []
     for log in recent_errors_raw:
         prod = db.query(Product).filter(Product.id == log.product_id).first() if log.product_id else None
@@ -189,6 +189,7 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
             marketplace_name=mkt.name if mkt else None,
             supplier_id=log.supplier_id,
             supplier_name=sup.name if sup else None,
+            order_id=log.order_id,
             message=log.message,
             retry_count=log.retry_count,
             status=log.status,

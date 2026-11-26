@@ -12,12 +12,27 @@ from app.schemas.sync import ErrorLogResponse, PaginatedErrorLogsResponse
 
 router = APIRouter()
 
+@router.get("/summary")
+def get_alert_summary(db: Session = Depends(get_db)):
+    """Counts for the in-app alert bell, plus when the last database backup ran."""
+    from sqlalchemy import func
+    from app.services.app_settings_service import get_backup_status
+    pending = db.query(func.count(ErrorLog.id)).filter(ErrorLog.status != "RESOLVED").scalar() or 0
+    orders = (
+        db.query(func.count(ErrorLog.id))
+        .filter(ErrorLog.status != "RESOLVED", ErrorLog.error_type == "ORDER_ATTENTION")
+        .scalar() or 0
+    )
+    return {"pending_total": pending, "orders_attention": orders, "backup": get_backup_status(db)}
+
+
 @router.get("", response_model=PaginatedErrorLogsResponse)
 def get_errors(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     error_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    unresolved: bool = Query(False),
     supplier_id: Optional[int] = Query(None),
     marketplace_id: Optional[int] = Query(None),
     db: Session = Depends(get_db)
@@ -27,6 +42,8 @@ def get_errors(
         query = query.filter(ErrorLog.error_type == error_type)
     if status:
         query = query.filter(ErrorLog.status == status)
+    if unresolved:
+        query = query.filter(ErrorLog.status != "RESOLVED")
     if supplier_id:
         query = query.filter(ErrorLog.supplier_id == supplier_id)
     if marketplace_id:
@@ -51,6 +68,7 @@ def get_errors(
             marketplace_name=mkt.name if mkt else None,
             supplier_id=log.supplier_id,
             supplier_name=sup.name if sup else None,
+            order_id=log.order_id,
             message=log.message,
             retry_count=log.retry_count,
             status=log.status,
@@ -92,6 +110,7 @@ def resolve_error(error_id: int, db: Session = Depends(get_db)):
         marketplace_name=mkt.name if mkt else None,
         supplier_id=error.supplier_id,
         supplier_name=sup.name if sup else None,
+        order_id=error.order_id,
         message=error.message,
         retry_count=error.retry_count,
         status=error.status,

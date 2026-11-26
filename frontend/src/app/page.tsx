@@ -456,11 +456,15 @@ export default function DashboardPage() {
                     </p>
                   )}
                   <p className="text-[11px] text-[#767676] mt-0.5">
-                    Why it matters: Stock or price updates for affected items may be delayed until re-checked.
+                    {err.error_type === "ORDER_ATTENTION"
+                      ? "Why it matters: a customer is waiting on this order. Open it to place it yourself or fix what held it."
+                      : err.error_type === "BACKUP_PROBLEM"
+                      ? "Why it matters: the database backup is not running, so recent data could be lost."
+                      : "Why it matters: Stock or price updates for affected items may be delayed until re-checked."}
                   </p>
                 </div>
                 <Link
-                  href="/logs"
+                  href={err.order_id ? `/orders?order=${err.order_id}` : "/logs"}
                   className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold self-start sm:self-center shrink-0 transition-colors"
                 >
                   Review

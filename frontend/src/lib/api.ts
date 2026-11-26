@@ -163,6 +163,7 @@ export interface DashboardStats {
   recent_errors: {
     id: number;
     error_type: string;
+    order_id?: number | null;
     product_sku?: string;
     supplier_name?: string;
     marketplace_name?: string;

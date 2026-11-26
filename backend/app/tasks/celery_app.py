@@ -63,6 +63,10 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.sync_tasks.reconcile_pending_listings_task",
         "schedule": crontab(minute="*/10"),
     },
+    "backup-health-check-daily": {
+        "task": "app.tasks.sync_tasks.backup_health_check_task",
+        "schedule": crontab(minute=0, hour=6),
+    },
     "walmart-match-backfill-every-5-mins": {
         "task": "app.tasks.sync_tasks.walmart_match_backfill_task",
         "schedule": crontab(minute="*/5"),

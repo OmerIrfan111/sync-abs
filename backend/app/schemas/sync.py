@@ -30,6 +30,7 @@ class ErrorLogResponse(BaseModel):
     marketplace_name: Optional[str] = None
     supplier_id: Optional[int] = None
     supplier_name: Optional[str] = None
+    order_id: Optional[int] = None
     message: str
     retry_count: int
     status: str

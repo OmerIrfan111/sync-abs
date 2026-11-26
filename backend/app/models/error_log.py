@@ -11,6 +11,7 @@ class ErrorLog(Base):
     product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
     marketplace_id = Column(Integer, ForeignKey("marketplaces.id", ondelete="SET NULL"), nullable=True, index=True)
     supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="SET NULL"), nullable=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     message = Column(Text, nullable=False)
     retry_count = Column(Integer, default=0, nullable=False)
     status = Column(String(50), default="PENDING", nullable=False, index=True) # PENDING, RETRYING, RESOLVED, FAILED
